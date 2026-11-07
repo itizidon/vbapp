@@ -1,0 +1,1 @@
+import {Module} from '@nestjs/common'; import {MatchesService} from './matches.service'; import {MatchesResolver} from './matches.resolver'; import {AuthModule} from '../auth/auth.module'; @Module({imports:[AuthModule],providers:[MatchesService,MatchesResolver]}) export class MatchesModule{}

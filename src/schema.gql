@@ -1,0 +1,366 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+input AddGuestParticipantInput {
+  guestName: String!
+  matchId: ID!
+  teamId: ID
+}
+
+input AddParticipantInput {
+  matchId: ID!
+  teamId: ID
+  userId: ID!
+}
+
+input AssessmentRatingInput {
+  rating: Int!
+  skillId: ID!
+}
+
+type AuthPayload {
+  accessToken: String!
+  user: UserModel!
+}
+
+type AverageSkillRating {
+  average: Float!
+  count: Int!
+  skillId: ID!
+}
+
+input CreateMatchInput {
+  description: String
+  playedAt: DateTime
+  sportId: ID
+  status: MatchStatus
+}
+
+input CreateSelfAssessmentInput {
+  overallLevel: String!
+  ratings: [AssessmentRatingInput!]!
+  sportId: ID!
+}
+
+input CreateTeamInput {
+  matchId: ID!
+  name: String
+  score: Int
+  teamNumber: Int
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type FeedbackCount {
+  count: Int!
+}
+
+type FeedbackModel {
+  analyticsAllowed: Boolean!
+  createdAt: DateTime!
+  evidenceAllowed: Boolean!
+  guestName: String
+  id: ID!
+  matchId: ID
+  overallComment: String
+  ratings: [FeedbackRatingModel!]
+  recipientId: ID!
+  reviewerId: ID
+  reviewerOverallLevelAtSubmission: String
+  reviewerSkillSnapshots: [ReviewerSnapshotModel!]
+  reviewerSnapshotCapturedAt: DateTime
+  sportId: ID!
+  status: FeedbackStatus!
+  updatedAt: DateTime!
+}
+
+type FeedbackRatingModel {
+  comment: String
+  rating: Int!
+  skillId: ID!
+}
+
+enum FeedbackStatus {
+  DELETED
+  HIDDEN
+  PENDING
+  PUBLISHED
+}
+
+type GuestInvitePayload {
+  expiresAt: DateTime!
+  token: String!
+}
+
+input LoginInput {
+  login: String!
+  password: String!
+}
+
+type MatchModel {
+  createdAt: DateTime!
+  createdById: ID!
+  description: String
+  id: ID!
+  participants: [MatchParticipantModel!]
+  playedAt: DateTime
+  sportId: ID
+  status: MatchStatus!
+  teams: [MatchTeamModel!]
+  updatedAt: DateTime!
+}
+
+type MatchParticipantModel {
+  guestName: String
+  id: ID!
+  matchId: ID!
+  teamId: ID
+  userId: ID
+}
+
+enum MatchStatus {
+  CANCELLED
+  COMPLETED
+  DRAFT
+  IN_PROGRESS
+  SCHEDULED
+}
+
+type MatchTeamModel {
+  id: ID!
+  matchId: ID!
+  name: String
+  score: Int
+  teamNumber: Int!
+}
+
+type Mutation {
+  addGuestMatchParticipant(input: AddGuestParticipantInput!): MatchParticipantModel!
+  addMatchParticipant(input: AddParticipantInput!): MatchParticipantModel!
+  assignParticipantToTeam(participantId: ID!, teamId: ID): MatchParticipantModel!
+  createGuestFeedbackInvite(matchId: ID, recipientId: ID!, sportId: ID!): GuestInvitePayload!
+  createMatch(input: CreateMatchInput): MatchModel!
+  createMatchTeam(input: CreateTeamInput!): MatchTeamModel!
+  createSelfAssessment(input: CreateSelfAssessmentInput!): SelfAssessmentModel!
+  deleteFeedback(id: ID!): FeedbackModel!
+  deleteMatch(id: ID!): MatchModel!
+  login(input: LoginInput!): AuthPayload!
+  moveParticipantToTeam(participantId: ID!, teamId: ID!): MatchParticipantModel!
+  register(input: RegisterInput!): AuthPayload!
+  removeMatchParticipant(id: ID!): MatchParticipantModel!
+  removeMatchTeam(id: ID!): MatchTeamModel!
+  submitFeedback(input: SubmitFeedbackInput!): FeedbackModel!
+  submitGuestFeedback(input: SubmitGuestFeedbackInput!): FeedbackModel!
+  updateFeedback(input: UpdateFeedbackInput!): FeedbackModel!
+  updateMatch(input: UpdateMatchInput!): MatchModel!
+  updateMatchTeam(input: UpdateTeamInput!): MatchTeamModel!
+  updateSelfAssessment(input: UpdateSelfAssessmentInput!): SelfAssessmentModel!
+  updateSelfAssessmentRatings(input: UpdateSelfAssessmentRatingsInput!): SelfAssessmentModel!
+  updateTeamScore(score: Int, teamId: ID!): MatchTeamModel!
+}
+
+type PlayerRatingProfileModel {
+  feedbackCount: Int!
+  selfOverallLevel: String
+  selfSkillRatings: [SelfAssessmentRatingModel!]!
+  sport: SportModel!
+  systemCalculatedRating: Float
+  systemConfidence: Float
+  systemOverallLevel: String
+  systemSkillRatings: [PlayerSkillRatingModel!]!
+}
+
+type PlayerSkillRatingModel {
+  algorithmVersion: String
+  calculatedAt: DateTime
+  calculatedRating: Float
+  confidence: Float
+  createdAt: DateTime!
+  feedbackCount: Int!
+  reviewerCount: Int!
+  skillId: ID!
+  updatedAt: DateTime!
+  userId: ID!
+}
+
+type PlayerSportRatingModel {
+  algorithmVersion: String
+  calculatedAt: DateTime
+  calculatedRating: Float
+  confidence: Float
+  createdAt: DateTime!
+  feedbackCount: Int!
+  overallLevel: String
+  reviewerCount: Int!
+  sportId: ID!
+  updatedAt: DateTime!
+  userId: ID!
+}
+
+type Query {
+  averageSkillRating(skillId: ID!): AverageSkillRating
+  feedback(id: ID!): FeedbackModel!
+  feedbackCount(userId: ID): FeedbackCount!
+  match(id: ID!): MatchModel
+  matchResults(matchId: ID!): MatchModel
+  me: UserModel!
+  mySelfAssessments: [SelfAssessmentModel!]!
+  playerRatingProfile(sportId: ID!, userId: ID!): PlayerRatingProfileModel!
+  playerSkillRatings(sportId: ID!, userId: ID!): [PlayerSkillRatingModel!]!
+  playerSportRating(sportId: ID!, userId: ID!): PlayerSportRatingModel
+  receivedFeedback(cursor: String): [FeedbackModel!]!
+  selfVsPeerRatings(sportId: ID!): [SelfVsPeerRating!]!
+  skillRatingTrends(skillId: ID!): [SkillRatingPoint!]!
+  skills(sportId: ID!): [SkillModel!]!
+  sport(id: ID!): SportModel
+  sports: [SportModel!]!
+  submittedFeedback(cursor: String): [FeedbackModel!]!
+  userMatchHistory: [MatchModel!]!
+  userMatches(cursor: String): [MatchModel!]!
+  userSelfAssessment(sportId: ID!, userId: ID!): SelfAssessmentModel
+  userSkillRatings(userId: ID!): [AverageSkillRating!]!
+  userSportFeedbackSummary: [SportFeedbackSummary!]!
+}
+
+input RatingInput {
+  comment: String
+  rating: Int!
+  skillId: ID!
+}
+
+input RegisterInput {
+  age: Int!
+  email: String!
+  heightCm: Int!
+  overallLevel: String!
+  password: String!
+  ratings: [AssessmentRatingInput!]!
+  sportId: ID!
+  username: String!
+}
+
+type ReviewerSnapshotModel {
+  capturedAt: DateTime!
+  ratingAtSubmission: Int!
+  skillId: ID!
+  sourceRatingUpdatedAt: DateTime!
+}
+
+type SelfAssessmentModel {
+  id: ID!
+  overallLevel: String!
+  ratings: [SelfAssessmentRatingModel!]!
+  sportId: ID!
+  updatedAt: DateTime!
+  userId: ID!
+}
+
+type SelfAssessmentRatingModel {
+  rating: Int!
+  skillId: ID!
+  updatedAt: DateTime!
+}
+
+type SelfVsPeerRating {
+  peerAverage: Float
+  peerCount: Int!
+  selfRating: Float
+  skillId: ID!
+}
+
+type SkillModel {
+  active: Boolean!
+  description: String
+  id: ID!
+  name: String!
+  requiredForSelfAssessment: Boolean!
+  slug: String!
+  sportId: ID!
+}
+
+type SkillRatingPoint {
+  average: Float!
+  count: Int!
+  period: DateTime!
+  skillId: ID!
+}
+
+type SportFeedbackSummary {
+  averageRating: Float!
+  feedbackCount: Int!
+  sportId: ID!
+}
+
+type SportModel {
+  id: ID!
+  name: String!
+  skills: [SkillModel!]
+  slug: String!
+}
+
+input SubmitFeedbackInput {
+  analyticsAllowed: Boolean
+  evidenceAllowed: Boolean
+  matchId: ID
+  overallComment: String
+  ratings: [RatingInput!]!
+  recipientId: ID!
+  sportId: ID!
+}
+
+input SubmitGuestFeedbackInput {
+  analyticsAllowed: Boolean
+  evidenceAllowed: Boolean
+  guestName: String!
+  matchId: ID
+  overallComment: String
+  ratings: [RatingInput!]!
+  recipientId: ID!
+  sportId: ID!
+  token: String!
+}
+
+input UpdateFeedbackInput {
+  analyticsAllowed: Boolean
+  evidenceAllowed: Boolean
+  id: ID!
+  overallComment: String
+  ratings: [RatingInput!]
+  status: FeedbackStatus
+}
+
+input UpdateMatchInput {
+  description: String
+  id: ID!
+  playedAt: DateTime
+  sportId: ID
+  status: MatchStatus
+}
+
+input UpdateSelfAssessmentInput {
+  id: ID!
+  overallLevel: String!
+}
+
+input UpdateSelfAssessmentRatingsInput {
+  id: ID!
+  ratings: [AssessmentRatingInput!]!
+}
+
+input UpdateTeamInput {
+  id: ID!
+  name: String
+  score: Int
+}
+
+type UserModel {
+  createdAt: DateTime!
+  email: String!
+  id: ID!
+  updatedAt: DateTime!
+  username: String!
+}

@@ -1,0 +1,1 @@
+import{Module}from'@nestjs/common';import{AuthModule}from'../auth/auth.module';import{PlayerRatingsResolver}from'./player-ratings.resolver';import{PlayerRatingsService}from'./player-ratings.service';@Module({imports:[AuthModule],providers:[PlayerRatingsResolver,PlayerRatingsService]})export class PlayerRatingsModule{}

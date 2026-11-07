@@ -1,0 +1,1 @@
+import{Module}from'@nestjs/common';import{AuthModule}from'../auth/auth.module';import{SelfAssessmentsService}from'./self-assessments.service';import{SelfAssessmentsResolver}from'./self-assessments.resolver';@Module({imports:[AuthModule],providers:[SelfAssessmentsService,SelfAssessmentsResolver]})export class SelfAssessmentsModule{}

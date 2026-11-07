@@ -1,0 +1,1 @@
+import{Module}from'@nestjs/common';import{AuthModule}from'../auth/auth.module';import{AnalyticsResolver}from'./analytics.resolver';@Module({imports:[AuthModule],providers:[AnalyticsResolver]})export class AnalyticsModule{}
