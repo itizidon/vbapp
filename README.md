@@ -2,6 +2,10 @@
 
 Production-oriented modular monolith for self-assessments, flexible match tracking, peer/guest feedback, and immutable historical reviewer snapshots. It uses NestJS, code-first GraphQL/Apollo, Prisma, PostgreSQL, JWT, Argon2id, and Jest.
 
+## Frontend
+
+The responsive Next.js app is in [`frontend/`](frontend/README.md). With this backend running, use `cd frontend && npm ci && npm run dev` and open http://localhost:3001.
+
 ## Start locally
 
 ```bash

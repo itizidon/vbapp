@@ -32,9 +32,12 @@ type AverageSkillRating {
 
 input CreateMatchInput {
   description: String
+  guestNames: [String!]
+  memberIds: [ID!]
   playedAt: DateTime
   sportId: ID
   status: MatchStatus
+  teams: [MatchCreationTeamInput!]
 }
 
 input CreateSelfAssessmentInput {
@@ -101,6 +104,12 @@ input LoginInput {
   password: String!
 }
 
+input MatchCreationTeamInput {
+  guestNames: [String!]
+  memberIds: [ID!]
+  name: String
+}
+
 type MatchModel {
   createdAt: DateTime!
   createdById: ID!
@@ -119,6 +128,7 @@ type MatchParticipantModel {
   id: ID!
   matchId: ID!
   teamId: ID
+  user: MemberModel
   userId: ID
 }
 
@@ -136,6 +146,11 @@ type MatchTeamModel {
   name: String
   score: Int
   teamNumber: Int!
+}
+
+type MemberModel {
+  id: ID!
+  username: String!
 }
 
 type Mutation {
@@ -208,6 +223,7 @@ type Query {
   match(id: ID!): MatchModel
   matchResults(matchId: ID!): MatchModel
   me: UserModel!
+  members(search: String!): [MemberModel!]!
   mySelfAssessments: [SelfAssessmentModel!]!
   playerRatingProfile(sportId: ID!, userId: ID!): PlayerRatingProfileModel!
   playerSkillRatings(sportId: ID!, userId: ID!): [PlayerSkillRatingModel!]!

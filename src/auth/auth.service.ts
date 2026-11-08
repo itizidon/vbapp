@@ -23,5 +23,11 @@ const LEVELS:Record<string,string[]>= { volleyball:['B','BB','A','AA','OPEN'], '
   }
   async login(input:LoginInput){ const user=await this.db.user.findFirst({where:{OR:[{username:input.login},{email:input.login}]}}); if(!user||!await verify(user.passwordHash,input.password)) throw new UnauthorizedException('Invalid credentials'); return this.payload(user); }
   async me(id:string){ return this.db.user.findUniqueOrThrow({where:{id}}); }
+  async members(actorId:string, search:string) {
+    const query=search.trim();
+    if(query.length<2) return [];
+    if(query.length>40) throw new BadRequestException('Search must be at most 40 characters');
+    return this.db.user.findMany({where:{id:{not:actorId},username:{contains:query,mode:'insensitive'}},select:{id:true,username:true},orderBy:{username:'asc'},take:10});
+  }
   private async payload(user:{id:string;username:string;email:string;createdAt:Date;updatedAt:Date}) { return {accessToken:await this.jwt.signAsync({sub:user.id,id:user.id,username:user.username}),user}; }
 }

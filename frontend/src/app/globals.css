@@ -1,0 +1,171 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+:root {
+  --background: #f7f8fa;
+  --foreground: #1b2433;
+  --card: #fff;
+  --muted: #eef1f5;
+  --muted-foreground: #687386;
+  --border: #e5e9ef;
+  --primary: #3866e9;
+  --radius: 0.85rem;
+  --accent: #edf2ff;
+}
+.dark {
+  --background: #10151e;
+  --foreground: #e6eaf2;
+  --card: #181f2b;
+  --muted: #222c3b;
+  --muted-foreground: #a3b0c4;
+  --border: #2c3749;
+  --primary: #7096ff;
+  --accent: #1d2b49;
+}
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-accent: var(--accent);
+  --font-sans: Arial, Helvetica, sans-serif;
+}
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  body {
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button,
+  a {
+    touch-action: manipulation;
+  }
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+  a {
+    text-decoration: none;
+  }
+  :focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 3px;
+  }
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--card);
+    padding: 10px 12px;
+    color: var(--foreground);
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+  }
+  label {
+    font-weight: 600;
+    font-size: 13px;
+  }
+  h1,
+  h2,
+  h3,
+  p {
+    margin: 0;
+  }
+  h1 {
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    font-size: clamp(26px, 3vw, 34px);
+    line-height: 1.2;
+  }
+  h2 {
+    font-size: 17px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  h3 {
+    font-weight: 600;
+  }
+}
+@layer components {
+  .panel {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: clamp(18px, 2vw, 26px);
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+  .subtle {
+    color: var(--muted-foreground);
+  }
+  .field {
+    display: grid;
+    gap: 6px;
+  }
+  .error {
+    color: #c73640;
+    font-size: 13px;
+  }
+  .page-grid {
+    display: grid;
+    gap: 24px;
+  }
+  .chart-wrap {
+    width: 100%;
+    min-width: 0;
+    height: 260px;
+  }
+  .break-anywhere {
+    overflow-wrap: anywhere;
+  }
+  .skip {
+    position: fixed;
+    left: 16px;
+    top: -80px;
+    z-index: 100;
+    background: var(--card);
+    padding: 12px;
+  }
+  .skip:focus {
+    top: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
