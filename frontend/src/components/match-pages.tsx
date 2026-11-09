@@ -1,5 +1,9 @@
 "use client";
 import Link from "next/link";
+import { useState } from "react";
+import { EMPTY_DATE_RANGE } from "@/lib/match-date-range";
+import { MatchDateFilter } from "./match-date-filter";
+import { InfiniteResults } from "./infinite-results";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarDays, Users, ChevronRight } from "lucide-react";
 import {
@@ -11,61 +15,155 @@ import {
   useSubmittedFeedback,
 } from "@/lib/hooks";
 import { gql } from "@/lib/api";
-import { matchTitle, matchDate, participantName } from "@/lib/matches";
+import {
+  matchTitle,
+  matchDate,
+  participantName,
+  teamResult,
+  playerMatchResult,
+} from "@/lib/matches";
 import type { Match } from "@/lib/types";
 import { Button } from "./ui/button";
 
+import { EditMatchDialog } from "./edit-match-dialog";
 import { CreateMatchDialog } from "./create-match-dialog";
 import { PageHeader } from "./page-header";
-import { ErrorState, LoadingSkeleton, EmptyState } from "./common";
+import { ErrorState, LoadingSkeleton, EmptyState, Pending } from "./common";
 import { FeedbackCard } from "./feedback-card";
 import { FeedbackRequestDialog } from "./feedback-request-dialog";
-export function MatchCard({ match }: { match: Match }) {
-  return (
-    <article className="panel min-w-0">
-      <Link href={`/matches/${match.id}`} className="block rounded-lg">
-        <div className="mb-4 flex items-start justify-between gap-3">
-          <span className="rounded-full bg-accent px-3 py-1 text-xs font-semibold text-primary">
-            {match.status.toLowerCase().replaceAll("_", " ")}
-          </span>
-          <ChevronRight size={19} className="shrink-0 text-muted-foreground" />
+export function MatchCard({
+  match,
+  readOnly = false,
+  playerId,
+}: {
+  match: Match;
+  readOnly?: boolean;
+  playerId?: string;
+}) {
+  const user = useUser();
+  const result = playerMatchResult(
+    match,
+    readOnly ? playerId : user.data?.me.id,
+  );
+  const cardStyle =
+    result === "Win"
+      ? "bg-green-50 border-green-300 dark:bg-green-950/40 dark:border-green-800"
+      : result === "Loss"
+        ? "bg-red-50 border-red-300 dark:bg-red-950/40 dark:border-red-800"
+        : "";
+  const players = match.participants ?? [];
+  const teams = match.teams ?? [];
+  const unassigned = players.filter(
+    (player) => !teams.some((team) => team.id === player.teamId),
+  );
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {match.status !== "SCHEDULED" && (
+            <span className="mb-3 inline-block rounded-full bg-accent px-3 py-1 text-xs font-semibold text-primary">
+              {match.status.toLowerCase().replaceAll("_", " ")}
+            </span>
+          )}
+          <h2 className="break-anywhere text-lg">{matchTitle(match)}</h2>
         </div>
-        <h2 className="break-anywhere text-lg">{matchTitle(match)}</h2>
-        <p className="subtle mt-2 text-xs">
-          {match.sportId ? "Beach Volleyball" : "Match · sport not specified"}
-        </p>
-        <p className="subtle mt-4 flex items-center gap-2 text-sm">
-          <CalendarDays size={16} className="shrink-0" />
-          {matchDate(match)}
-        </p>
-        <p className="subtle mt-2 flex items-center gap-2 text-sm">
-          <Users size={16} />
-          {match.participants?.length ?? 0}{" "}
-          {(match.participants?.length ?? 0) === 1
-            ? "participant"
-            : "participants"}
-        </p>
-        {!!match.teams?.length && (
-          <div className="mt-5 grid gap-2 border-t border-border pt-4">
-            {match.teams.map((team) => (
-              <div key={team.id} className="flex justify-between gap-3 text-sm">
-                <span className="break-anywhere">
-                  {team.name ?? `Team ${team.teamNumber}`}
-                </span>
-                <strong>{team.score ?? "—"}</strong>
-              </div>
-            ))}
-          </div>
+        {!readOnly && (
+          <ChevronRight
+            size={19}
+            className="mt-1 shrink-0 text-muted-foreground"
+          />
         )}
-      </Link>
+      </div>
+      <p className="subtle mt-4 flex items-center gap-2 text-sm">
+        <CalendarDays size={16} className="shrink-0" />
+        {matchDate(match)}
+      </p>
+      <p className="subtle mt-2 flex items-center gap-2 text-sm">
+        <Users size={16} className="shrink-0" />
+        {match.participants?.length ?? 0}{" "}
+        {(match.participants?.length ?? 0) === 1
+          ? "participant"
+          : "participants"}
+      </p>
+      {teams.length > 0 && (
+        <div className="mt-5 grid gap-3 border-t border-border pt-4">
+          {teams.map((team) => {
+            const result = teamResult(team, teams);
+            const resultStyle =
+              result === "Win"
+                ? "text-green-800 dark:text-green-300"
+                : result === "Loss"
+                  ? "text-red-800 dark:text-red-300"
+                  : "";
+            return (
+              <div
+                key={team.id}
+                className={`flex items-start justify-between gap-3 rounded-lg p-3 text-sm ${resultStyle}`}
+              >
+                <div className="min-w-0">
+                  <p className="break-anywhere font-semibold">
+                    {team.name ?? `Team ${team.teamNumber}`}
+                  </p>
+                  <p className="subtle break-anywhere mt-1 text-xs">
+                    {players
+                      .filter((player) => player.teamId === team.id)
+                      .map((player) => participantName(player))
+                      .join(", ") || "No assigned players"}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <strong
+                    className="block text-xl tabular-nums"
+                    aria-label={`Score: ${team.score ?? "not recorded"}`}
+                  >
+                    {team.score ?? "—"}
+                  </strong>
+                  {result && (
+                    <span className="text-xs font-semibold">{result}</span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {unassigned.length > 0 && (
+        <div className="mt-3">
+          <p className="subtle text-xs font-semibold">
+            {teams.length ? "Unassigned players" : "Players"}
+          </p>
+          <p className="subtle break-anywhere mt-1 text-xs">
+            {unassigned.map((player) => participantName(player)).join(", ")}
+          </p>
+        </div>
+      )}
+      {readOnly && (
+        <p className="subtle mt-4 text-xs">
+          Status: {match.status.toLowerCase().replaceAll("_", " ")} · Recorded{" "}
+          {new Date(match.createdAt).toLocaleDateString()}
+        </p>
+      )}
+    </>
+  );
+  return (
+    <article className={`panel min-w-0 ${cardStyle}`}>
+      {readOnly ? (
+        <div>{content}</div>
+      ) : (
+        <Link href={`/matches/${match.id}`} className="block rounded-lg">
+          {content}
+        </Link>
+      )}
     </article>
   );
 }
 export function MatchList() {
-  const matches = useMatches();
+  const [range, setRange] = useState(EMPTY_DATE_RANGE);
+  const matches = useMatches(true, range);
   const catalog = useCatalog();
   if (matches.isPending || catalog.isPending) return <LoadingSkeleton />;
-  const error = matches.error ?? catalog.error;
+  const error =
+    catalog.error ?? (matches.isFetchNextPageError ? null : matches.error);
   if (error)
     return (
       <ErrorState
@@ -83,6 +181,7 @@ export function MatchList() {
         description="The games you’re part of. The people you play with."
         action={<CreateMatchDialog />}
       />
+      <MatchDateFilter value={range} onApply={setRange} />
       {matches.data?.rows.length ? (
         <div className="grid gap-4 md:grid-cols-2">
           {matches.data.rows.map((match) => (
@@ -91,21 +190,25 @@ export function MatchList() {
         </div>
       ) : (
         <section className="panel">
-          <EmptyState title="Your next match starts here">
-            Create a match to keep your games and feedback together.
+          <EmptyState
+            title={
+              range.from || range.to
+                ? "No matches in this date range"
+                : "Your next match starts here"
+            }
+          >
+            {range.from || range.to
+              ? "No matches in this date range. Try different dates or clear the filter."
+              : "Create a match to keep your games and feedback together."}
           </EmptyState>
         </section>
       )}
-      {matches.hasNextPage && (
-        <Button
-          className="mt-6 w-full"
-          variant="outline"
-          onClick={() => matches.fetchNextPage()}
-          disabled={matches.isFetchingNextPage}
-        >
-          {matches.isFetchingNextPage ? "Loading…" : "Load older matches"}
-        </Button>
-      )}
+      <InfiniteResults
+        hasNextPage={!!matches.hasNextPage}
+        isFetchingNextPage={matches.isFetchingNextPage}
+        error={matches.isFetchNextPageError ? matches.error : null}
+        onLoadMore={() => matches.fetchNextPage()}
+      />
     </>
   );
 }
@@ -173,18 +276,21 @@ export function MatchDetails({ id }: { id: string }) {
         title={matchTitle(match)}
         description={matchDate(match)}
         action={
-          participating ? (
-            <FeedbackRequestDialog initialMatch={match} />
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            {match.createdById === me.id && <EditMatchDialog match={match} />}
+            {participating && <FeedbackRequestDialog initialMatch={match} />}
+          </div>
         }
       />
       <div className="grid gap-5">
         <section className="panel">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2>Match information</h2>
-            <span className="rounded-full bg-accent px-3 py-1 text-xs text-primary">
-              {match.status.toLowerCase().replaceAll("_", " ")}
-            </span>
+            {match.status !== "SCHEDULED" && (
+              <span className="rounded-full bg-accent px-3 py-1 text-xs text-primary">
+                {match.status.toLowerCase().replaceAll("_", " ")}
+              </span>
+            )}
           </div>
           <p className="subtle mt-3">
             {match.sportId ? "Beach Volleyball" : "Sport not specified"} ·{" "}
@@ -314,7 +420,11 @@ export function MatchDetails({ id }: { id: string }) {
                 onClick={() => received.fetchNextPage()}
                 disabled={received.isFetchingNextPage}
               >
-                Load older received feedback
+                {received.isFetchingNextPage ? (
+                  <Pending label="Loading received feedback…" />
+                ) : (
+                  "Load older received feedback"
+                )}
               </Button>
             )}
             {submitted.hasNextPage && (
@@ -323,7 +433,11 @@ export function MatchDetails({ id }: { id: string }) {
                 onClick={() => submitted.fetchNextPage()}
                 disabled={submitted.isFetchingNextPage}
               >
-                Load older submitted feedback
+                {submitted.isFetchingNextPage ? (
+                  <Pending label="Loading submitted feedback…" />
+                ) : (
+                  "Load older submitted feedback"
+                )}
               </Button>
             )}
           </div>

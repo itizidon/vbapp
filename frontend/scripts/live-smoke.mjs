@@ -142,32 +142,20 @@ try {
     .getByRole("textbox", { name: /Match name or description/ })
     .fill("Live beach match verification");
   assert.ok(await page.getByLabel(/Date and time/).inputValue());
-  await page
+  const team2 = page.getByRole("group", { name: "Team 2", exact: true });
+  await team2
     .getByRole("textbox", { name: "Find an existing member" })
     .fill(memberUsername);
-  await page
+  await team2
     .getByRole("button", { name: `Add member ${memberUsername}` })
     .click();
-  await page
+  await team2
     .getByRole("textbox", { name: "Guest name" })
     .fill("QA guest Jordan");
-  await page.getByRole("button", { name: "Add guest", exact: true }).click();
-  await page
-    .getByRole("textbox", { name: "Team 1 name", exact: true })
-    .fill("Sand");
-  await page
-    .getByRole("textbox", { name: "Team 2 name", exact: true })
-    .fill("Sea");
-  await page
-    .getByRole("combobox", { name: `Team for ${username}`, exact: true })
-    .selectOption({ label: "Sand" });
-  await page
-    .getByRole("combobox", { name: `Team for ${memberUsername}`, exact: true })
-    .selectOption({ label: "Sea" });
-  await page
-    .getByRole("combobox", { name: "Team for QA guest Jordan", exact: true })
-    .selectOption({ label: "Sea" });
+  await team2.getByRole("button", { name: "Add guest", exact: true }).click();
 
+  await page.getByLabel("Team 1 score", { exact: true }).fill("0");
+  await page.getByLabel("Team 2 score", { exact: true }).fill("21");
   await page
     .getByRole("dialog")
     .getByRole("button", { name: "Create match", exact: true })
@@ -175,16 +163,19 @@ try {
   await page
     .getByRole("heading", { name: "Live beach match verification" })
     .waitFor();
+  await page.waitForURL(/\/matches\/[0-9a-f-]{36}$/);
   const matchId = new URL(page.url()).pathname.split("/").pop();
   const createdMatch = await gql(
-    "query Match($id:ID!){match(id:$id){playedAt teams{id name} participants{teamId userId guestName user{id username}}}}",
+    "query Match($id:ID!){match(id:$id){playedAt teams{id name score} participants{teamId userId guestName user{id username}}}}",
     { id: matchId },
   );
   assert.ok(createdMatch.match.playedAt);
   assert.equal(createdMatch.match.participants.length, 3);
-  const sand = createdMatch.match.teams.find((team) => team.name === "Sand");
-  const sea = createdMatch.match.teams.find((team) => team.name === "Sea");
+  const sand = createdMatch.match.teams.find((team) => team.name === "Team 1");
+  const sea = createdMatch.match.teams.find((team) => team.name === "Team 2");
   assert.ok(sand && sea);
+  assert.equal(sand.score, 0);
+  assert.equal(sea.score, 21);
   assert.equal(
     createdMatch.match.participants.find((player) => player.userId === userId)
       .teamId,
@@ -259,6 +250,126 @@ try {
   );
   await page.reload();
   await page.getByText("Live match feedback verification.").waitFor();
+  // Exercise the actual organizer-only editor after feedback already exists.
+  await page.getByRole("button", { name: "Edit match", exact: true }).click();
+  const editor = page.getByRole("dialog");
+  const details = editor.getByRole("form", { name: "Edit match details" });
+  await details
+    .getByLabel("Match name or description")
+    .fill("Edited beach match verification");
+  await details.getByLabel("Date and time").fill("2026-11-09T18:30");
+  const expectedPlayedAt = await details
+    .getByLabel("Date and time")
+    .evaluate((input) => new Date(input.value).toISOString());
+  await details.getByLabel("Match status").selectOption("COMPLETED");
+  await details.getByRole("button", { name: "Save match details" }).click();
+  await details.getByRole("status").getByText("Match details saved.").waitFor();
+  const sandEditor = editor.getByRole("form", { name: "Edit team Team 1" });
+  await sandEditor.getByLabel("Score for Team 1").fill("0");
+  await sandEditor.getByRole("button", { name: "Save team" }).click();
+  await sandEditor.getByRole("status").waitFor();
+  const seaEditor = editor.getByRole("form", { name: "Edit team Team 2" });
+  await seaEditor.getByLabel("Score for Team 2").fill("19");
+  await seaEditor.getByRole("button", { name: "Save team" }).click();
+  await seaEditor.getByRole("status").waitFor();
+  const memberRow = editor.getByRole("region", {
+    name: `Player ${memberUsername}`,
+    exact: true,
+  });
+  await memberRow
+    .getByRole("button", { name: "Move to Team 1", exact: true })
+    .click();
+  await editor
+    .getByRole("region", { name: "Edit Team 1", exact: true })
+    .getByRole("region", { name: `Player ${memberUsername}`, exact: true })
+    .waitFor();
+  const moved = await gql(
+    "query Match($id:ID!){match(id:$id){participants{userId teamId}}}",
+    { id: matchId },
+  );
+  assert.equal(
+    moved.match.participants.find((player) => player.userId === memberId)
+      .teamId,
+    sand.id,
+  );
+  await editor
+    .getByRole("button", { name: "Remove player QA guest Jordan", exact: true })
+    .click();
+  await editor
+    .getByRole("region", { name: "Player QA guest Jordan", exact: true })
+    .waitFor({ state: "detached" });
+  await editor
+    .getByRole("button", {
+      name: `Remove player ${memberUsername}`,
+      exact: true,
+    })
+    .click();
+  await memberRow.waitFor({ state: "detached" });
+  const seaPanel = editor.getByRole("region", {
+    name: "Edit Team 2",
+    exact: true,
+  });
+  await seaPanel
+    .getByRole("textbox", { name: "Find an existing member" })
+    .fill(memberUsername);
+  await seaPanel
+    .getByRole("button", { name: `Add member ${memberUsername}` })
+    .click();
+  await memberRow.waitFor();
+  await seaPanel
+    .getByRole("textbox", { name: "Guest name", exact: true })
+    .fill("QA guest Morgan");
+  await seaPanel
+    .getByRole("button", { name: "Add guest", exact: true })
+    .click();
+  await editor
+    .getByRole("region", { name: "Player QA guest Morgan", exact: true })
+    .waitFor();
+  await editor.getByRole("button", { name: "Close dialog" }).click();
+  const edited = await gql(
+    "query Match($id:ID!){match(id:$id){description playedAt status teams{id name teamNumber score} participants{userId guestName teamId}}}",
+    { id: matchId },
+  );
+  assert.equal(edited.match.description, "Edited beach match verification");
+  assert.equal(edited.match.playedAt, expectedPlayedAt);
+  assert.equal(edited.match.status, "COMPLETED");
+  assert.equal(edited.match.teams.find((team) => team.id === sand.id).score, 0);
+  assert.equal(edited.match.teams.find((team) => team.id === sea.id).score, 19);
+  assert.equal(edited.match.participants.length, 3);
+  assert.ok(
+    !edited.match.participants.some(
+      (player) => player.guestName === "QA guest Jordan",
+    ),
+  );
+  assert.equal(
+    edited.match.participants.find(
+      (player) => player.guestName === "QA guest Morgan",
+    ).teamId,
+    sea.id,
+  );
+  const readOnlyApi = await request.newContext({ baseURL });
+  try {
+    await gql(
+      "mutation Login($input:LoginInput!){login(input:$input){accessToken user{id}}}",
+      { input: { login: memberUsername, password } },
+      readOnlyApi,
+    );
+    const denied = await readOnlyApi.post("/api/graphql", {
+      data: {
+        query:
+          "mutation EditMatch($input:UpdateMatchInput!){updateMatch(input:$input){id}}",
+        variables: { input: { id: matchId, description: "Not authorized" } },
+      },
+    });
+    assert.ok(
+      (await denied.json()).errors?.some((error) =>
+        error.message.includes("Only the organizer"),
+      ),
+    );
+  } finally {
+    await readOnlyApi.dispose();
+  }
+
   const received = await gql(
     "{receivedFeedback{id matchId overallComment ratings{rating}}}",
   );
@@ -323,7 +434,7 @@ try {
   assert.equal(login.login.user.id, userId);
   assert.equal(login.login.accessToken, undefined);
   console.log(
-    "Live flow verified: request link → guest general feedback → recipient list; create match → match-specific link → guest feedback → match details; account sign-out/login, descriptions, mixed rosters, current date defaults, and cross-tab identity.",
+    "Live flow verified: request link → guest general feedback → recipient list; create match → match-specific link → guest feedback → match details; account sign-out/login, descriptions, mixed rosters, current date defaults, cross-tab identity, and organizer-only match editing.",
   );
 } finally {
   await browser?.close();

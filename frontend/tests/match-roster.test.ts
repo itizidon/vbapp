@@ -1,9 +1,5 @@
 import { expect, it } from "vitest";
-import {
-  buildMatchRoster,
-  initialMatchTeams,
-  nextTeamName,
-} from "../src/lib/match-roster";
+import { buildMatchRoster, initialMatchTeams } from "../src/lib/match-roster";
 it("groups the organizer, members, and guests under their selected teams", () => {
   expect(
     buildMatchRoster({
@@ -21,8 +17,13 @@ it("groups the organizer, members, and guests under their selected teams", () =>
     memberIds: [],
     guestNames: [],
     teams: [
-      { name: "Team 1", memberIds: ["me"], guestNames: [] },
-      { name: "Team 2", memberIds: ["other"], guestNames: ["Jordan"] },
+      { name: "Team 1", score: null, memberIds: ["me"], guestNames: [] },
+      {
+        name: "Team 2",
+        score: null,
+        memberIds: ["other"],
+        guestNames: ["Jordan"],
+      },
     ],
   });
 });
@@ -52,6 +53,17 @@ it("rejects stale team references rather than assigning a player incorrectly", (
   ).toThrow("no longer available");
 });
 
-it("does not reuse an existing automatic team name after a team is removed", () => {
-  expect(nextTeamName([{ key: "two", name: "Team 2" }])).toBe("Team 3");
+it("includes recorded team scores, including zero", () => {
+  const teams = initialMatchTeams().map((team, index) => ({
+    ...team,
+    score: index ? "21" : "0",
+  }));
+  const result = buildMatchRoster({
+    organizerId: "me",
+    members: [],
+    guests: [],
+    teams,
+    assignments: {},
+  });
+  expect(result.teams.map((team) => team.score)).toEqual([0, 21]);
 });

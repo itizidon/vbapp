@@ -1,7 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { hash, verify, argon2id } from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import { isUUID } from 'class-validator';
 import { LoginInput, RegisterInput } from '../common/inputs';
 
 const LEVELS:Record<string,string[]>= { volleyball:['B','BB','A','AA','OPEN'], 'beach-volleyball':['B','BB','A','AA','OPEN'] };
@@ -28,6 +30,42 @@ const LEVELS:Record<string,string[]>= { volleyball:['B','BB','A','AA','OPEN'], '
     if(query.length<2) return [];
     if(query.length>40) throw new BadRequestException('Search must be at most 40 characters');
     return this.db.user.findMany({where:{id:{not:actorId},username:{contains:query,mode:'insensitive'}},select:{id:true,username:true},orderBy:{username:'asc'},take:10});
+  }
+  updateVisibility(actorId:string,isPublic:boolean) {
+    return this.db.user.update({where:{id:actorId},data:{isPublic}});
+  }
+  async searchPlayers(search:string,cursor?:string) {
+    const query=search.trim();
+    if(query.length>40)throw new BadRequestException('Search must be at most 40 characters');
+    if(cursor&&!isUUID(cursor))throw new BadRequestException('Invalid player cursor');
+    return this.db.user.findMany({
+      where:query?{username:{contains:query,mode:'insensitive'}}:{},
+      select:{id:true,username:true,isPublic:true},
+      orderBy:[{username:'asc'},{id:'asc'}],take:51,
+      ...(cursor?{cursor:{id:cursor},skip:1}:{}),
+    });
+  }
+  async playerSuggestions(search:string) {
+    const query=search.trim();
+    if(query.length<2)return [];
+    if(query.length>254)throw new BadRequestException('Search must be at most 254 characters');
+    const escaped=query.replace(/[\\%_]/g,'\\$&');
+    const contains=`%${escaped}%`, prefix=`${escaped}%`;
+    return this.db.$queryRaw<{id:string;username:string;isPublic:boolean}[]>(Prisma.sql`
+      SELECT id, username::text AS username, "isPublic" FROM "User"
+      WHERE username ILIKE ${contains} OR email ILIKE ${contains}
+      ORDER BY CASE
+        WHEN username = ${query}::citext OR email = ${query}::citext THEN 0
+        WHEN username ILIKE ${prefix} OR email ILIKE ${prefix} THEN 1
+        ELSE 2 END, lower(username::text) ASC, id ASC
+      LIMIT 5
+    `);
+  }
+  async playerProfile(id:string) {
+    if(!isUUID(id))throw new BadRequestException('Invalid player ID');
+    const player=await this.db.user.findUnique({where:{id},select:{id:true,username:true,isPublic:true}});
+    if(!player)throw new NotFoundException('Player not found');
+    return player;
   }
   private async payload(user:{id:string;username:string;email:string;createdAt:Date;updatedAt:Date}) { return {accessToken:await this.jwt.signAsync({sub:user.id,id:user.id,username:user.username}),user}; }
 }

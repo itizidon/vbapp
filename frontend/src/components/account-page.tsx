@@ -3,6 +3,7 @@ import { useCatalog, useSummary, useUser } from "@/lib/hooks";
 import { UserAvatar, ErrorState, LoadingSkeleton, RatingStars } from "./common";
 import { AssessmentEditor } from "./assessment-editor";
 import { FeedbackRequestDialog } from "./feedback-request-dialog";
+import { AccountVisibilitySwitch } from "./account-visibility-switch";
 import { AccountMenu } from "./app-shell";
 import { PageHeader } from "./page-header";
 export function AccountPage() {
@@ -51,8 +52,8 @@ export function AccountPage() {
         <section id="feedback-links" className="panel space-y-4">
           <h2>Feedback links</h2>
           <p className="subtle text-sm">
-            Create a personal, single-use link for general feedback or one of
-            your matches. Expiration appears when your link is ready.
+            Create a reusable, 24-hour link for general feedback or one of your
+            matches. Expiration appears when your link is ready.
           </p>
           <FeedbackRequestDialog label="Create a feedback link" />
         </section>
@@ -63,10 +64,7 @@ export function AccountPage() {
             reviewer. Each reviewer chooses whether to allow aggregate analytics
             or future supporting evidence when submitting.
           </p>
-          <p className="subtle text-xs">
-            Account-wide visibility controls and password recovery are not
-            available yet.
-          </p>
+          <AccountVisibilitySwitch me={me} />
         </section>
       </div>
       <section className="panel mt-5">

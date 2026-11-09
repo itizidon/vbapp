@@ -32,6 +32,9 @@ export default async function Home() {
             perspective, and give them yours.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
+            <Button asChild variant="outline">
+              <Link href="/players">Search players</Link>
+            </Button>
             <Button asChild>
               <Link href="/signup">
                 Join Courtside

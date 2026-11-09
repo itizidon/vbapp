@@ -49,7 +49,7 @@ The initial migration enables `citext`, creates enums/tables/indexes/checks, enf
 - Matches: `createMatch`, `updateMatch`, `deleteMatch`, `match`, `userMatches`, `createMatchTeam`, `updateMatchTeam`, `removeMatchTeam`, `addMatchParticipant`, `addGuestMatchParticipant`, `assignParticipantToTeam`, `moveParticipantToTeam`, `removeMatchParticipant`, `updateTeamScore`
 - Feedback: `submitFeedback`, `submitGuestFeedback`, `createGuestFeedbackInvite`, `updateFeedback`, `deleteFeedback`, `feedback`, `receivedFeedback`, `submittedFeedback`
 - Self-assessments: `mySelfAssessments`, `userSelfAssessment`, `createSelfAssessment`, `updateSelfAssessment`, `updateSelfAssessmentRatings`
-- Analytics: `averageSkillRating`, `userSkillRatings`, `feedbackCount`, `skillRatingTrends`, `selfVsPeerRatings`, `userSportFeedbackSummary`, `userMatchHistory`, `matchResults`
+- Analytics: `myAnalytics`, `averageSkillRating`, `userSkillRatings`, `feedbackCount`, `skillRatingTrends`, `selfVsPeerRatings`, `userSportFeedbackSummary`, `userMatchHistory`, `matchResults`
 - System ratings: `playerSkillRatings`, `playerSportRating`, `playerRatingProfile`
 
 `createMatch(input: null)` and `createMatch` both create a draft with server-generated metadata. List operations use stable `(createdAt, id)` ordering and accept an opaque ID cursor; production clients should request at most 50 records and treat the 51st as a next-page sentinel.
@@ -58,7 +58,7 @@ The initial migration enables `citext`, creates enums/tables/indexes/checks, enf
 
 Registered feedback submission is one PostgreSQL `SERIALIZABLE` transaction. It validates recipient/sport/skills/match participation, takes a shared lock on the relevant current `SelfAssessment`, reads its ratings, and atomically inserts feedback, recipient ratings, copied overall metadata, and individual reviewer snapshots. Assessment writers take an exclusive lock on the same row. This prevents an overall level from one assessment version being combined with ratings from another. Serialization failures can occur under contention and callers should retry the whole mutation with bounded backoff.
 
-No-assessment and guest submissions create no snapshot. A guest invite is a signed, expiring JWT containing a random nonce and fixed recipient/sport/match scope; the nonce is consumed by the feedback insert's unique constraint. Snapshot fields never appear in inputs. Database triggers reject later edits, and ordinary feedback editing never refreshes them. A later submission takes a new snapshot.
+No-assessment and guest submissions create no snapshot. A guest invite is a signed, expiring JWT containing a random nonce and fixed recipient/sport/match scope; the nonce is retained on each submission for auditing, and multiple submissions may reuse the invite until its 24-hour expiration. Snapshot fields never appear in inputs. Database triggers reject later edits, and ordinary feedback editing never refreshes them. A later submission takes a new snapshot.
 
 Raw snapshots are private: only the registered reviewer sees their snapshot on authorized feedback reads. Recipients receive feedback with snapshot fields redacted. Public analytics only use rows explicitly marked `analyticsAllowed`; user-specific analytics require the subject's token. This is intentionally conservative and can later be replaced by an explicit sharing policy or administrator role.
 
@@ -81,3 +81,15 @@ Passwords use Argon2id and never enter GraphQL output types. JWTs default to 15 
 - Analytics are baseline SQL queries. Benchmark them on production-like volume before adding targeted indexes, materialized views, or partitions.
 - `deleteFeedback` performs privacy-preserving soft deletion; a separate audited retention job must perform physical deletion where policy requires it.
 - PostgreSQL integration tests are intentionally opt-in through `TEST_DATABASE_URL` so they never fall back to an in-memory database. CI should always provide that database and run migrations first.
+
+## Account visibility and player histories
+
+Accounts default to private (`User.isPublic = false`). Apply migrations with `pnpm prisma:deploy` and regenerate the client with `pnpm prisma:generate` before starting the updated backend.
+
+Authenticated users can change their own visibility with `updateAccountVisibility(isPublic: Boolean!)`. Public directory queries `searchPlayers(search: String!, cursor: String)` and `playerProfile(id: ID!)` expose only ID, username, and visibility. Private players remain searchable. `playerMatches(userId: ID!, cursor: String)` returns public players' organized/participated matches, teams, scores, and rosters in pages of 10 plus a lookahead row. It rejects private accounts on every request. Existing `userMatches` and organizer-only mutations retain their permissions; public profiles do not expose feedback or personal account information.
+
+The frontend provides a visibility switch on Account and **Search players** from the landing/matches pages. Public histories are read-only and available without signing in.
+
+Match/feedback arrays now return at most 11 rows (10 results plus lookahead). `userMatches` and `playerMatches` accept optional `playedFrom` (inclusive) and `playedBefore` (exclusive) DateTime filters on `playedAt`, applied before cursor pagination. `receivedFeedback` accepts `matchOnly: Boolean` to filter match/general feedback before pagination. The frontend loads subsequent 10-result pages on scroll and converts its inclusive local date range into these timestamp bounds. No additional database migration is needed for pagination or date filters.
+
+`myAnalytics(from: DateTime, before: DateTime, timeZone: String)` is an authenticated, current-user-only daily analytics endpoint. It returns active backend skill categories, daily win/loss percentages, per-category rating averages/counts, and period totals. Only feedback received by the authenticated user is summarized. Category names and IDs come from Skill records; they are not fixed in the chart. Results use full history and published feedback, with local-calendar daily buckets. The frontend Analytics tab supports 1W, 1M, 3M, YTD, 1Y, and ALL with one selected metric at a time.

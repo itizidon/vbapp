@@ -19,11 +19,23 @@ describe('team rosters at creation',()=>{
  it('creates teams before assigning registered and guest participants in the transaction',async()=>{
   const tx:any={match:{create:jest.fn().mockResolvedValue({id:'m'}),findUniqueOrThrow:jest.fn().mockResolvedValue({id:'m'})},matchTeam:{create:jest.fn().mockResolvedValueOnce({id:'t1'}).mockResolvedValueOnce({id:'t2'})},matchParticipant:{createMany:jest.fn()}};
   const db:any={$transaction:jest.fn(fn=>fn(tx))};
-  await new MatchesService(db).create('owner',{memberIds:['unassigned'],teams:[{name:' Sand ',memberIds:['owner']},{name:'Sea',guestNames:[' Taylor ']}]});
-  expect(tx.matchTeam.create).toHaveBeenNthCalledWith(1,{data:{matchId:'m',teamNumber:1,name:'Sand'}});
-  expect(tx.matchTeam.create).toHaveBeenNthCalledWith(2,{data:{matchId:'m',teamNumber:2,name:'Sea'}});
+  await new MatchesService(db).create('owner',{memberIds:['unassigned'],teams:[{name:' Sand ',score:0,memberIds:['owner']},{name:'Sea',score:21,guestNames:[' Taylor ']}]});
+  expect(tx.matchTeam.create).toHaveBeenNthCalledWith(1,{data:{matchId:'m',teamNumber:1,name:'Sand',score:0}});
+  expect(tx.matchTeam.create).toHaveBeenNthCalledWith(2,{data:{matchId:'m',teamNumber:2,name:'Sea',score:21}});
   expect(tx.matchParticipant.createMany).toHaveBeenCalledWith({data:[{matchId:'m',userId:'unassigned'},{matchId:'m',teamId:'t1',userId:'owner'},{matchId:'m',teamId:'t2',guestName:'Taylor'}]});
  });
  it('rejects a player repeated across teams before any writes',async()=>{const db:any={$transaction:jest.fn()};await expect(new MatchesService(db).create('owner',{teams:[{memberIds:['same']},{memberIds:['same']}]})).rejects.toBeInstanceOf(BadRequestException);expect(db.$transaction).not.toHaveBeenCalled()});
  it('validates nested team inputs',async()=>{const errors=await validate(plainToInstance(CreateMatchInput,{teams:[{name:'x'.repeat(101),memberIds:['bad-id']}]}));expect(errors.some(error=>error.property==='teams')).toBe(true)});
+});
+
+describe('scores at match creation',()=>{
+ it.each([-1, 1.5, 2147483648])('rejects invalid scores before writing: %s',async score=>{
+  const db:any={$transaction:jest.fn()};
+  await expect(new MatchesService(db).create('owner',{teams:[{score}]})).rejects.toBeInstanceOf(BadRequestException);
+  expect(db.$transaction).not.toHaveBeenCalled();
+ });
+ it.each([-1, 1.5, 2147483648])('validates nested score input: %s',async score=>{
+  const errors=await validate(plainToInstance(CreateMatchInput,{teams:[{score}]}));
+  expect(errors.some(error=>error.property==='teams')).toBe(true);
+ });
 });

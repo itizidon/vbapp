@@ -14,6 +14,17 @@ input AddParticipantInput {
   userId: ID!
 }
 
+type AnalyticsDashboard {
+  before: DateTime!
+  categories: [SkillModel!]!
+  from: DateTime
+  losses: Int!
+  points: [DailyAnalyticsPoint!]!
+  ratingCount: Int!
+  timeZone: String!
+  wins: Int!
+}
+
 input AssessmentRatingInput {
   rating: Int!
   skillId: ID!
@@ -51,6 +62,20 @@ input CreateTeamInput {
   name: String
   score: Int
   teamNumber: Int
+}
+
+type DailyAnalyticsPoint {
+  date: String!
+  losses: Int!
+  ratings: [DailyCategoryRating!]!
+  winRate: Float
+  wins: Int!
+}
+
+type DailyCategoryRating {
+  average: Float!
+  count: Int!
+  skillId: ID!
 }
 
 """
@@ -99,6 +124,12 @@ type GuestInvitePayload {
   token: String!
 }
 
+type IndividualCategoryFeedback {
+  id: ID!
+  rating: Int!
+  submittedAt: DateTime!
+}
+
 input LoginInput {
   login: String!
   password: String!
@@ -108,6 +139,7 @@ input MatchCreationTeamInput {
   guestNames: [String!]
   memberIds: [ID!]
   name: String
+  score: Int
 }
 
 type MatchModel {
@@ -170,12 +202,19 @@ type Mutation {
   removeMatchTeam(id: ID!): MatchTeamModel!
   submitFeedback(input: SubmitFeedbackInput!): FeedbackModel!
   submitGuestFeedback(input: SubmitGuestFeedbackInput!): FeedbackModel!
+  updateAccountVisibility(isPublic: Boolean!): UserModel!
   updateFeedback(input: UpdateFeedbackInput!): FeedbackModel!
   updateMatch(input: UpdateMatchInput!): MatchModel!
   updateMatchTeam(input: UpdateTeamInput!): MatchTeamModel!
   updateSelfAssessment(input: UpdateSelfAssessmentInput!): SelfAssessmentModel!
   updateSelfAssessmentRatings(input: UpdateSelfAssessmentRatingsInput!): SelfAssessmentModel!
   updateTeamScore(score: Int, teamId: ID!): MatchTeamModel!
+}
+
+type PlayerDirectoryModel {
+  id: ID!
+  isPublic: Boolean!
+  username: String!
 }
 
 type PlayerRatingProfileModel {
@@ -224,11 +263,17 @@ type Query {
   matchResults(matchId: ID!): MatchModel
   me: UserModel!
   members(search: String!): [MemberModel!]!
+  myAnalytics(before: DateTime, from: DateTime, timeZone: String! = "UTC"): AnalyticsDashboard!
+  myCategoryFeedback(before: DateTime, from: DateTime, skillId: ID!): [IndividualCategoryFeedback!]!
   mySelfAssessments: [SelfAssessmentModel!]!
+  playerMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime, userId: ID!): [MatchModel!]!
+  playerProfile(id: ID!): PlayerDirectoryModel!
   playerRatingProfile(sportId: ID!, userId: ID!): PlayerRatingProfileModel!
   playerSkillRatings(sportId: ID!, userId: ID!): [PlayerSkillRatingModel!]!
   playerSportRating(sportId: ID!, userId: ID!): PlayerSportRatingModel
-  receivedFeedback(cursor: String): [FeedbackModel!]!
+  playerSuggestions(search: String!): [PlayerDirectoryModel!]!
+  receivedFeedback(createdBefore: DateTime, createdFrom: DateTime, cursor: String, matchOnly: Boolean): [FeedbackModel!]!
+  searchPlayers(cursor: String, search: String! = ""): [PlayerDirectoryModel!]!
   selfVsPeerRatings(sportId: ID!): [SelfVsPeerRating!]!
   skillRatingTrends(skillId: ID!): [SkillRatingPoint!]!
   skills(sportId: ID!): [SkillModel!]!
@@ -236,7 +281,7 @@ type Query {
   sports: [SportModel!]!
   submittedFeedback(cursor: String): [FeedbackModel!]!
   userMatchHistory: [MatchModel!]!
-  userMatches(cursor: String): [MatchModel!]!
+  userMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime): [MatchModel!]!
   userSelfAssessment(sportId: ID!, userId: ID!): SelfAssessmentModel
   userSkillRatings(userId: ID!): [AverageSkillRating!]!
   userSportFeedbackSummary: [SportFeedbackSummary!]!
@@ -377,6 +422,7 @@ type UserModel {
   createdAt: DateTime!
   email: String!
   id: ID!
+  isPublic: Boolean!
   updatedAt: DateTime!
   username: String!
 }

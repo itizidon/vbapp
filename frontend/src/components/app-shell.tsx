@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "next-themes";
 import {
   Activity,
+  TrendingUp,
   CalendarDays,
   MessageSquare,
   UserRound,
@@ -16,11 +17,13 @@ import {
 import { useUser } from "@/lib/hooks";
 import { notifyAuthChanged } from "@/lib/auth-session";
 import { ApiError } from "@/lib/api";
+import { TopPlayerSearch } from "./top-player-search";
 import { Button } from "./ui/button";
 import { ErrorState, LoadingSkeleton } from "./common";
 const tabs = [
   { href: "/matches", label: "Matches", Icon: CalendarDays },
   { href: "/feedback", label: "Feedback", Icon: MessageSquare },
+  { href: "/analytics", label: "Analytics", Icon: TrendingUp },
   { href: "/account", label: "Account", Icon: UserRound },
 ];
 export function Brand() {
@@ -57,8 +60,8 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
       aria-label={mobile ? "Mobile navigation" : "Main navigation"}
       className={
         mobile
-          ? "fixed inset-x-0 bottom-0 z-30 grid grid-cols-3 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] sm:hidden"
-          : "hidden items-center gap-2 sm:flex"
+          ? "fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 border-t border-border bg-card pb-[env(safe-area-inset-bottom)] md:hidden"
+          : "hidden items-center gap-1 md:flex"
       }
     >
       {tabs.map(({ href, label, Icon }) => {
@@ -71,7 +74,7 @@ function Navigation({ mobile = false }: { mobile?: boolean }) {
             className={
               mobile
                 ? `flex min-h-16 flex-col items-center justify-center gap-1 text-xs ${active ? "text-primary" : "text-muted-foreground"}`
-                : `flex min-h-11 items-center gap-2 rounded-xl px-4 text-sm font-semibold ${active ? "bg-accent text-primary" : "text-muted-foreground hover:bg-muted"}`
+                : `flex min-h-11 items-center gap-2 rounded-xl px-2 text-sm font-semibold lg:px-4 ${active ? "bg-accent text-primary" : "text-muted-foreground hover:bg-muted"}`
             }
           >
             <Icon size={19} />
@@ -156,15 +159,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         Skip to content
       </a>
       <header className="sticky top-0 z-20 border-b border-border bg-card/95 backdrop-blur-sm">
-        <div className="mx-auto flex min-h-20 max-w-6xl items-center justify-between gap-3 px-4 sm:px-6">
+        <div className="mx-auto flex min-h-20 max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:flex-nowrap">
           <Brand />
           <DesktopNavigation />
+          <div className="order-last w-full min-w-0 lg:order-none lg:w-56 lg:shrink-0">
+            <TopPlayerSearch enabled={!!user.data} />
+          </div>
           <ThemeToggle />
         </div>
       </header>
       <main
         id="main-content"
-        className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-7 sm:px-6 sm:pb-12 sm:pt-10"
+        className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-7 sm:px-6 md:pb-12 sm:pt-10"
       >
         {user.isPending || unauthenticated ? (
           <LoadingSkeleton />

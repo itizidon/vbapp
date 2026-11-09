@@ -11,6 +11,7 @@ import { Type } from 'class-transformer';
 @InputType() export class UpdateSelfAssessmentInput { @Field(()=>ID) @IsUUID() id!:string; @Field() @IsString() overallLevel!:string; }
 @InputType() export class UpdateSelfAssessmentRatingsInput { @Field(()=>ID) @IsUUID() id!:string; @Field(()=>[AssessmentRatingInput]) @ArrayMinSize(1) @ValidateNested({each:true}) @Type(()=>AssessmentRatingInput) ratings!:AssessmentRatingInput[]; }
 @InputType() export class MatchCreationTeamInput {
+ @Field(()=>Int,{nullable:true}) @IsOptional() @IsInt() @Min(0) @Max(2147483647) score?:number;
  @Field({nullable:true}) @IsOptional() @Length(1,100) name?:string;
  @Field(()=>[ID],{nullable:true}) @IsOptional() @ArrayMaxSize(50) @ArrayUnique() @IsUUID(undefined,{each:true}) memberIds?:string[];
  @Field(()=>[String],{nullable:true}) @IsOptional() @ArrayMaxSize(50) @IsString({each:true}) @Length(1,100,{each:true}) guestNames?:string[];

@@ -1,7 +1,9 @@
+import { parseTeamScore } from "./match-edit";
 import type { Member } from "./types";
 export interface DraftTeam {
   key: string;
   name: string;
+  score?: string;
 }
 export interface DraftGuest {
   key: string;
@@ -32,6 +34,7 @@ export function buildMatchRoster({
     guestNames: [] as string[],
     teams: teams.map((team, index) => ({
       name: team.name.trim() || `Team ${index + 1}`,
+      score: parseTeamScore(team.score ?? ""),
       memberIds: [] as string[],
       guestNames: [] as string[],
     })),
@@ -54,11 +57,4 @@ export function buildMatchRoster({
   for (const guest of guests)
     group(`guest:${guest.key}`).guestNames.push(guest.name);
   return output;
-}
-
-export function nextTeamName(teams: DraftTeam[]) {
-  let number = teams.length + 1;
-  const names = new Set(teams.map((team) => team.name.trim().toLowerCase()));
-  while (names.has(`team ${number}`)) number++;
-  return `Team ${number}`;
 }

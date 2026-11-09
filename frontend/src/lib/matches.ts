@@ -39,3 +39,21 @@ export function recipientMatches(matches: Match[], recipientId: string) {
     match.participants?.some((p) => p.userId === recipientId),
   );
 }
+
+export function teamResult(
+  team: { score: number | null },
+  teams: { score: number | null }[],
+): "Win" | "Loss" | null {
+  if (teams.length < 2 || teams.some((item) => item.score === null))
+    return null;
+  const highest = Math.max(...teams.map((item) => item.score!));
+  if (teams.filter((item) => item.score === highest).length !== 1) return null;
+  return team.score === highest ? "Win" : "Loss";
+}
+
+export function playerMatchResult(match: Match, userId?: string) {
+  if (!userId) return null;
+  const player = match.participants?.find((item) => item.userId === userId);
+  const team = match.teams?.find((item) => item.id === player?.teamId);
+  return team ? teamResult(team, match.teams ?? []) : null;
+}

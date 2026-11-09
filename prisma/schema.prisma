@@ -26,6 +26,7 @@ model User {
   id String @id @default(uuid()) @db.Uuid
   username String @unique @db.Citext
   email String @unique @db.Citext
+  isPublic Boolean @default(false)
   passwordHash String
   age Int
   heightCm Int
@@ -129,7 +130,7 @@ model Feedback {
   matchId String? @db.Uuid
   overallComment String?
   guestName String?
-  guestInviteNonce String? @unique @db.Uuid
+  guestInviteNonce String? @db.Uuid
   guestInviteExpiresAt DateTime?
   status FeedbackStatus @default(PUBLISHED)
   analyticsAllowed Boolean @default(false)
@@ -146,6 +147,7 @@ model Feedback {
   match Match? @relation(fields:[matchId], references:[id], onDelete:SetNull)
   ratings FeedbackRating[]
   reviewerSkillSnapshots FeedbackReviewerSkillSnapshot[]
+  @@index([guestInviteNonce])
   @@index([recipientId, createdAt])
   @@index([sportId, createdAt])
   @@index([reviewerId])

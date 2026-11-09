@@ -30,7 +30,7 @@ export async function gql<T>(
   }
   return result.data as T;
 }
-export const USER_FIELDS = "id username email createdAt";
+export const USER_FIELDS = "id username email createdAt isPublic";
 export const FEEDBACK_FIELDS =
   "id recipientId matchId sportId reviewerId guestName overallComment createdAt status analyticsAllowed evidenceAllowed ratings { skillId rating comment }";
 export const CATALOG = `query Catalog { sports { id name slug skills { id name slug sportId active requiredForSelfAssessment description } } }`;

@@ -1,4 +1,5 @@
 "use client";
+import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Copy, Check, Share2, Plus, Link as LinkIcon } from "lucide-react";
@@ -55,6 +56,22 @@ export function FeedbackLinkShare({
           onFocus={(event) => event.target.select()}
         />
       </label>
+      <figure className="mx-auto max-w-64 space-y-2">
+        <div className="rounded-xl bg-white p-2">
+          <QRCodeSVG
+            value={url}
+            size={256}
+            level="M"
+            marginSize={4}
+            role="img"
+            aria-label="Feedback link QR code"
+            className="h-auto w-full"
+          />
+        </div>
+        <figcaption className="subtle text-center text-xs">
+          Scan to open the feedback form.
+        </figcaption>
+      </figure>
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={copy}>
           {copied ? <Check size={16} /> : <Copy size={16} />}Copy link
@@ -68,7 +85,7 @@ export function FeedbackLinkShare({
           )}
       </div>
       <p className="subtle text-xs">
-        Guest link: single use · expires {new Date(expiresAt).toLocaleString()}
+        Reusable for 24 hours · expires {new Date(expiresAt).toLocaleString()}
       </p>
       <p role="status" className="text-xs">
         {message}
@@ -179,8 +196,8 @@ export function FeedbackRequestDialog({
                 />
               )}
               <p className="subtle text-xs">
-                The link is restricted to your choice. Create a separate link
-                for each reviewer.
+                The link is restricted to your choice and can be used by
+                multiple reviewers for 24 hours.
               </p>
               {catalog.error && (
                 <ErrorState

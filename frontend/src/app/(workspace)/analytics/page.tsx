@@ -1,4 +1,4 @@
-import { redirect } from "next/navigation";
+import { AnalyticsPage } from "@/components/analytics-page";
 export default function Page() {
-  redirect("/feedback");
+  return <AnalyticsPage />;
 }

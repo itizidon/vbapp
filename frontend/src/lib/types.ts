@@ -1,4 +1,5 @@
 export interface User {
+  isPublic: boolean;
   id: string;
   username: string;
   email: string;
@@ -93,4 +94,10 @@ export interface Match {
   updatedAt: string;
   teams: MatchTeam[] | null;
   participants: MatchParticipant[] | null;
+}
+
+export interface PlayerProfile {
+  id: string;
+  username: string;
+  isPublic: boolean;
 }

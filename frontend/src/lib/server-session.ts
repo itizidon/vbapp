@@ -13,7 +13,7 @@ export async function getCurrentUser(): Promise<User | null> {
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          query: "query CurrentUser {me{id username email createdAt}}",
+          query: "query CurrentUser {me{id username email createdAt isPublic}}",
         }),
         cache: "no-store",
         signal: AbortSignal.timeout(5000),

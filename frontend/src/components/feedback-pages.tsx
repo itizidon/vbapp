@@ -1,5 +1,8 @@
 "use client";
 import Link from "next/link";
+import { EMPTY_DATE_RANGE } from "@/lib/match-date-range";
+import { MatchDateFilter } from "./match-date-filter";
+import { InfiniteResults } from "./infinite-results";
 import { useState } from "react";
 import {
   useCatalog,
@@ -14,10 +17,12 @@ import { Button } from "./ui/button";
 import { LoadingSkeleton, ErrorState, EmptyState, UserAvatar } from "./common";
 export function FeedbackList() {
   const catalog = useCatalog();
-  const feedback = useFeedback();
   const [filter, setFilter] = useState("all");
+  const [range, setRange] = useState(EMPTY_DATE_RANGE);
+  const feedback = useFeedback(true, filter, range);
   if (catalog.isPending || feedback.isPending) return <LoadingSkeleton />;
-  const error = catalog.error ?? feedback.error;
+  const error =
+    catalog.error ?? (feedback.isFetchNextPageError ? null : feedback.error);
   if (error)
     return (
       <ErrorState
@@ -59,8 +64,9 @@ export function FeedbackList() {
           </Button>
         ))}
       </div>
+      <MatchDateFilter subject="feedback" value={range} onApply={setRange} />
       <p className="subtle mb-4 text-xs">
-        Newest first · filters apply to loaded feedback.
+        Newest first · 10 results at a time.
       </p>
       <div className="grid gap-4">
         {rows.length ? (
@@ -69,23 +75,26 @@ export function FeedbackList() {
           ))
         ) : (
           <section className="panel">
-            <EmptyState title="No feedback here yet">
-              Request feedback from someone you play with, or try another
-              filter.
+            <EmptyState
+              title={
+                range.from || range.to
+                  ? "No feedback in this date range"
+                  : "No feedback here yet"
+              }
+            >
+              {range.from || range.to
+                ? "Try different dates or clear the date filter."
+                : "Request feedback from someone you play with, or try another filter."}
             </EmptyState>
           </section>
         )}
       </div>
-      {feedback.hasNextPage && (
-        <Button
-          className="mt-6 w-full"
-          variant="outline"
-          disabled={feedback.isFetchingNextPage}
-          onClick={() => feedback.fetchNextPage()}
-        >
-          {feedback.isFetchingNextPage ? "Loading…" : "Load older feedback"}
-        </Button>
-      )}
+      <InfiniteResults
+        hasNextPage={!!feedback.hasNextPage}
+        isFetchingNextPage={feedback.isFetchingNextPage}
+        error={feedback.isFetchNextPageError ? feedback.error : null}
+        onLoadMore={() => feedback.fetchNextPage()}
+      />
     </>
   );
 }

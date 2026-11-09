@@ -1,16 +1,15 @@
 "use client";
-import { useRef, useState } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
-import { Plus, X } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useCatalog, useUser } from "@/lib/hooks";
 import { gql } from "@/lib/api";
 import { MATCH_FIELDS } from "@/lib/matches";
 import {
   buildMatchRoster,
   initialMatchTeams,
-  nextTeamName,
   type DraftGuest,
   type DraftTeam,
   type TeamAssignments,
@@ -33,6 +32,7 @@ export function CreateMatchDialog() {
   const [teams, setTeams] = useState<DraftTeam[]>(initialMatchTeams);
   const [assignments, setAssignments] = useState<TeamAssignments>({});
   const locked = useRef(false);
+  const [navigating, startTransition] = useTransition();
   const catalog = useCatalog();
   const user = useUser();
   const router = useRouter();
@@ -68,18 +68,22 @@ export function CreateMatchDialog() {
       return response.createMatch;
     },
     onSuccess: (match) => {
-      client.invalidateQueries({ queryKey: ["matches"] });
-      client.invalidateQueries({ queryKey: ["match", match.id] });
-      setOpen(false);
-      router.push(`/matches/${match.id}`);
+      client.setQueryData(["match", match.id], { match });
+      void client.invalidateQueries({
+        queryKey: ["matches"],
+        refetchType: "none",
+      });
+      startTransition(() => router.push(`/matches/${match.id}`));
     },
     onError: () => {
       locked.current = false;
     },
   });
+  const busy = mutation.isPending || mutation.isSuccess || navigating;
   return (
     <>
       <Button
+        disabled={busy}
         onClick={() => {
           locked.current = false;
           mutation.reset();
@@ -99,10 +103,10 @@ export function CreateMatchDialog() {
       <Dialog
         open={open}
         onOpenChange={(value) => {
-          if (!mutation.isPending) setOpen(value);
+          if (!busy) setOpen(value);
         }}
       >
-        <DialogContent>
+        <DialogContent className="lg:max-w-4xl lg:p-8">
           <DialogTitle className="pr-9 text-xl font-bold">
             Create a match
           </DialogTitle>
@@ -126,7 +130,7 @@ export function CreateMatchDialog() {
               <input
                 placeholder="Sunday beach session"
                 maxLength={500}
-                disabled={mutation.isPending}
+                disabled={busy}
                 {...form.register("description")}
               />
             </label>
@@ -135,85 +139,26 @@ export function CreateMatchDialog() {
               <span className="subtle font-normal">(optional)</span>
               <input
                 type="datetime-local"
-                disabled={mutation.isPending}
+                disabled={busy}
                 {...form.register("playedAt")}
               />
             </label>
-            <fieldset
-              disabled={mutation.isPending}
-              className="space-y-3 rounded-xl border border-border p-4"
-            >
-              <legend className="px-1 text-base font-semibold">Teams</legend>
-              <p className="subtle text-xs">
-                Name your teams, then choose a team for each player below.
-              </p>
-              {teams.map((team, index) => (
-                <div key={team.key} className="flex min-w-0 items-end gap-2">
-                  <label className="field min-w-0 flex-1">
-                    Team {index + 1} name
-                    <input
-                      maxLength={100}
-                      value={team.name}
-                      onChange={(event) =>
-                        setTeams((previous) =>
-                          previous.map((item) =>
-                            item.key === team.key
-                              ? { ...item, name: event.target.value }
-                              : item,
-                          ),
-                        )
-                      }
-                    />
-                  </label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="size-11 shrink-0 px-0"
-                    aria-label={`Remove team ${team.name.trim() || index + 1}`}
-                    onClick={() => {
-                      setTeams((previous) =>
-                        previous.filter((item) => item.key !== team.key),
-                      );
-                      setAssignments((previous) =>
-                        Object.fromEntries(
-                          Object.entries(previous).filter(
-                            ([, value]) => value !== team.key,
-                          ),
-                        ),
-                      );
-                    }}
-                  >
-                    <X size={16} />
-                  </Button>
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="outline"
-                disabled={teams.length >= 50}
-                onClick={() =>
-                  setTeams((previous) => [
-                    ...previous,
-                    {
-                      key: crypto.randomUUID(),
-                      name: nextTeamName(previous),
-                    },
-                  ])
-                }
-              >
-                <Plus size={16} />
-                Add team
-              </Button>
-            </fieldset>
             <ParticipantPicker
               organizer={user.data?.me}
               members={members}
               guests={guests}
               onMembersChange={setMembers}
               onGuestsChange={setGuests}
-              disabled={mutation.isPending}
+              disabled={busy}
               teams={teams}
               assignments={assignments}
+              onScoreChange={(teamKey, score) =>
+                setTeams((previous) =>
+                  previous.map((team) =>
+                    team.key === teamKey ? { ...team, score } : team,
+                  ),
+                )
+              }
               onTeamChange={(playerKey, teamKey) =>
                 setAssignments((previous) => ({
                   ...previous,
@@ -234,10 +179,14 @@ export function CreateMatchDialog() {
             )}
             <Button
               className="w-full"
-              disabled={!catalog.data?.sports.length || mutation.isPending}
+              disabled={!catalog.data?.sports.length || busy}
             >
-              {mutation.isPending ? (
-                <Pending label="Creating match…" />
+              {busy ? (
+                <Pending
+                  label={
+                    mutation.isPending ? "Creating match…" : "Opening match…"
+                  }
+                />
               ) : (
                 "Create match"
               )}
