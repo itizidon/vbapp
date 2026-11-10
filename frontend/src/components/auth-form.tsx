@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Check, ShieldCheck } from "lucide-react";
@@ -159,34 +159,34 @@ export function LoginForm({ returnTo = "/matches" }: { returnTo?: string }) {
     </AuthFrame>
   );
 }
+const signupFormSchema = signupSchema.omit({ sportId: true });
 export function SignupForm({ returnTo = "/matches" }: { returnTo?: string }) {
   const router = useRouter();
   const client = useQueryClient();
   const catalog = useCatalog();
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [ratingError, setRatingError] = useState("");
-  const form = useForm<z.infer<typeof signupSchema>>({
-    resolver: zodResolver(signupSchema),
+  const form = useForm<z.infer<typeof signupFormSchema>>({
+    resolver: zodResolver(signupFormSchema),
     defaultValues: {
       username: "",
       email: "",
       password: "",
       age: 18,
       heightCm: 170,
-      sportId: "",
       overallLevel: "B",
     },
   });
-  const sportId = useWatch({ control: form.control, name: "sportId" });
-  const sport = catalog.data?.sports.find((s) => s.id === sportId);
+  const sport = catalog.data?.sports.find((s) => s.slug === "beach-volleyball");
   const skills = sport?.skills.filter((s) => s.active) ?? [];
   const mutation = useMutation({
-    mutationFn: (input: z.infer<typeof signupSchema>) =>
+    mutationFn: (input: z.infer<typeof signupFormSchema>) =>
       gql<{ register: { user: User } }>(
         `mutation Register($input:RegisterInput!){register(input:$input){accessToken user {${USER_FIELDS}}}}`,
         {
           input: {
             ...input,
+            sportId: sport!.id,
             ratings: Object.entries(ratings)
               .filter(([, rating]) => rating > 0)
               .map(([skillId, rating]) => ({ skillId, rating })),
@@ -200,7 +200,8 @@ export function SignupForm({ returnTo = "/matches" }: { returnTo?: string }) {
       router.push(safeReturnTo(returnTo));
     },
   });
-  function submit(input: z.infer<typeof signupSchema>) {
+  function submit(input: z.infer<typeof signupFormSchema>) {
+    if (!sport) return;
     const values = Object.entries(ratings)
       .filter(([, rating]) => rating > 0)
       .map(([skillId, rating]) => ({ skillId, rating }));
@@ -276,31 +277,13 @@ export function SignupForm({ returnTo = "/matches" }: { returnTo?: string }) {
         </p>
         {catalog.error ? (
           <ErrorState error={catalog.error} retry={() => catalog.refetch()} />
-        ) : (
-          <label className="field">
-            Your sport
-            <select
-              {...form.register("sportId")}
-              onChange={(e) => {
-                form.setValue("sportId", e.target.value);
-                setRatings({});
-              }}
-              disabled={catalog.isPending}
-            >
-              <option value="">
-                {catalog.isPending ? "Loading sports…" : "Choose a sport"}
-              </option>
-              {catalog.data?.sports.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            {form.formState.errors.sportId && (
-              <span className="error">Choose your sport</span>
-            )}
-          </label>
-        )}
+        ) : catalog.isPending ? (
+          <Pending label="Loading player skills…" />
+        ) : !sport ? (
+          <p role="alert" className="error">
+            Player skills are not available yet. Please try again later.
+          </p>
+        ) : null}
         {sport && (
           <>
             <label className="field">
@@ -352,7 +335,9 @@ export function SignupForm({ returnTo = "/matches" }: { returnTo?: string }) {
         )}
         <Button
           className="w-full"
-          disabled={mutation.isPending || catalog.isPending || !!catalog.error}
+          disabled={
+            mutation.isPending || catalog.isPending || !!catalog.error || !sport
+          }
         >
           {mutation.isPending ? (
             <Pending label="Creating account…" />

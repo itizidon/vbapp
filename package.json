@@ -15,7 +15,9 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
-    "prisma:seed": "tsx --env-file=.env prisma/seed.ts"
+    "prisma:seed": "tsx --env-file=.env prisma/seed.ts",
+    "prisma:seed:deploy": "node dist/prisma/seed.js",
+    "db:deploy": "pnpm prisma:deploy && pnpm prisma:seed:deploy"
   },
   "dependencies": {
     "@apollo/server": "^5.1.0",
