@@ -8,7 +8,29 @@ const request = (body: object, origin = "http://localhost:3001") =>
     headers: { "content-type": "application/json", origin },
     body: JSON.stringify(body),
   });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
+it("accepts the configured public origin behind a reverse proxy", async () => {
+  vi.stubEnv("FRONTEND_URL", "https://qa.example.com/");
+  const response = await POST(
+    request({ action: "logout" }, "https://qa.example.com"),
+  );
+  expect(response.status).toBe(200);
+});
+it("rejects unrelated origins even when forwarded headers match them", async () => {
+  vi.stubEnv("FRONTEND_URL", "https://qa.example.com");
+  const req = request({ action: "logout" }, "https://other.example");
+  req.headers.set("x-forwarded-host", "other.example");
+  req.headers.set("x-forwarded-proto", "https");
+  const response = await POST(req);
+  expect(response.status).toBe(403);
+});
+it("does not accept the internal origin when a public origin is configured", async () => {
+  vi.stubEnv("FRONTEND_URL", "https://qa.example.com");
+  expect((await POST(request({ action: "logout" }))).status).toBe(403);
+});
 it("rejects cross-origin mutations", async () => {
   expect(
     (await POST(request({ query: "mutation X{x}" }, "https://other.example")))

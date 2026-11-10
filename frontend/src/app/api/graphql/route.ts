@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 const cookieName = "courtside_session";
 export async function POST(req: NextRequest) {
-  const origin = req.headers.get("origin");
-  if (origin && origin !== req.nextUrl.origin)
-    return NextResponse.json(
-      { errors: [{ message: "Request origin rejected" }] },
-      { status: 403 },
-    );
   try {
+    const origin = req.headers.get("origin");
+    // A reverse proxy may expose an internal host/protocol in nextUrl.
+    // Trust an explicitly configured public URL rather than forwarded headers.
+    const expectedOrigin = process.env.FRONTEND_URL
+      ? new URL(process.env.FRONTEND_URL).origin
+      : req.nextUrl.origin;
+    if (origin && origin !== expectedOrigin)
+      return NextResponse.json(
+        { errors: [{ message: "Request origin rejected" }] },
+        { status: 403 },
+      );
     const body = await req.json();
     if (body.action === "logout") {
       const response = NextResponse.json({ data: { logout: true } });

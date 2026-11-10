@@ -16,6 +16,8 @@ npm run dev
 
 Open http://localhost:3001. The backend needs PostgreSQL, migrations, and the Beach Volleyball catalog (`pnpm prisma:seed` in the backend directory). `GRAPHQL_API_URL` is a server-only setting defaulting to `http://localhost:3000/graphql`; no browser API secrets are needed. Development uses Next.js's supported webpack mode. Production: `npm run build` then `npm start`, with HTTPS on the deployment host.
 
+For Railway or another reverse proxy, set `FRONTEND_URL=https://your-frontend-domain` in the frontend service and redeploy. The `/api/graphql` origin check uses that public URL instead of the internal request URL, preventing false `403 Request origin rejected` responses while continuing to reject other browser origins. Use the frontend URL you open in the browser, not the backend GraphQL URL. Without this variable, the check uses the request URL for local development. This setting does not restrict QA to invited users; a separate access gate is still needed for that.
+
 ## Navigation and pages
 
 There are four primary tabs: **Matches**, **Feedback**, **Analytics**, **Account**. Desktop/tablet use a compact top navigation; mobile uses safe-area-aware bottom navigation. Content is centered at a maximum width of 1152px.
