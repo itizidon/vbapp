@@ -1,10 +1,11 @@
 {
   "$schema": "https://railway.com/railway.schema.json",
   "build": {
-    "buildCommand": "pnpm build"
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile.backend"
   },
   "deploy": {
     "preDeployCommand": ["pnpm db:deploy"],
-    "startCommand": "pnpm start:prod"
+    "startCommand": "node dist/src/main.js"
   }
 }
