@@ -1,5 +1,11 @@
-import { Field, GraphQLISODateTime, ID, Int, ObjectType } from '@nestjs/graphql';
-import { SkillModel } from '../common/models';
+import {
+  Field,
+  GraphQLISODateTime,
+  ID,
+  Int,
+  ObjectType,
+} from "@nestjs/graphql";
+import { SkillModel } from "../common/models";
 @ObjectType()
 export class DailyCategoryRating {
   @Field(() => ID) skillId!: string;
@@ -31,4 +37,14 @@ export class IndividualCategoryFeedback {
   @Field(() => ID) id!: string;
   @Field(() => GraphQLISODateTime) submittedAt!: Date;
   @Field(() => Int) rating!: number;
+}
+
+@ObjectType()
+export class PerformanceSummary {
+  @Field(() => Number, { nullable: true }) winRate!: number | null;
+  @Field(() => Int) currentStreak!: number;
+  @Field() streakKind!: string;
+  @Field(() => Int) gamesPlayed!: number;
+  @Field(() => Number, { nullable: true }) averagePlayerRating!: number | null;
+  @Field(() => Int) ratedSkillCount!: number;
 }

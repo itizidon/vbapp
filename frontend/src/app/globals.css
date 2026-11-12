@@ -169,3 +169,434 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Cinematic performance view; tokens are scoped so the rest of the app keeps its theme. */
+.performance-profile {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  margin-bottom: 28px;
+  border-radius: 24px;
+  color: #f6f4ec;
+  background: #15333d;
+  border: 1px solid rgba(237, 201, 148, 0.3);
+  --foreground: #f6f4ec;
+  --muted-foreground: #c5d0d0;
+  --card: #0a202a;
+  --muted: rgba(8, 27, 36, 0.72);
+  --border: rgba(234, 210, 167, 0.28);
+  --primary: #f4b366;
+  --accent: rgba(239, 181, 106, 0.14);
+  box-shadow: 0 20px 60px rgba(9, 32, 41, 0.16);
+}
+.beach-court-background {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: #2c596b url("/assets/beach-performance.webp") center center/cover
+    no-repeat;
+}
+.beach-court-background__shade {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(3, 20, 29, 0.65) 0%,
+    rgba(7, 26, 34, 0.35) 32%,
+    rgba(9, 31, 39, 0.3) 67%,
+    rgba(5, 20, 27, 0.56) 100%
+  );
+  box-shadow: inset 0 0 110px rgba(0, 13, 22, 0.48);
+}
+.performance-profile__content {
+  padding: 28px 24px 24px;
+  position: relative;
+}
+.performance-profile__heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.performance-profile__heading h1 {
+  font-family: Impact, "Arial Narrow", sans-serif;
+  font-size: clamp(30px, 3.5vw, 48px);
+  font-weight: 900;
+  letter-spacing: 0.025em;
+  line-height: 1.08;
+  color: #fffaf1;
+  text-shadow: 0 3px 20px rgba(2, 15, 22, 0.6);
+}
+.performance-profile__eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: #f3cb91;
+  margin-bottom: 12px;
+}
+.performance-profile__eyebrow span {
+  color: #fff5;
+  padding: 0 8px;
+}
+.performance-profile__intro {
+  font-size: 13px;
+  color: #dce1dd;
+  margin-top: 10px;
+  line-height: 1.5;
+}
+.performance-profile__season {
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: #d5dacf;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+.performance-live-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: #8dd9aa;
+  border-radius: 50%;
+  margin-right: 7px;
+  box-shadow: 0 0 8px #8dd9aa;
+}
+.performance-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 28px;
+}
+.performance-summary__error {
+  grid-column: 1/-1;
+}
+.performance-stat {
+  min-width: 0;
+  padding: 17px 18px 14px;
+  border: 1px solid rgba(255, 220, 162, 0.27);
+  border-radius: 12px;
+  background: linear-gradient(
+    135deg,
+    rgba(5, 24, 33, 0.87),
+    rgba(10, 32, 40, 0.73)
+  );
+  box-shadow:
+    inset 0 1px 0 #ffffff0b,
+    0 6px 18px #071d282b;
+}
+.performance-stat__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #ddc9a9;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+.performance-stat__label svg {
+  color: #efbc79;
+  flex-shrink: 0;
+}
+.performance-stat__value {
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.3;
+  letter-spacing: -0.03em;
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+  color: #f6c682;
+}
+.performance-stat.positive .performance-stat__value,
+.performance-profile .positive {
+  color: #97e1ae;
+}
+.performance-stat.negative .performance-stat__value,
+.performance-profile .negative {
+  color: #ffb1aa;
+}
+.performance-stat__note {
+  font-size: 10px;
+  color: #b8c9c9;
+  margin-top: 4px;
+  line-height: 1.5;
+}
+.performance-profile__radar > [role="group"] {
+  justify-content: center;
+}
+.performance-profile button,
+.performance-profile select,
+.performance-profile input {
+  color: inherit;
+}
+.performance-profile select,
+.performance-profile input[type="date"] {
+  background: rgba(6, 25, 35, 0.85);
+  border: 1px solid rgba(239, 203, 150, 0.35);
+  border-radius: 9px;
+  color-scheme: dark;
+}
+.performance-profile select option {
+  background: #102b36;
+  color: #fff;
+}
+.performance-profile input[type="checkbox"] {
+  accent-color: #f1b970;
+}
+.performance-profile .field {
+  font-size: 11px;
+  letter-spacing: 0.035em;
+  color: #e9d8bb;
+}
+.performance-profile .subtle {
+  color: #d3dbd6;
+}
+.performance-profile__radar > p {
+  font-size: 10px;
+  line-height: 1.7;
+  max-width: 800px;
+  margin-inline: auto;
+  text-align: center;
+  text-shadow: 0 1px 8px #00131d;
+}
+.radar-immersive .radar-controls {
+  padding: 14px 18px;
+  max-width: 760px;
+  margin-inline: auto;
+  border: 1px solid rgba(230, 204, 162, 0.2);
+  background: rgba(5, 25, 35, 0.77);
+  border-radius: 12px;
+}
+.radar-immersive .radar-controls label {
+  font-size: 11px;
+}
+.radar-stage {
+  position: relative;
+  min-width: 0;
+}
+.radar-immersive .radar-plot {
+  height: 410px;
+  filter: drop-shadow(0 0 24px rgba(66, 197, 216, 0.13));
+}
+.radar-immersive .recharts-polar-angle-axis text {
+  font-weight: 700;
+  filter: drop-shadow(0 2px 4px #001018);
+}
+.radar-skill-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.skill-rating-card {
+  min-width: 0;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--skill-accent) 40%, transparent);
+  border-radius: 12px;
+  padding: 14px;
+  background: linear-gradient(
+    135deg,
+    rgba(5, 23, 32, 0.91),
+    rgba(10, 31, 39, 0.8)
+  );
+  color: #fbfaf4;
+  box-shadow:
+    inset 0 1px 0 #ffffff0c,
+    0 6px 24px #061b2533;
+  transition:
+    border-color 0.2s,
+    transform 0.2s;
+}
+.skill-rating-card:hover,
+.skill-rating-card.is-selected {
+  border-color: var(--skill-accent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--skill-accent) 14%, transparent);
+}
+.skill-rating-card:hover {
+  transform: translateY(-2px);
+}
+.skill-rating-card__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--skill-accent);
+}
+.skill-rating-card__body {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 8px;
+}
+.skill-rating-card__body svg {
+  flex-shrink: 0;
+  max-width: 43%;
+  filter: drop-shadow(
+    0 0 5px color-mix(in srgb, var(--skill-accent) 25%, transparent)
+  );
+}
+.skill-rating-card__value {
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: -0.04em;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+.skill-rating-card__value small {
+  font-size: 10px;
+  margin-left: 5px;
+  color: #b5c6c5;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.skill-rating-card__comparison {
+  color: #bccdca;
+  font-size: 10px;
+  margin-top: 5px;
+}
+.skill-rating-card__delta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #c3cfca;
+  margin-top: 9px;
+}
+.radar-immersive .radar-detail {
+  max-width: 520px;
+  margin-inline: auto;
+}
+.radar-immersive .radar-detail > div {
+  background: rgba(6, 25, 34, 0.85);
+  border-color: #ead2a13d;
+  font-size: 11px;
+  line-height: 1.7;
+}
+@media (min-width: 1200px) {
+  .radar-immersive .radar-stage {
+    min-height: 570px;
+  }
+  .radar-immersive .radar-plot {
+    width: 56%;
+    height: 570px;
+    max-width: 600px;
+  }
+  .radar-skill-cards {
+    display: contents;
+  }
+  .skill-rating-card {
+    position: absolute;
+    width: 23%;
+    max-width: 250px;
+  }
+  .skill-rating-card--passing {
+    left: 0;
+    top: 25px;
+  }
+  .skill-rating-card--setting {
+    right: 0;
+    top: 25px;
+  }
+  .skill-rating-card--defense {
+    left: 0;
+    top: 215px;
+  }
+  .skill-rating-card--attack {
+    left: 5%;
+    bottom: 10px;
+  }
+  .skill-rating-card--serving {
+    right: 5%;
+    bottom: 10px;
+  }
+}
+@media (max-width: 767px) {
+  .performance-profile {
+    border-radius: 17px;
+  }
+  .performance-profile__content {
+    padding: 22px 14px 18px;
+  }
+  .performance-profile__heading {
+    display: block;
+  }
+  .performance-profile__season {
+    margin-top: 14px;
+    font-size: 8px;
+    white-space: normal;
+  }
+  .performance-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-bottom: 22px;
+  }
+  .performance-stat {
+    padding: 13px 11px;
+  }
+  .performance-stat__label {
+    font-size: 8px;
+    gap: 5px;
+    letter-spacing: 0.035em;
+  }
+  .performance-stat__value {
+    font-size: 29px;
+  }
+  .performance-stat__note {
+    font-size: 9px;
+  }
+  .performance-profile__eyebrow {
+    font-size: 8px;
+    letter-spacing: 0.09em;
+  }
+  .radar-immersive .radar-controls {
+    padding: 12px;
+  }
+  .radar-immersive .radar-plot {
+    height: 355px;
+  }
+  .radar-skill-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .skill-rating-card {
+    padding: 12px 10px;
+  }
+  .skill-rating-card:last-child {
+    grid-column: 1/-1;
+    max-width: none;
+  }
+  .skill-rating-card__heading {
+    font-size: 10px;
+  }
+  .skill-rating-card__value {
+    font-size: 26px;
+  }
+  .skill-rating-card__body svg {
+    width: 65px;
+  }
+}
+
+.radar-immersive .radar-plot {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(3, 24, 33, 0.5),
+    rgba(5, 25, 34, 0.14) 58%,
+    transparent 74%
+  );
+  border-radius: 50%;
+}
+@media (max-width: 767px) {
+  .beach-court-background {
+    background-image:
+      linear-gradient(to bottom, transparent 750px, #71614c 1100px),
+      url("/assets/beach-performance.webp");
+    background-size: 100% 1100px, auto 1100px;
+    background-position: center top, 60% top;
+    background-color: #71614c;
+  }
+}

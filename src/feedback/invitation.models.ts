@@ -22,6 +22,7 @@ export class InvitedMatchModel {
 @ObjectType()
 export class FeedbackInvitationModel {
   @Field(() => ID) recipientId!: string;
+  @Field() recipientUsername!: string;
   @Field(() => SportModel) sport!: SportModel;
   @Field(() => InvitedMatchModel, { nullable: true }) match?: InvitedMatchModel;
 }

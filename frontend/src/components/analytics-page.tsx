@@ -1,4 +1,5 @@
 "use client";
+import { PerformanceProfile } from "./performance-profile";
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { gql } from "@/lib/api";
@@ -15,7 +16,6 @@ import {
 } from "@/lib/analytics";
 import { RatingHistoryChart } from "./rating-history-chart";
 import { AnalyticsChart } from "./analytics-chart";
-import { PageHeader } from "./page-header";
 import { Button } from "./ui/button";
 import { LoadingSkeleton, ErrorState, EmptyState } from "./common";
 export function AnalyticsPage() {
@@ -74,10 +74,7 @@ export function AnalyticsPage() {
     : (data?.ratingCount ?? 0);
   return (
     <>
-      <PageHeader
-        title="Your analytics"
-        description="Explore your results and feedback, one day at a time."
-      />
+      <PerformanceProfile onSkillSelect={setSelected} />
       <section className="panel min-w-0 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2>Performance over time</h2>

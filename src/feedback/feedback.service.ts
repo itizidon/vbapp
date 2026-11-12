@@ -81,6 +81,11 @@ export class FeedbackService {
   }
   async invitation(token: string) {
     const payload = await this.verifyInvitation(token);
+    const recipient = await this.db.user.findUnique({
+      where: { id: payload.recipientId },
+      select: { username: true },
+    });
+    if (!recipient) throw new NotFoundException("Player not found");
     const sport = await this.db.sport.findUnique({
       where: { id: payload.sportId },
       include: {
@@ -134,7 +139,12 @@ export class FeedbackService {
         unassignedPlayers: source.participants.map(name),
       };
     }
-    return { recipientId: payload.recipientId, sport, match };
+    return {
+      recipientId: payload.recipientId,
+      recipientUsername: recipient.username,
+      sport,
+      match,
+    };
   }
   async submitGuest(input: SubmitGuestFeedbackInput) {
     const payload = await this.verifyInvitation(input.token);

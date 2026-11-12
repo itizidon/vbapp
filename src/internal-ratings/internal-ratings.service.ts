@@ -333,6 +333,149 @@ export class InternalRatingsService {
     }));
   }
 
+  async summary(actor: string, userId: string, sportId: string) {
+    this.authorize(actor, userId);
+    if (!isUUID(sportId)) throw new BadRequestException("Invalid sport ID");
+    return this.db.$transaction(
+      async (tx) => {
+        const totalSkillCount = await tx.skill.count({
+          where: { sportId, active: true },
+        });
+        const rows = await tx.playerInternalRating.findMany({
+          where: { userId, skill: { sportId, active: true } },
+          include: { skill: true },
+          orderBy: { skill: { name: "asc" } },
+        });
+        const overallRating = rows.length
+          ? rows
+              .reduce(
+                (sum, row) => sum.plus(row.currentRating),
+                new Prisma.Decimal(0),
+              )
+              .div(rows.length)
+              .toDecimalPlaces(4, Prisma.Decimal.ROUND_HALF_UP)
+              .toNumber()
+          : null;
+        return {
+          overallRating,
+          ratedSkillCount: rows.length,
+          totalSkillCount,
+          ratings: rows.map((row) => ({
+            ...row,
+            skillName: row.skill.name,
+            initialRating: row.initialRating.toNumber(),
+            currentRating: row.currentRating.toNumber(),
+          })),
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+  }
+
+  async radarProfile(
+    actor: string,
+    userId: string,
+    sportId: string,
+    asOf?: Date,
+  ) {
+    this.authorize(actor, userId);
+    if (
+      !isUUID(sportId) ||
+      (asOf &&
+        (!Number.isFinite(asOf.getTime()) || asOf.getTime() > Date.now()))
+    )
+      throw new BadRequestException("Invalid radar profile filter");
+    return this.db.$transaction(
+      async (tx) => {
+        const skills = await tx.skill.findMany({
+          where: { sportId, active: true },
+          orderBy: { name: "asc" },
+        });
+        const current = await tx.playerInternalRating.findMany({
+          where: { userId, skill: { sportId, active: true } },
+        });
+        const self = asOf
+          ? await tx.selfAssessmentRatingEvent.findMany({
+              where: {
+                userId,
+                skill: { sportId, active: true },
+                createdAt: { lte: asOf },
+              },
+              orderBy: [
+                { skillId: "asc" },
+                { createdAt: "desc" },
+                { sequence: "desc" },
+              ],
+              distinct: ["skillId"],
+            })
+          : await tx.selfAssessmentRating.findMany({
+              where: {
+                selfAssessment: { userId, sportId },
+                skill: { active: true },
+              },
+            });
+        const historical =
+          asOf && current.length
+            ? await tx.playerInternalRatingEvent.findMany({
+                where: {
+                  userId,
+                  chartPoint: true,
+                  effectiveAt: { lte: asOf },
+                  OR: current.map((row) => ({
+                    skillId: row.skillId,
+                    revision: row.revision,
+                  })),
+                },
+                orderBy: [
+                  { skillId: "asc" },
+                  { effectiveAt: "desc" },
+                  { sequence: "desc" },
+                ],
+                distinct: ["skillId"],
+              })
+            : [];
+        const averages = await tx.feedbackRating.groupBy({
+          by: ["skillId"],
+          where: {
+            skill: { sportId, active: true },
+            feedback: {
+              recipientId: userId,
+              sportId,
+              status: "PUBLISHED",
+              ...(asOf ? { createdAt: { lte: asOf } } : {}),
+            },
+          },
+          _avg: { rating: true },
+          _count: true,
+        });
+        return {
+          asOf: asOf ?? null,
+          skills: skills.map((skill) => {
+            const own = self.find((row) => row.skillId === skill.id);
+            const internal = asOf
+              ? historical.find((row) => row.skillId === skill.id)?.newRating
+              : current.find((row) => row.skillId === skill.id)?.currentRating;
+            const average = averages.find((row) => row.skillId === skill.id);
+            return {
+              skillId: skill.id,
+              skillName: skill.name,
+              skillSlug: skill.slug,
+              selfRating: own
+                ? "newRating" in own
+                  ? own.newRating
+                  : own.rating
+                : null,
+              internalRating: internal?.toNumber() ?? null,
+              averageFeedbackRating: average?._avg.rating ?? null,
+              feedbackCount: average?._count ?? 0,
+            };
+          }),
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+  }
+
   async history(
     actor: string,
     userId: string,

@@ -3,12 +3,15 @@ import { afterEach, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { FeedbackSubmissionForm } from "../src/components/feedback-form";
+const session = vi.hoisted(() => ({
+  data: undefined as { me: { id: string; username: string } } | undefined,
+}));
 vi.mock("next/navigation", () => ({
   usePathname: () => "/f/test-token",
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("../src/lib/hooks", () => ({
-  useUser: () => ({ isPending: false, data: undefined, error: null }),
+  useUser: () => ({ isPending: false, data: session.data, error: null }),
   useMatches: () => ({ data: { rows: [] } }),
   useMatch: () => ({}),
   useCatalog: () => {
@@ -41,6 +44,7 @@ function setup(
     teams: { teamNumber: number; score: number; players: string[] }[];
     unassignedPlayers: string[];
   } = null,
+  guestOnly = false,
 ) {
   const fetcher = vi.fn(async (_url, options) => {
     const { query } = JSON.parse(options.body);
@@ -53,6 +57,7 @@ function setup(
               data: {
                 feedbackInvitation: {
                   recipientId: "player",
+                  recipientUsername: "TestPlayer",
                   sport: {
                     id: "invited-sport",
                     name: "Beach Volleyball",
@@ -71,7 +76,7 @@ function setup(
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   client.setQueryData(
-    ["feedback-categories", "invited-sport", "signed-invite"],
+    ["feedback-categories", "invited-sport", "player", "signed-invite"],
     {
       sport: {
         id: "invited-sport",
@@ -87,18 +92,27 @@ function setup(
         recipientId="player"
         sportId="invited-sport"
         token="signed-invite"
+        guestOnly={guestOnly}
       />
     </QueryClientProvider>,
   );
   return fetcher;
 }
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  session.data = undefined;
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 it("refreshes stale categories and renders every backend skill with descriptions for guests", async () => {
   const fetcher = setup([
     ...skills,
     { ...skills[0], id: "retired", name: "Retired category", active: false },
   ]);
   await screen.findByRole("group", { name: "Defense" });
+  expect(screen.getByText("TestPlayer", { exact: true })).toBeVisible();
+  expect(
+    screen.queryByText("Player player", { exact: true }),
+  ).not.toBeInTheDocument();
   for (const skill of skills) {
     expect(
       screen.getByRole("group", { name: skill.name }),
@@ -180,4 +194,50 @@ it("shows general feedback as read-only for an invitation without a match", asyn
   setup();
   await screen.findByRole("heading", { name: "General feedback" });
   expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+});
+
+it("uses guest names on a signed-in player's device and clears the form between reviewers", async () => {
+  session.data = { me: { id: "player", username: "AccountOwner" } };
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  const fetcher = setup(skills, null, true);
+  await screen.findByRole("group", { name: "Serving" });
+  expect(
+    screen.queryByRole("link", { name: "Log in" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("link", { name: "Sign up" }),
+  ).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue("AccountOwner")).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Your name"), {
+    target: { value: "First reviewer" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Serving: 4 out of 5" }));
+  fireEvent.change(screen.getByLabelText("Serving comment (optional)"), {
+    target: { value: "Good serve" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Submit feedback" }));
+  await screen.findByRole("heading", { name: "Thanks for your feedback." });
+  fireEvent.click(screen.getByRole("button", { name: "Next reviewer" }));
+  expect(screen.getByLabelText("Your name")).toHaveValue("");
+  expect(screen.getByLabelText("Serving comment (optional)")).toHaveValue("");
+  expect(
+    screen.getByRole("button", { name: "Serving: 4 out of 5" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  fireEvent.change(screen.getByLabelText("Your name"), {
+    target: { value: "Second reviewer" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Setting: 5 out of 5" }));
+  fireEvent.click(screen.getByRole("button", { name: "Submit feedback" }));
+  await screen.findByRole("heading", { name: "Thanks for your feedback." });
+  const submissions = fetcher.mock.calls
+    .map((call) => JSON.parse(call[1].body))
+    .filter((call) => call.query.includes("mutation GuestFeedback"));
+  expect(submissions.map((call) => call.variables.input.guestName)).toEqual([
+    "First reviewer",
+    "Second reviewer",
+  ]);
+  expect(submissions[1].variables.input.ratings).toEqual([
+    { skillId: "setting", rating: 5 },
+  ]);
+  expect(session.data.me.username).toBe("AccountOwner");
 });

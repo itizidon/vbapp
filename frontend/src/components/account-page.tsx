@@ -1,6 +1,7 @@
 "use client";
 import { useCatalog, useSummary, useUser } from "@/lib/hooks";
-import { UserAvatar, ErrorState, LoadingSkeleton, RatingStars } from "./common";
+import { UserAvatar, ErrorState, LoadingSkeleton } from "./common";
+import { SelfSkillRatings, InternalRatingCard } from "./profile-skill-ratings";
 import { AssessmentEditor } from "./assessment-editor";
 import { FeedbackRequestDialog } from "./feedback-request-dialog";
 import { AccountVisibilitySwitch } from "./account-visibility-switch";
@@ -67,39 +68,34 @@ export function AccountPage() {
           <AccountVisibilitySwitch me={me} />
         </section>
       </div>
-      <section className="panel mt-5">
-        <h2 className="mb-1">Your player profile</h2>
-        <p className="subtle mb-5 text-sm">
-          Keep your self-assessment up to date.
-        </p>
-        {catalog.data?.sports.map((sport) => {
-          const assessment = summary.data?.mySelfAssessments.find(
-            (a) => a.sportId === sport.id,
-          );
-          return (
-            <div key={sport.id}>
+      {catalog.data?.sports.map((sport) => {
+        const assessment = summary.data?.mySelfAssessments.find(
+          (a) => a.sportId === sport.id,
+        );
+        return (
+          <div
+            key={sport.id}
+            className="mt-5 grid min-w-0 gap-5 lg:grid-cols-2"
+          >
+            <section className="panel min-w-0" aria-label="Self-assessment">
+              <h2>Self-assessment</h2>
+              <p className="subtle mb-5 mt-1 text-sm">
+                Your own view of your game.
+              </p>
               <h3 className="mb-4">
                 {sport.name} · {assessment?.overallLevel ?? "Unrated"}
               </h3>
-              <div className="mb-5 space-y-3">
-                {assessment?.ratings.map((r) => (
-                  <div
-                    key={r.skillId}
-                    className="flex flex-wrap items-center justify-between gap-2 text-sm"
-                  >
-                    <span>
-                      {sport.skills.find((s) => s.id === r.skillId)?.name ??
-                        "Skill"}
-                    </span>
-                    <RatingStars value={r.rating} />
-                  </div>
-                ))}
-              </div>
+              <SelfSkillRatings sport={sport} assessment={assessment} />
               <AssessmentEditor sport={sport} assessment={assessment} />
-            </div>
-          );
-        })}
-      </section>
+            </section>
+            <InternalRatingCard
+              userId={me.id}
+              sport={sport}
+              assessment={assessment}
+            />
+          </div>
+        );
+      })}
     </>
   );
 }

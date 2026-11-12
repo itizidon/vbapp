@@ -9,26 +9,23 @@ const jwt = new JwtService({
 });
 function fixture() {
   const db: any = {
+    user: { findUnique: jest.fn().mockResolvedValue({ username: "Alex" }) },
     sport: {
-      findUnique: jest
-        .fn()
-        .mockResolvedValue({
-          id: sportId,
-          name: "Beach Volleyball",
-          slug: "beach-volleyball",
-          skills: ["Attack", "Defense", "Passing", "Setting", "Serving"].map(
-            (name) => ({ name, active: true }),
-          ),
-        }),
+      findUnique: jest.fn().mockResolvedValue({
+        id: sportId,
+        name: "Beach Volleyball",
+        slug: "beach-volleyball",
+        skills: ["Attack", "Defense", "Passing", "Setting", "Serving"].map(
+          (name) => ({ name, active: true }),
+        ),
+      }),
     },
     match: {
-      findUnique: jest
-        .fn()
-        .mockResolvedValue({
-          id: matchId,
-          sportId,
-          participants: [{ id: "participant" }],
-        }),
+      findUnique: jest.fn().mockResolvedValue({
+        id: matchId,
+        sportId,
+        participants: [{ id: "participant" }],
+      }),
       findUniqueOrThrow: jest.fn().mockResolvedValue({
         id: matchId,
         playedAt: new Date("2026-11-11T18:00:00Z"),
@@ -70,6 +67,12 @@ const sign = (
 it("returns all active categories and only the signed match preview", async () => {
   const { db, service } = fixture();
   const result = await service.invitation(await sign());
+  expect(result.recipientUsername).toBe("Alex");
+  expect(db.user.findUnique).toHaveBeenCalledWith({
+    where: { id: recipientId },
+    select: { username: true },
+  });
+  expect(result).not.toHaveProperty("email");
   expect(result.sport.skills.map((s) => s.name)).toEqual([
     "Attack",
     "Defense",

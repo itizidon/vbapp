@@ -154,3 +154,11 @@ Feedback invitations are reusable for 24 hours. The `20261109000000_reusable_fee
 
 
 Guest feedback pages load `feedbackInvitation(token)` from the backend. The backend verifies the signed invitation before returning its sport's complete active category list and a minimal, read-only match preview (date, team scores and player names). Unrelated matches, account emails and other private match fields are not exposed. An invitation without a match remains general feedback; create a new link from the match details page to associate it with a match. Links created from a match's request dialog stay locked to that match. If categories are missing, inspect the returned backend skills; the form does not invent skill IDs or placeholder categories.
+
+
+The feedback request dialog offers **Create feedback link** (copy/QR sharing) and **Review on this device**. Device review opens the signed invitation with `?mode=device`, showing a guest-name field and feedback controls even when the recipient is signed in. It uses the guest submission mutation, leaves the account session intact, and hides login/signup controls. After submission, **Next reviewer** clears the name, ratings and comments while retaining the invitation and match context. The existing guest invitation expiration and influence policies still apply.
+
+
+The self-assessment and internal-rating cards now include five-axis skill radars. Analytics also offers a Performance Profile radar with source selection and comparison, always showing current ratings. See [data sources, missing-value behavior, query and preview instructions](../docs/skill-radar.md).
+
+Analytics now presents that profile over a locally hosted sunset beach court, with career statistics, a multicolor radar and interactive skill gauges. See [dashboard components, summary definitions, image provenance and verification](../docs/performance-dashboard.md). Restart the backend and frontend together to include the new authenticated `myPerformanceSummary` query; this redesign adds no migration or dependency.

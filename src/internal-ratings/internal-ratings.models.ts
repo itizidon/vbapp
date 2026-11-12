@@ -37,3 +37,27 @@ export class RatingHistoryPage {
   @Field({ nullable: true }) nextCursor?: string;
   @Field(() => Int) revision!: number;
 }
+
+@ObjectType()
+export class InternalRatingSummaryModel {
+  @Field({ nullable: true }) overallRating?: number;
+  @Field(() => Int) ratedSkillCount!: number;
+  @Field(() => Int) totalSkillCount!: number;
+  @Field(() => [InternalSkillRatingModel]) ratings!: InternalSkillRatingModel[];
+}
+
+@ObjectType()
+export class SkillRadarValueModel {
+  @Field(() => ID) skillId!: string;
+  @Field() skillName!: string;
+  @Field() skillSlug!: string;
+  @Field({ nullable: true }) selfRating?: number;
+  @Field({ nullable: true }) internalRating?: number;
+  @Field({ nullable: true }) averageFeedbackRating?: number;
+  @Field(() => Int) feedbackCount!: number;
+}
+@ObjectType()
+export class SkillRadarProfileModel {
+  @Field(() => GraphQLISODateTime, { nullable: true }) asOf?: Date;
+  @Field(() => [SkillRadarValueModel]) skills!: SkillRadarValueModel[];
+}

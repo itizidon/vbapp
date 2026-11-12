@@ -1,8 +1,16 @@
 "use client";
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { Copy, Check, Share2, Plus, Link as LinkIcon } from "lucide-react";
+import {
+  Copy,
+  Check,
+  Share2,
+  Plus,
+  Smartphone,
+  Link as LinkIcon,
+} from "lucide-react";
 import { useUser, useCatalog, useMatches } from "@/lib/hooks";
 import { recipientMatches } from "@/lib/matches";
 import { gql } from "@/lib/api";
@@ -100,6 +108,7 @@ export function FeedbackRequestDialog({
   initialMatch?: Match;
   label?: string;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [matchId, setMatchId] = useState(initialMatch?.id ?? "");
   const [invite, setInvite] = useState<{
@@ -119,7 +128,7 @@ export function FeedbackRequestDialog({
       : ownMatches;
   const sport = catalog.data?.sports[0];
   const create = useMutation({
-    mutationFn: () => {
+    mutationFn: (_mode: "share" | "device") => {
       if (!sport || !user.data)
         throw new Error(
           "Beach Volleyball is unavailable. Try again after the catalog loads.",
@@ -144,11 +153,18 @@ export function FeedbackRequestDialog({
         },
       );
     },
-    onSuccess: ({ createGuestFeedbackInvite: value }) =>
-      setInvite({
-        url: `${window.location.origin}/f/${encodeURIComponent(value.token)}`,
-        expiresAt: value.expiresAt,
-      }),
+    onSuccess: ({ createGuestFeedbackInvite: value }, mode) => {
+      const path = `/f/${encodeURIComponent(value.token)}`;
+      if (mode === "device") {
+        setOpen(false);
+        router.push(`${path}?mode=device`);
+      } else {
+        setInvite({
+          url: `${window.location.origin}${path}`,
+          expiresAt: value.expiresAt,
+        });
+      }
+    },
   });
   return (
     <>
@@ -169,11 +185,23 @@ export function FeedbackRequestDialog({
             Request feedback
           </DialogTitle>
           <DialogDescription className="subtle mb-6 mt-2 text-sm">
-            Share a personal link with another player. They can leave feedback
-            without creating an account.
+            Create a link to share, or let someone leave feedback on this
+            device. No account is needed to review.
           </DialogDescription>
           {invite ? (
-            <FeedbackLinkShare {...invite} />
+            <div className="space-y-4">
+              <FeedbackLinkShare {...invite} />
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() =>
+                  router.push(`${new URL(invite.url).pathname}?mode=device`)
+                }
+              >
+                <Smartphone size={16} />
+                Review on this device
+              </Button>
+            </div>
           ) : (
             <div className="space-y-5">
               <MatchSelector
@@ -215,14 +243,29 @@ export function FeedbackRequestDialog({
               <Button
                 className="w-full"
                 disabled={!sport || create.isPending}
-                onClick={() => create.mutate()}
+                onClick={() => create.mutate("share")}
               >
-                {create.isPending ? (
+                {create.isPending && create.variables === "share" ? (
                   <Pending label="Creating link…" />
                 ) : (
                   <>
                     <LinkIcon size={16} />
                     Create feedback link
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                disabled={!sport || create.isPending}
+                onClick={() => create.mutate("device")}
+              >
+                {create.isPending && create.variables === "device" ? (
+                  <Pending label="Opening guest review…" />
+                ) : (
+                  <>
+                    <Smartphone size={16} />
+                    Review on this device
                   </>
                 )}
               </Button>

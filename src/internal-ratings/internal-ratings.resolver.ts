@@ -12,6 +12,8 @@ import { GqlAuthGuard } from "../common/gql-auth.guard";
 import { InternalRatingsService } from "./internal-ratings.service";
 import {
   InternalSkillRatingModel,
+  InternalRatingSummaryModel,
+  SkillRadarProfileModel,
   RatingHistoryPage,
 } from "./internal-ratings.models";
 @Resolver()
@@ -25,6 +27,24 @@ export class InternalRatingsResolver {
     @Args("sportId", { type: () => ID }) sportId: string,
   ) {
     return this.ratings.current(actor.id, userId, sportId);
+  }
+  @Query(() => InternalRatingSummaryModel)
+  internalRatingSummary(
+    @CurrentUser() actor: AuthUser,
+    @Args("userId", { type: () => ID }) userId: string,
+    @Args("sportId", { type: () => ID }) sportId: string,
+  ) {
+    return this.ratings.summary(actor.id, userId, sportId);
+  }
+  @Query(() => SkillRadarProfileModel)
+  skillRadarProfile(
+    @CurrentUser() actor: AuthUser,
+    @Args("userId", { type: () => ID }) userId: string,
+    @Args("sportId", { type: () => ID }) sportId: string,
+    @Args("asOf", { type: () => GraphQLISODateTime, nullable: true })
+    asOf?: Date,
+  ) {
+    return this.ratings.radarProfile(actor.id, userId, sportId, asOf);
   }
   @Query(() => RatingHistoryPage)
   internalRatingHistory(

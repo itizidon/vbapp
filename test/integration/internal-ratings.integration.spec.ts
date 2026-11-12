@@ -512,4 +512,54 @@ describeDb("internal ratings PostgreSQL integration", () => {
       2.96666667,
     );
   });
+  it("returns real current and as-of radar data without substituting current scores for history", async () => {
+    const f = await fixture(),
+      skill = f.skills[0];
+    const asOf = new Date();
+    await feedback.submit(f.reviewer.id, {
+      recipientId: f.recipient.id,
+      sportId: f.sport.id,
+      ratings: [{ skillId: skill.id, rating: 5 }],
+    });
+    await self.updateRatings(f.recipient.id, {
+      id: f.recipient.assessment.id,
+      ratings: [{ skillId: skill.id, rating: 1 }],
+    });
+    const current = await ratings.radarProfile(
+      f.recipient.id,
+      f.recipient.id,
+      f.sport.id,
+    );
+    expect(
+      current.skills.find((row) => row.skillId === skill.id),
+    ).toMatchObject({
+      selfRating: 1,
+      internalRating: 3.03333333,
+      averageFeedbackRating: 5,
+    });
+    const past = await ratings.radarProfile(
+      f.recipient.id,
+      f.recipient.id,
+      f.sport.id,
+      asOf,
+    );
+    expect(past.skills.find((row) => row.skillId === skill.id)).toMatchObject({
+      selfRating: 3,
+      internalRating: 3,
+    });
+    const empty = await ratings.radarProfile(
+      f.recipient.id,
+      f.recipient.id,
+      f.sport.id,
+      new Date("2000-01-01"),
+    );
+    expect(
+      empty.skills.every(
+        (row) =>
+          row.selfRating === null &&
+          row.internalRating === null &&
+          row.averageFeedbackRating === null,
+      ),
+    ).toBe(true);
+  });
 });

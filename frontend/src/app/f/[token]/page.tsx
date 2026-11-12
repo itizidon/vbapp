@@ -8,15 +8,22 @@ export const metadata = {
 };
 export default async function Page({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ mode?: string | string[] }>;
 }) {
   const { token } = await params;
+  const guestOnly = (await searchParams).mode === "device";
   const claims = decodeInviteToken(token);
   return (
     <div className="min-h-dvh">
       <header className="mx-auto flex max-w-3xl items-center justify-between px-4 py-6">
-        <Brand />
+        {guestOnly ? (
+          <span className="text-xl font-bold">courtside.</span>
+        ) : (
+          <Brand />
+        )}
         <ThemeToggle />
       </header>
       <main className="mx-auto max-w-2xl px-4 pb-12 pt-4">
@@ -26,6 +33,7 @@ export default async function Page({
             sportId={claims.sportId}
             scopedMatchId={claims.matchId}
             token={token}
+            guestOnly={guestOnly}
           />
         ) : (
           <section className="panel">

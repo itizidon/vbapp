@@ -94,25 +94,33 @@ export function FeedbackSubmissionForm({
   token,
   scopedMatchId,
   initialMatchId,
+  guestOnly = false,
 }: {
   recipientId: string;
   sportId: string;
   token?: string;
   scopedMatchId?: string;
   initialMatchId?: string;
+  guestOnly?: boolean;
 }) {
   const catalog = useQuery({
-    queryKey: ["feedback-categories", sportId, token ?? "registered"],
+    queryKey: [
+      "feedback-categories",
+      sportId,
+      recipientId,
+      token ?? "registered",
+    ],
     queryFn: async () => {
       if (token) {
         const result = await gql<{
           feedbackInvitation: {
             recipientId: string;
+            recipientUsername: string;
             sport: Sport;
             match: InvitedMatch | null;
           };
         }>(
-          `query FeedbackInvitation($token:String!){feedbackInvitation(token:$token){recipientId sport{id name slug skills{id sportId name slug description active requiredForSelfAssessment}} match{id playedAt teams{teamNumber score players} unassignedPlayers}}}`,
+          `query FeedbackInvitation($token:String!){feedbackInvitation(token:$token){recipientId recipientUsername sport{id name slug skills{id sportId name slug description active requiredForSelfAssessment}} match{id playedAt teams{teamNumber score players} unassignedPlayers}}}`,
           { token },
         );
         return result.feedbackInvitation;
@@ -120,21 +128,24 @@ export function FeedbackSubmissionForm({
       const result = await gql<{
         sport: Pick<Sport, "id" | "name" | "slug"> | null;
         skills: Skill[];
+        playerProfile: { username: string };
       }>(
-        `query FeedbackCategories($sportId:ID!){sport(id:$sportId){id name slug} skills(sportId:$sportId){id sportId name slug description active requiredForSelfAssessment}}`,
-        { sportId },
+        `query FeedbackCategories($sportId:ID!,$recipientId:ID!){playerProfile(id:$recipientId){username} sport(id:$sportId){id name slug} skills(sportId:$sportId){id sportId name slug description active requiredForSelfAssessment}}`,
+        { sportId, recipientId },
       );
       return {
         sport: result.sport ? { ...result.sport, skills: result.skills } : null,
         recipientId,
+        recipientUsername: result.playerProfile.username,
         match: null as InvitedMatch | null,
       };
     },
     staleTime: 0,
     refetchOnMount: "always",
   });
-  const user = useUser();
+  const user = useUser(!guestOnly);
   const activeSession =
+    !guestOnly &&
     !!user.data &&
     !(user.error instanceof ApiError && user.error.status === 401);
   const path = usePathname();
@@ -257,6 +268,15 @@ export function FeedbackSubmissionForm({
     lockedSubmission.current = true;
     mutation.mutate(values);
   }
+  function nextReviewer() {
+    form.reset();
+    setRatings({});
+    setComments({});
+    setValidationError("");
+    lockedSubmission.current = false;
+    mutation.reset();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   if (mutation.isSuccess)
     return (
       <section className="panel py-12 text-center">
@@ -267,6 +287,11 @@ export function FeedbackSubmissionForm({
         <p className="subtle mt-4">
           Your perspective has been sent to the player.
         </p>
+        {guestOnly && (
+          <Button className="mt-6" onClick={nextReviewer}>
+            Next reviewer
+          </Button>
+        )}
         {registered && (
           <Button className="mt-6" asChild>
             <Link href="/matches">Back to matches</Link>
@@ -274,10 +299,12 @@ export function FeedbackSubmissionForm({
         )}
       </section>
     );
-  if (catalog.isPending || user.isPending) return <LoadingSkeleton />;
+  if (catalog.isPending || (!guestOnly && user.isPending))
+    return <LoadingSkeleton />;
   if (catalog.error)
     return <ErrorState error={catalog.error} retry={() => catalog.refetch()} />;
   if (
+    !guestOnly &&
     user.error &&
     !(user.error instanceof ApiError && user.error.status === 401)
   )
@@ -293,7 +320,9 @@ export function FeedbackSubmissionForm({
       <p className="eyebrow mb-3">A perspective that helps</p>
       <h1>Leave feedback for this player</h1>
       <section className="mb-6 mt-5 rounded-xl border border-border bg-card p-4">
-        <p className="break-anywhere font-mono text-xs">Player {recipientId}</p>
+        <p className="break-anywhere font-semibold">
+          {catalog.data?.recipientUsername ?? "Player"}
+        </p>
         <p className="subtle mt-2 text-xs">
           Confirm this link came from the player you want to review.
         </p>
@@ -323,20 +352,24 @@ export function FeedbackSubmissionForm({
             {guest ? (
               <>
                 <p className="subtle text-sm">
-                  Continue as a guest, or use your player account.
+                  {guestOnly
+                    ? "Enter your name and share your feedback."
+                    : "Continue as a guest, or use your player account."}
                 </p>
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" type="button" asChild>
-                    <Link href={authHref("/login", returnTo)}>Log in</Link>
-                  </Button>
-                  <Button variant="outline" type="button" asChild>
-                    <Link href={authHref("/signup", returnTo)}>Sign up</Link>
-                  </Button>
-                </div>
+                {!guestOnly && (
+                  <div className="flex flex-wrap gap-2">
+                    <Button variant="outline" type="button" asChild>
+                      <Link href={authHref("/login", returnTo)}>Log in</Link>
+                    </Button>
+                    <Button variant="outline" type="button" asChild>
+                      <Link href={authHref("/signup", returnTo)}>Sign up</Link>
+                    </Button>
+                  </div>
+                )}
                 <label className="field">
                   Your name
                   <input
-                    autoComplete="name"
+                    autoComplete={guestOnly ? "off" : "name"}
                     required
                     {...form.register("guestName")}
                   />

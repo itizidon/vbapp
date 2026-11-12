@@ -60,6 +60,9 @@ export function AssessmentEditor({
     },
     onSuccess: () => {
       client.invalidateQueries({ queryKey: ["summary"] });
+      client.invalidateQueries({ queryKey: ["internal-ratings"] });
+      client.invalidateQueries({ queryKey: ["rating-history"] });
+      client.invalidateQueries({ queryKey: ["skill-radar"] });
       setMessage("Self-assessment saved.");
       setOpen(false);
     },
