@@ -91,6 +91,34 @@ export class FeedbackService {
     });
   }
 
+  async reviewerSuggestions(
+    actor: string | undefined,
+    search: string,
+    token?: string,
+    recipientId?: string,
+  ) {
+    const invitation = token ? await this.verifyInvitation(token) : null;
+    if (!invitation && !actor)
+      throw new UnauthorizedException("Sign in or open a feedback invitation");
+    const recipient = invitation?.recipientId ?? recipientId;
+    if (!recipient || !isUUID(recipient))
+      throw new BadRequestException("A valid recipient is required");
+    if (invitation && recipientId && recipientId !== invitation.recipientId)
+      throw new UnauthorizedException("Invitation does not match recipient");
+    const query = search.trim();
+    if (query.length > 40)
+      throw new BadRequestException("Search must be at most 40 characters");
+    if (query.length < 2) return [];
+    return this.db.user.findMany({
+      where: {
+        id: invitation?.assignedReviewerId ?? { not: recipient },
+        username: { contains: query, mode: "insensitive" },
+      },
+      select: { id: true, username: true },
+      orderBy: { username: "asc" },
+      take: 10,
+    });
+  }
   async submit(reviewerId: string, input: SubmitFeedbackInput) {
     return this.create(input, { reviewerId });
   }
@@ -130,7 +158,19 @@ export class FeedbackService {
         payload.exp * 1000 <= Date.now()
       )
         throw new Error();
-      return payload;
+      const stored = await tx.feedbackLink.findUnique({
+        where: { tokenHash: this.tokenHash(token) },
+      });
+      if (
+        stored &&
+        (stored.revokedAt || stored.expiresAt.getTime() <= Date.now())
+      )
+        throw new Error();
+      return {
+        ...payload,
+        linkId: stored?.id,
+        assignedReviewerId: stored?.assignedReviewerId ?? undefined,
+      };
     } catch {
       throw new UnauthorizedException("Invalid or expired guest invitation");
     }
@@ -237,7 +277,7 @@ export class FeedbackService {
       submittedById?: string;
     },
   ) {
-    if (identity.reviewerId === input.recipientId)
+    if (identity.reviewerId === input.recipientId && !input.assignedReviewerId)
       throw new BadRequestException("Self-feedback is not allowed");
     const skillIds = input.ratings.map((r) => r.skillId);
     if (new Set(skillIds).size !== skillIds.length)
@@ -253,10 +293,47 @@ export class FeedbackService {
           (invitation.matchId ?? null) !== (input.matchId ?? null))
       )
         throw new UnauthorizedException("Invitation does not match submission");
-      const assignedReviewerId = invitation?.assignedReviewerId;
+      if (
+        invitation?.assignedReviewerId &&
+        input.assignedReviewerId &&
+        input.assignedReviewerId !== invitation.assignedReviewerId
+      )
+        throw new BadRequestException(
+          "This link already has a designated reviewer",
+        );
+      const assignedReviewerId =
+        invitation?.assignedReviewerId ?? input.assignedReviewerId;
       const approvalRequired = !!assignedReviewerId;
+      if (
+        assignedReviewerId &&
+        (!isUUID(assignedReviewerId) ||
+          !(await tx.user.findUnique({
+            where: { id: assignedReviewerId },
+            select: { id: true },
+          })))
+      )
+        throw new NotFoundException("Reviewer not found");
       if (assignedReviewerId === input.recipientId)
         throw new BadRequestException("Self-feedback is not allowed");
+      let feedbackLinkId = invitation?.linkId;
+      if (approvalRequired && invitation && !feedbackLinkId) {
+        const legacyLink = await tx.feedbackLink.upsert({
+          where: { tokenHash: this.tokenHash(identity.linkToken!) },
+          update: {},
+          create: {
+            tokenHash: this.tokenHash(identity.linkToken!),
+            recipientId: invitation.recipientId,
+            sportId: invitation.sportId,
+            matchId: invitation.matchId,
+            expiresAt: new Date(invitation.exp * 1000),
+          },
+        });
+        if (legacyLink.revokedAt)
+          throw new UnauthorizedException(
+            "Invalid or expired guest invitation",
+          );
+        feedbackLinkId = legacyLink.id;
+      }
       const [recipient, sport, skills] = await Promise.all([
         tx.user.findUnique({
           where: { id: input.recipientId },
@@ -314,7 +391,7 @@ export class FeedbackService {
           guestName: identity.guestName,
           guestInviteNonce: identity.nonce,
           guestInviteExpiresAt: identity.expiresAt,
-          feedbackLinkId: invitation?.linkId,
+          feedbackLinkId,
           submittedById: identity.submittedById ?? identity.reviewerId,
           approvalRequired,
           status: approvalRequired ? "PENDING" : "PUBLISHED",
@@ -432,11 +509,13 @@ export class FeedbackService {
         throw new ForbiddenException("Only the designated reviewer may decide");
       if (
         !feedback.approvalRequired ||
-        !link ||
-        link.assignedReviewerId !== actor ||
-        link.recipientId !== feedback.recipientId ||
-        link.sportId !== feedback.sportId ||
-        link.matchId !== feedback.matchId
+        (!link && !feedback.submittedById) ||
+        (link &&
+          ((link.assignedReviewerId !== null &&
+            link.assignedReviewerId !== actor) ||
+            link.recipientId !== feedback.recipientId ||
+            link.sportId !== feedback.sportId ||
+            link.matchId !== feedback.matchId))
       )
         throw new BadRequestException(
           "Feedback has no matching reviewer assignment",
@@ -455,7 +534,7 @@ export class FeedbackService {
         return feedback;
       if (feedback.status !== "PENDING")
         throw new BadRequestException("Feedback has already been processed");
-      if (approve && link.revokedAt)
+      if (approve && link?.revokedAt)
         throw new BadRequestException("This feedback link was revoked");
       if (approve) {
         const activeSkills = await tx.feedbackRating.findMany({

@@ -14,7 +14,7 @@ import { feedbackSchema, validateRatings } from "@/lib/validation";
 import type { z } from "zod";
 import { InvitedMatchPreview } from "./invited-match-preview";
 import type { InvitedMatch } from "@/lib/invites";
-import type { Sport, Skill } from "@/lib/types";
+import type { Sport, Skill, Member } from "@/lib/types";
 import { Button } from "./ui/button";
 import {
   RatingStars,
@@ -23,6 +23,7 @@ import {
   Pending,
   EmptyState,
 } from "./common";
+import { ReviewerPicker } from "./reviewer-picker";
 import { MatchSelector } from "./match-selector";
 import {
   feedbackSteps,
@@ -171,6 +172,7 @@ export function FeedbackSubmissionForm({
     scopedMatchId ?? initialMatchId ?? "",
   );
   const selectedMatch = useMatch(selected, activeSession && !token);
+  const [selectedReviewer, setSelectedReviewer] = useState<Member | null>(null);
   const [answers, setAnswers] = useState<FeedbackAnswers>({});
   const [stepIndex, setStepIndex] = useState(0);
   const [review, setReview] = useState(false);
@@ -236,8 +238,9 @@ export function FeedbackSubmissionForm({
   }
   const registered = activeSession;
   const guest = !registered;
-  const assignedReviewer = catalog.data?.assignedReviewer;
-  const approvalRequired = !!catalog.data?.approvalRequired;
+  const assignedReviewer = catalog.data?.assignedReviewer ?? selectedReviewer;
+  const approvalRequired =
+    !!catalog.data?.approvalRequired || !!selectedReviewer;
   const ownReview =
     !approvalRequired &&
     registered &&
@@ -280,7 +283,10 @@ export function FeedbackSubmissionForm({
         sportId: sport.id,
         matchId: effectiveMatchId || null,
         ratings: valuesToSend,
-        ...(guest || approvalRequired
+        ...(selectedReviewer && !catalog.data?.assignedReviewer
+          ? { assignedReviewerId: selectedReviewer.id }
+          : {}),
+        ...(guest || (token && approvalRequired)
           ? {
               guestName: guest
                 ? guestName.trim() || undefined
@@ -290,7 +296,7 @@ export function FeedbackSubmissionForm({
           : {}),
       };
       return gql(
-        guest || approvalRequired
+        guest || (token && approvalRequired)
           ? `mutation GuestFeedback($input:SubmitGuestFeedbackInput!){submitGuestFeedback(input:$input){id}}`
           : `mutation SubmitFeedback($input:SubmitFeedbackInput!){submitFeedback(input:$input){id}}`,
         { input },
@@ -329,6 +335,7 @@ export function FeedbackSubmissionForm({
   }
   function nextReviewer() {
     form.reset();
+    setSelectedReviewer(null);
     setAnswers({});
     setStepIndex(0);
     setReview(false);
@@ -653,6 +660,18 @@ export function FeedbackSubmissionForm({
                         autoComplete="nickname"
                       />
                     </label>
+                  </div>
+                )}
+                {!catalog.data?.assignedReviewer && (
+                  <div className="mt-4">
+                    <ReviewerPicker
+                      recipientId={catalog.data?.recipientId ?? recipientId}
+                      value={selectedReviewer}
+                      onChange={setSelectedReviewer}
+                      disabled={mutation.isPending}
+                      forFeedback
+                      token={token}
+                    />
                   </div>
                 )}
                 {token ? (

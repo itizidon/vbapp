@@ -133,6 +133,7 @@ export function PlayerSkillRadarChart({
   allowCompare = true,
   loading = false,
   onSkillSelect,
+  onModeChange,
   immersive = false,
 }: {
   data: SkillRadarData[];
@@ -141,6 +142,7 @@ export function PlayerSkillRadarChart({
   allowCompare?: boolean;
   loading?: boolean;
   onSkillSelect?: (skillId: string) => void;
+  onModeChange?: (mode: SelectableRatingMode) => void;
 }) {
   const id = useId();
   const gradientId = `skill-spectrum-${id.replace(/:/g, "-")}`;
@@ -178,7 +180,10 @@ export function PlayerSkillRadarChart({
             id={id}
             value={chosen}
             disabled={comparing}
-            onChange={setChosen}
+            onChange={(next) => {
+              setChosen(next);
+              onModeChange?.(next);
+            }}
           />
         )}
         {allowCompare && (

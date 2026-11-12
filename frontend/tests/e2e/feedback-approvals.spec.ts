@@ -272,3 +272,144 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
     );
   }
 });
+
+test("selects an approver inside guest and signed-in feedback forms", async ({
+  browser,
+  baseURL,
+}, info) => {
+  test.skip(
+    process.env.APPROVALS_E2E !== "true",
+    "Requires isolated migrated test database",
+  );
+  const owner = await browser.newContext({
+    baseURL,
+    viewport: info.project.use.viewport,
+  });
+  const reviewer = await browser.newContext({
+    baseURL,
+    viewport: info.project.use.viewport,
+  });
+  const guest = await browser.newContext({
+    baseURL,
+    viewport: info.project.use.viewport,
+  });
+  async function gql(
+    api: APIRequestContext,
+    query: string,
+    variables: object = {},
+  ) {
+    const response = await api.post("/api/graphql", {
+      headers: { origin: baseURL! },
+      data: { query, variables },
+    });
+    const body = await response.json();
+    expect(body.errors).toBeUndefined();
+    return body.data;
+  }
+  try {
+    const sport = (
+      await gql(owner.request, "query{sports{id slug skills{id}}}")
+    ).sports.find((s: { slug: string }) => s.slug === "beach-volleyball");
+    async function register(api: APIRequestContext, prefix: string) {
+      const username = prefix + randomUUID().slice(0, 8);
+      return (
+        await gql(
+          api,
+          "mutation($input:RegisterInput!){register(input:$input){accessToken user{id username}}}",
+          {
+            input: {
+              username,
+              email: `${username}@example.test`,
+              password: "in-form-approver-long-password",
+              age: 25,
+              heightCm: 180,
+              sportId: sport.id,
+              overallLevel: "B",
+              ratings: sport.skills.map((s: { id: string }) => ({
+                skillId: s.id,
+                rating: 3,
+              })),
+            },
+          },
+        )
+      ).register.user;
+    }
+    const recipient = await register(owner.request, "recipient");
+    const assigned = await register(reviewer.request, "approver");
+    const invite = (
+      await gql(
+        owner.request,
+        "mutation($r:ID!,$s:ID!){createGuestFeedbackInvite(recipientId:$r,sportId:$s){token}}",
+        { r: recipient.id, s: sport.id },
+      )
+    ).createGuestFeedbackInvite;
+    async function chooseAndSubmit(page: import("@playwright/test").Page) {
+      await page.getByLabel(/Assign feedback giver/).fill(assigned.username);
+      await page
+        .getByRole("button", { name: assigned.username, exact: true })
+        .click();
+      await expect(
+        page.getByText(`@${assigned.username}`, { exact: true }),
+      ).toBeVisible();
+      await page
+        .getByRole("radio", { name: "Attacking: 4 out of 5", exact: true })
+        .click();
+      for (let i = 0; i < 5; i++)
+        await page
+          .getByRole("button", { name: /^(Next|Review Feedback)$/ })
+          .click();
+      await page
+        .getByRole("button", { name: "Submit Feedback", exact: true })
+        .click();
+      await expect(page.getByText(/Your draft is awaiting/)).toBeVisible();
+    }
+    const guestPage = await guest.newPage();
+    await guestPage.goto(`/f/${invite.token}`);
+    await chooseAndSubmit(guestPage);
+    expect(
+      (await gql(owner.request, "query{receivedFeedback{id}}"))
+        .receivedFeedback,
+    ).toHaveLength(0);
+    const reviewPage = await reviewer.newPage();
+    await reviewPage.goto("/account");
+    const queue = reviewPage.getByRole("region", {
+      name: "Pending Feedback Approvals",
+      exact: true,
+    });
+    await expect(queue.getByText("1 pending", { exact: true })).toBeVisible();
+    await queue
+      .getByRole("button", { name: "Approve Feedback", exact: true })
+      .click();
+    await expect(
+      queue.getByText("You're all caught up!", { exact: true }),
+    ).toBeVisible();
+    const published = (
+      await gql(
+        owner.request,
+        "query{receivedFeedback{id reviewerId guestName}}",
+      )
+    ).receivedFeedback;
+    expect(published).toHaveLength(1);
+    expect(published[0]).toMatchObject({
+      reviewerId: assigned.id,
+      guestName: "Guest reviewer",
+    });
+    const ownerPage = await owner.newPage();
+    await ownerPage.goto(`/give-feedback/${recipient.id}`);
+    await chooseAndSubmit(ownerPage);
+    await reviewPage.reload();
+    await expect(queue.getByText("1 pending", { exact: true })).toBeVisible();
+    await queue.getByRole("button", { name: "Reject", exact: true }).click();
+    await expect(
+      queue.getByText("You're all caught up!", { exact: true }),
+    ).toBeVisible();
+    expect(
+      (await gql(owner.request, "query{receivedFeedback{id}}"))
+        .receivedFeedback,
+    ).toHaveLength(1);
+  } finally {
+    await Promise.all(
+      [owner, reviewer, guest].map((context) => context.close()),
+    );
+  }
+});

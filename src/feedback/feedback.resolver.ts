@@ -11,7 +11,11 @@ import {
 } from "@nestjs/graphql";
 import { UseGuards } from "@nestjs/common";
 import { FeedbackService } from "./feedback.service";
-import { FeedbackModel, GuestInvitePayload } from "../common/models";
+import {
+  FeedbackModel,
+  GuestInvitePayload,
+  MemberModel,
+} from "../common/models";
 import {
   SubmitFeedbackInput,
   SubmitGuestFeedbackInput,
@@ -22,6 +26,17 @@ import { AuthUser, CurrentUser } from "../common/current-user.decorator";
 @Resolver()
 export class FeedbackResolver {
   constructor(private s: FeedbackService) {}
+  @UseGuards(OptionalGqlAuthGuard)
+  @Query(() => [MemberModel])
+  feedbackReviewers(
+    @Args("search") search: string,
+    @Args("token", { nullable: true }) token?: string,
+    @Args("recipientId", { type: () => ID, nullable: true })
+    recipientId?: string,
+    @CurrentUser() u?: AuthUser,
+  ) {
+    return this.s.reviewerSuggestions(u?.id, search, token, recipientId);
+  }
   @Query(() => FeedbackInvitationModel) feedbackInvitation(
     @Args("token") token: string,
   ) {

@@ -10,11 +10,15 @@ export function ReviewerPicker({
   value,
   onChange,
   disabled = false,
+  forFeedback = false,
+  token,
 }: {
   recipientId: string;
   value: Member | null;
   onChange: (member: Member | null) => void;
   disabled?: boolean;
+  forFeedback?: boolean;
+  token?: string;
 }) {
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -24,17 +28,25 @@ export function ReviewerPicker({
     return () => clearTimeout(timer);
   }, [search]);
   const results = useQuery({
-    queryKey: ["reviewer-search", debounced, recipientId],
+    queryKey: ["reviewer-search", debounced, recipientId, forFeedback, token],
     enabled:
       !disabled &&
       !value &&
       debounced.length >= 2 &&
       debounced === search.trim(),
-    queryFn: () =>
-      gql<{ members: Member[] }>(
+    queryFn: async () => {
+      if (forFeedback) {
+        const result = await gql<{ feedbackReviewers: Member[] }>(
+          `query FeedbackReviewers($search:String!,$token:String,$recipientId:ID){feedbackReviewers(search:$search,token:$token,recipientId:$recipientId){id username}}`,
+          { search: debounced, token: token ?? null, recipientId },
+        );
+        return { members: result.feedbackReviewers };
+      }
+      return gql<{ members: Member[] }>(
         `query Reviewers($search:String!){members(search:$search){id username}}`,
         { search: debounced },
-      ),
+      );
+    },
   });
   return (
     <div className="space-y-2">
@@ -118,8 +130,10 @@ export function ReviewerPicker({
       )}
       <p className="subtle text-xs" id={`${id}-hint`}>
         {value
-          ? `${value.username} must sign in and approve each submission before it is published or affects your ratings.`
-          : "Leave unassigned for the usual feedback flow. Assigned feedback requires the selected player’s approval."}
+          ? `${value.username} must sign in and approve this feedback before it is published or affects the player’s ratings.`
+          : forFeedback
+            ? "Choose the player responsible for this feedback. It will wait in their Account approvals. Leave blank to submit normally."
+            : "Leave unassigned for the usual feedback flow. Assigned feedback requires the selected player’s approval."}
       </p>
     </div>
   );

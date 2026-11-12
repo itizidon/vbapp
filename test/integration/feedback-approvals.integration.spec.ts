@@ -519,5 +519,189 @@ const url = process.env.TEST_DATABASE_URL;
           .status,
       ).toBe("PENDING");
     });
+
+    it("searches reviewers for a validated invitation without exposing emails or the recipient", async () => {
+      const f = await fixture();
+      const link = await service.invite(
+        f.recipient.id,
+        f.recipient.id,
+        f.sport.id,
+      );
+      expect(
+        await service.reviewerSuggestions(
+          undefined,
+          f.reviewer.username,
+          link.token,
+        ),
+      ).toEqual([{ id: f.reviewer.id, username: f.reviewer.username }]);
+      expect(
+        await service.reviewerSuggestions(
+          undefined,
+          f.recipient.username,
+          link.token,
+        ),
+      ).toEqual([]);
+      expect(
+        await service.reviewerSuggestions(
+          f.other.id,
+          f.reviewer.username,
+          undefined,
+          f.recipient.id,
+        ),
+      ).toHaveLength(1);
+      await expect(
+        service.reviewerSuggestions(undefined, f.reviewer.username),
+      ).rejects.toThrow("Sign in");
+      await expect(
+        service.reviewerSuggestions(
+          undefined,
+          f.reviewer.username,
+          link.token,
+          f.other.id,
+        ),
+      ).rejects.toThrow("does not match");
+      await service.revokeLink(f.recipient.id, link.linkId);
+      await expect(
+        service.reviewerSuggestions(undefined, f.reviewer.username, link.token),
+      ).rejects.toThrow("Invalid or expired");
+    });
+    it("assigns one draft from an unassigned link without reassigning the reusable link", async () => {
+      const f = await fixture();
+      const link = await service.invite(
+        f.recipient.id,
+        f.recipient.id,
+        f.sport.id,
+      );
+      const draft = await service.submitGuest({
+        ...f.input,
+        token: link.token,
+        assignedReviewerId: f.reviewer.id,
+      });
+      expect(draft).toMatchObject({
+        status: "PENDING",
+        reviewerId: f.reviewer.id,
+        feedbackLinkId: link.linkId,
+        approvalRequired: true,
+      });
+      expect(
+        (
+          await db.feedbackLink.findUniqueOrThrow({
+            where: { id: link.linkId },
+          })
+        ).assignedReviewerId,
+      ).toBeNull();
+      expect(
+        (
+          await rating(f.recipient.id, f.sport.skills[0].id)
+        ).currentRating.toString(),
+      ).toBe("3");
+      expect(
+        (await service.pendingApprovals(f.reviewer.id)).items.map(
+          (row) => row.id,
+        ),
+      ).toContain(draft.id);
+      await service.decide(f.reviewer.id, draft.id, true);
+      expect(
+        (await rating(f.recipient.id, f.sport.skills[0].id)).currentRating.gt(
+          3,
+        ),
+      ).toBe(true);
+      expect(
+        (await service.submitGuest({ ...f.input, token: link.token })).status,
+      ).toBe("PUBLISHED");
+    });
+    it("supports authenticated in-form assignments without an invitation and applies approval once", async () => {
+      const f = await fixture();
+      const draft = await service.submit(f.other.id, {
+        ...f.input,
+        assignedReviewerId: f.reviewer.id,
+      });
+      expect(draft).toMatchObject({
+        status: "PENDING",
+        reviewerId: f.reviewer.id,
+        submittedById: f.other.id,
+        feedbackLinkId: null,
+      });
+      await expect(service.decide(f.other.id, draft.id, true)).rejects.toThrow(
+        "designated reviewer",
+      );
+      await Promise.all([
+        service.decide(f.reviewer.id, draft.id, true),
+        service.decide(f.reviewer.id, draft.id, true),
+      ]);
+      expect(
+        await db.playerInternalRatingEvent.count({
+          where: { feedbackId: draft.id, type: "FEEDBACK_APPLIED" },
+        }),
+      ).toBe(1);
+    });
+    it("lets a recipient prepare a draft for another reviewer without self-approving", async () => {
+      const f = await fixture();
+      const draft = await service.submit(f.recipient.id, {
+        ...f.input,
+        assignedReviewerId: f.reviewer.id,
+      });
+      expect(draft.status).toBe("PENDING");
+      await expect(
+        service.decide(f.recipient.id, draft.id, true),
+      ).rejects.toThrow("designated reviewer");
+      expect(
+        (await service.decide(f.reviewer.id, draft.id, false)).status,
+      ).toBe("REJECTED");
+    });
+    it("rejects recipient/unknown assignments and changes to a link's fixed reviewer", async () => {
+      const f = await fixture();
+      const link = await service.invite(
+        f.recipient.id,
+        f.recipient.id,
+        f.sport.id,
+      );
+      await expect(
+        service.submitGuest({
+          ...f.input,
+          token: link.token,
+          assignedReviewerId: f.recipient.id,
+        }),
+      ).rejects.toThrow("Self-feedback");
+      await expect(
+        service.submitGuest({
+          ...f.input,
+          token: link.token,
+          assignedReviewerId: randomUUID(),
+        }),
+      ).rejects.toThrow("Reviewer not found");
+      await expect(
+        service.submitGuest({
+          ...f.input,
+          token: f.link.token,
+          assignedReviewerId: f.other.id,
+        }),
+      ).rejects.toThrow("already has a designated");
+      expect(
+        await db.feedback.count({ where: { recipientId: f.recipient.id } }),
+      ).toBe(0);
+    });
+    it("supports selecting an approver on legacy signed invitations", async () => {
+      const f = await fixture();
+      const token = await jwt.signAsync(
+        {
+          kind: "guest-feedback",
+          nonce: randomUUID(),
+          recipientId: f.recipient.id,
+          sportId: f.sport.id,
+        },
+        { expiresIn: "24h" },
+      );
+      const draft = await service.submitGuest({
+        ...f.input,
+        token,
+        assignedReviewerId: f.reviewer.id,
+      });
+      expect(draft.status).toBe("PENDING");
+      expect(draft.feedbackLinkId).not.toBeNull();
+      expect((await service.decide(f.reviewer.id, draft.id, true)).status).toBe(
+        "PUBLISHED",
+      );
+    });
   },
 );

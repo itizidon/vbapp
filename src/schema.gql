@@ -324,6 +324,7 @@ type Query {
   feedback(id: ID!): FeedbackModel!
   feedbackCount(userId: ID): FeedbackCount!
   feedbackInvitation(token: String!): FeedbackInvitationModel!
+  feedbackReviewers(recipientId: ID, search: String!, token: String): [MemberModel!]!
   internalRatingAudit(before: DateTime, cursor: String, from: DateTime, limit: Int! = 100, skillId: ID!, userId: ID!): RatingHistoryPage!
   internalRatingHistory(before: DateTime, cursor: String, from: DateTime, limit: Int! = 100, revision: Int, skillId: ID!, userId: ID!): RatingHistoryPage!
   internalRatingSummary(sportId: ID!, userId: ID!): InternalRatingSummaryModel!
@@ -470,6 +471,7 @@ type SportModel {
 
 input SubmitFeedbackInput {
   analyticsAllowed: Boolean
+  assignedReviewerId: ID
   evidenceAllowed: Boolean
   matchId: ID
   overallComment: String
@@ -480,6 +482,7 @@ input SubmitFeedbackInput {
 
 input SubmitGuestFeedbackInput {
   analyticsAllowed: Boolean
+  assignedReviewerId: ID
   evidenceAllowed: Boolean
   guestName: String
   matchId: ID

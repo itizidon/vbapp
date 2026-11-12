@@ -66,6 +66,9 @@ export function SkillRadarProfile({
         <PlayerSkillRadarChart
           data={profile.data?.skillRadarProfile.skills ?? []}
           onSkillSelect={onSkillSelect}
+          onModeChange={() => {
+            void profile.refetch();
+          }}
           immersive={immersive}
           allowCompare={false}
         />

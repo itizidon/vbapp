@@ -59,29 +59,37 @@ function setup({
       ok: true,
       status: 200,
       json: async () =>
-        query.includes("FeedbackInvitation")
+        query.includes("FeedbackReviewers")
           ? {
               data: {
-                feedbackInvitation: {
-                  recipientId: "player",
-                  recipientUsername: "TestPlayer",
-                  assignedReviewer: assigned
-                    ? { id: "assigned", username: "AssignedPlayer" }
-                    : null,
-                  approvalRequired: assigned,
-                  sport: {
-                    id: "sport",
-                    name: "Beach Volleyball",
-                    slug: "beach-volleyball",
-                    skills: categories,
-                  },
-                  match,
-                },
+                feedbackReviewers: [
+                  { id: "selected-reviewer", username: "ChosenPlayer" },
+                ],
               },
             }
-          : fail
-            ? { errors: [{ message: "Please retry your submission" }] }
-            : { data: { submitGuestFeedback: { id: "saved" } } },
+          : query.includes("FeedbackInvitation")
+            ? {
+                data: {
+                  feedbackInvitation: {
+                    recipientId: "player",
+                    recipientUsername: "TestPlayer",
+                    assignedReviewer: assigned
+                      ? { id: "assigned", username: "AssignedPlayer" }
+                      : null,
+                    approvalRequired: assigned,
+                    sport: {
+                      id: "sport",
+                      name: "Beach Volleyball",
+                      slug: "beach-volleyball",
+                      skills: categories,
+                    },
+                    match,
+                  },
+                },
+              }
+            : fail
+              ? { errors: [{ message: "Please retry your submission" }] }
+              : { data: { submitGuestFeedback: { id: "saved" } } },
     };
   });
   vi.stubGlobal("fetch", fetcher);
@@ -432,4 +440,33 @@ it("submits guest feedback without a name and leaves guest identity to the backe
   await screen.findByRole("heading", { name: "Thanks for your feedback." });
   expect(calls(fetcher)).toHaveLength(1);
   expect(calls(fetcher)[0].variables.input).not.toHaveProperty("guestName");
+});
+
+it("selects a registered approver inside a guest feedback form and submits a Pending assignment request", async () => {
+  const fetcher = setup();
+  await ready();
+  fireEvent.change(screen.getByLabelText(/Assign feedback giver/), {
+    target: { value: "Chosen" },
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "ChosenPlayer" }));
+  expect(screen.getByText("@ChosenPlayer")).toBeVisible();
+  rating("Attacking", 4);
+  review();
+  fireEvent.click(screen.getByRole("button", { name: "Submit Feedback" }));
+  await screen.findByText(/Your draft is awaiting ChosenPlayer/);
+  const submission = calls(fetcher)[0];
+  expect(submission.query).toContain("submitGuestFeedback");
+  expect(submission.variables.input).toMatchObject({
+    assignedReviewerId: "selected-reviewer",
+    token: "signed-invite",
+  });
+  expect(submission.variables.input).not.toHaveProperty("reviewerId");
+});
+it("does not allow changing an invitation's existing reviewer", async () => {
+  setup({ assigned: true });
+  await ready();
+  expect(
+    screen.queryByLabelText(/Assign feedback giver/),
+  ).not.toBeInTheDocument();
+  expect(screen.getByText("@AssignedPlayer")).toBeVisible();
 });

@@ -115,3 +115,17 @@ No migration or backfill was run against the existing application database. All 
 Validation completed: 95 backend unit tests, 28 PostgreSQL integration tests and 96 frontend tests passed. Backend and frontend TypeScript checks and production builds passed. Frontend lint has zero errors and six pre-existing warnings. Real-browser assignment/approval/rejection workflows passed at 320, 375 and 1440 pixels. The integration command used `--testTimeout=30000` for the existing CLI backfill test, which can exceed Jest’s default five-second timeout under concurrent build load.
 
 Additional browser checks passed for the existing current-rating Analytics view and Account layout at 375 and 1440 pixels, and for published reviewer username attribution. Temporary backend/frontend processes and test databases were removed after validation.
+
+## Choosing an approver in the feedback form
+
+The feedback sidebar also offers the registered-player search on unassigned links and ordinary signed-in feedback forms. A selection sends `assignedReviewerId` as a request for that player to take responsibility, not as proof of the preparer's identity. The backend validates the user, excludes the recipient, stores the designated reviewer on the new feedback and always creates a Pending draft. Existing link-level assignments cannot be changed. Other submissions through the same unassigned reusable link can choose independently. Leaving the field blank preserves normal unassigned publication.
+
+`feedbackReviewers(search: String!, token: String, recipientId: ID)` returns at most ten usernames/IDs. Guests must supply a valid invitation; signed-in forms use the authenticated session. Invite scope is checked, recipient accounts are excluded and private emails are never returned. Search is debounced in the shared `ReviewerPicker`.
+
+Both `SubmitFeedbackInput` and `SubmitGuestFeedbackInput` accept optional `assignedReviewerId`. Account approvals, identity/audit fields, recipient privacy, duplicate protection, reviewer weights and immutable rating events reuse the existing implementation. Same-device Next Reviewer clears the per-draft selection; a link's fixed assignment remains.
+
+Authenticated assignments without a link retain the verified preparer in `submittedById`. The additive migration `20261112010000_feedback_form_assignment` broadens the existing identity check to allow this authenticated origin, while retaining a non-null designated reviewer and all old identity rules. No tables or records are removed. Apply it with `pnpm prisma:deploy` before deploying the backend/frontend update. No migration was applied to the existing application database during implementation.
+
+Legacy signed invitations are materialized as hashed link records when needed for an assigned draft, preserving their original scope/expiration and permitting revocation checks thereafter. They remain reusable; the selected reviewer is stored per feedback rather than being written onto the unassigned link.
+
+Additional validation: 95 backend unit tests, 107 frontend tests, 34 PostgreSQL integration tests, both production builds and four real-browser checks at mobile/desktop widths passed. Tests cover guest-scoped search, authenticated search, recipient exclusion, per-draft assignment, fixed-link tampering, legacy tokens, direct authenticated assignments, pending isolation, approval/rejection and duplicate rating protection. Lint has zero errors and six existing warnings.

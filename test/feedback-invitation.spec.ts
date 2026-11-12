@@ -9,6 +9,7 @@ const jwt = new JwtService({
 });
 function fixture() {
   const db: any = {
+    feedbackLink:{findUnique:jest.fn().mockResolvedValue(null)},
     user: { findUnique: jest.fn().mockResolvedValue({ username: "Alex" }) },
     sport: {
       findUnique: jest.fn().mockResolvedValue({
