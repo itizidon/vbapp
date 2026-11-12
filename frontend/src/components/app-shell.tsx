@@ -35,7 +35,7 @@ export function Brand() {
       <span className="grid size-9 place-items-center rounded-xl bg-primary text-white">
         <Activity size={23} />
       </span>
-      courtside<span className="-ml-2 text-primary">.</span>
+      bvbtips<span className="-ml-2 text-primary">.</span>
     </Link>
   );
 }

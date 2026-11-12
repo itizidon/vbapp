@@ -45,7 +45,7 @@ export function FeedbackLinkShare({
   }
   async function share() {
     try {
-      await navigator.share({ title: "Leave me feedback on Courtside", url });
+      await navigator.share({ title: "Leave me feedback on bvbtips", url });
     } catch (error) {
       if ((error as Error).name !== "AbortError")
         setMessage("Sharing failed. You can copy the link instead.");

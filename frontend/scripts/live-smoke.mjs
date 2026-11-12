@@ -377,17 +377,17 @@ try {
   assert.ok(received.receivedFeedback.some((f) => f.matchId === null));
   assert.ok(received.receivedFeedback.some((f) => f.matchId === matchId));
   await page.screenshot({
-    path: "/tmp/courtside-match-desktop.png",
+    path: "/tmp/bvbtips-match-desktop.png",
     fullPage: true,
   });
   await page.goto("/feedback");
   await page.screenshot({
-    path: "/tmp/courtside-feedback-desktop.png",
+    path: "/tmp/bvbtips-feedback-desktop.png",
     fullPage: true,
   });
   await page.setViewportSize({ width: 375, height: 900 });
   await page.screenshot({
-    path: "/tmp/courtside-feedback-mobile.png",
+    path: "/tmp/bvbtips-feedback-mobile.png",
     fullPage: true,
   });
   await page

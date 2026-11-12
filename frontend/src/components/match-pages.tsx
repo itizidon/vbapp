@@ -60,11 +60,6 @@ export function MatchCard({
     <>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          {match.status !== "SCHEDULED" && (
-            <span className="mb-3 inline-block rounded-full bg-accent px-3 py-1 text-xs font-semibold text-primary">
-              {match.status.toLowerCase().replaceAll("_", " ")}
-            </span>
-          )}
           <h2 className="break-anywhere text-lg">{matchTitle(match)}</h2>
         </div>
         {!readOnly && (
@@ -139,8 +134,7 @@ export function MatchCard({
       )}
       {readOnly && (
         <p className="subtle mt-4 text-xs">
-          Status: {match.status.toLowerCase().replaceAll("_", " ")} · Recorded{" "}
-          {new Date(match.createdAt).toLocaleDateString()}
+          Recorded {new Date(match.createdAt).toLocaleDateString()}
         </p>
       )}
     </>
@@ -286,11 +280,6 @@ export function MatchDetails({ id }: { id: string }) {
         <section className="panel">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2>Match information</h2>
-            {match.status !== "SCHEDULED" && (
-              <span className="rounded-full bg-accent px-3 py-1 text-xs text-primary">
-                {match.status.toLowerCase().replaceAll("_", " ")}
-              </span>
-            )}
           </div>
           <p className="subtle mt-3">
             {match.sportId ? "Beach Volleyball" : "Sport not specified"} ·{" "}

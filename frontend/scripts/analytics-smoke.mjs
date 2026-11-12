@@ -211,7 +211,7 @@ try {
   const individualChart = page.getByLabel("Individual feedback line chart");
   await expect(individualChart.locator(".recharts-dot")).toHaveCount(3);
   await page.screenshot({
-    path: "/tmp/courtside-analytics-live.png",
+    path: "/tmp/bvbtips-analytics-live.png",
     fullPage: true,
   });
   await page.getByText("View individual feedback", { exact: true }).click();

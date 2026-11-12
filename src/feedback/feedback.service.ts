@@ -220,7 +220,7 @@ export class FeedbackService {
     return this.create(input, {
       linkToken: input.token,
       submittedById,
-      guestName: input.guestName.trim(),
+      guestName: input.guestName?.trim() || "Guest reviewer",
       nonce: payload.nonce,
       expiresAt: new Date(payload.exp * 1000),
     });

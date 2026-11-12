@@ -114,7 +114,7 @@ try {
     .getByRole("option");
   await expect(options).toHaveCount(5);
   await page.screenshot({
-    path: "/tmp/courtside-player-search-live.png",
+    path: "/tmp/bvbtips-player-search-live.png",
     fullPage: true,
   });
   assert.ok(page.url().endsWith("/matches"));

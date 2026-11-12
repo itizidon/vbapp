@@ -1,11 +1,11 @@
 "use client";
-import { useRef, useState, useId } from "react";
+import { useRef, useState, useId, useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams, usePathname } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Send } from "lucide-react";
+import { Check, Send, ArrowLeft } from "lucide-react";
 import { useCatalog, useUser, useMatches, useMatch } from "@/lib/hooks";
 import { authHref } from "@/lib/navigation";
 import { gql, ApiError } from "@/lib/api";
@@ -24,6 +24,16 @@ import {
   EmptyState,
 } from "./common";
 import { MatchSelector } from "./match-selector";
+import {
+  feedbackSteps,
+  feedbackRatings,
+  emptyFeedbackAnswer,
+  type FeedbackAnswers,
+  type SkillFeedbackAnswer,
+} from "@/lib/feedback-steps";
+import { FeedbackCategoryCard } from "./feedback-category-card";
+import { FeedbackReviewerHeader } from "./feedback-reviewer-header";
+import { FeedbackReviewSummary } from "./feedback-review-summary";
 export function CategoryRatingInput({
   name,
   description,
@@ -161,8 +171,16 @@ export function FeedbackSubmissionForm({
     scopedMatchId ?? initialMatchId ?? "",
   );
   const selectedMatch = useMatch(selected, activeSession && !token);
-  const [ratings, setRatings] = useState<Record<string, number>>({});
-  const [comments, setComments] = useState<Record<string, string>>({});
+  const [answers, setAnswers] = useState<FeedbackAnswers>({});
+  const [stepIndex, setStepIndex] = useState(0);
+  const [review, setReview] = useState(false);
+  const stepPanel = useRef<HTMLDivElement>(null);
+  const moved = useRef(false);
+  useEffect(() => {
+    if (!moved.current) return;
+    moved.current = false;
+    stepPanel.current?.focus({ preventScroll: true });
+  }, [stepIndex, review]);
   const [validationError, setValidationError] = useState("");
   const lockedSubmission = useRef(false);
   const form = useForm<z.infer<typeof feedbackSchema>>({
@@ -177,7 +195,45 @@ export function FeedbackSubmissionForm({
   const sport = catalog.data?.sport;
   const invitationMatch = catalog.data?.match ?? null;
   const effectiveMatchId = token ? (invitationMatch?.id ?? "") : selected;
-  const skills = sport?.skills.filter((skill) => skill.active) ?? [];
+  const steps = feedbackSteps(sport?.skills ?? []);
+  const currentStep = steps[stepIndex];
+  const hasSkills = steps.some((step) => step.skill);
+  const valuesToSend = feedbackRatings(steps, answers);
+  const guestNameValue = useWatch({ control: form.control, name: "guestName" });
+  function editStep(index: number) {
+    moved.current = true;
+    setStepIndex(index);
+    setReview(false);
+    setValidationError("");
+  }
+  function updateAnswer(patch: Partial<SkillFeedbackAnswer>) {
+    const skill = currentStep.skill;
+    if (!skill) return;
+    setAnswers((previous) => ({
+      ...previous,
+      [skill.id]: {
+        ...(previous[skill.id] ?? emptyFeedbackAnswer(skill.id)),
+        ...patch,
+        skillId: skill.id,
+      },
+    }));
+    setValidationError("");
+  }
+  function advance(skip = false) {
+    const answer = currentStep.skill ? answers[currentStep.skill.id] : null;
+    if (!skip && answer?.comment.trim() && answer.rating === null) {
+      setValidationError(
+        `Choose a rating for ${currentStep.title} to include its comment, or use Skip to clear this answer.`,
+      );
+      return;
+    }
+    if (skip || answer?.rating == null)
+      updateAnswer({ rating: null, comment: "", skipped: true });
+    setValidationError("");
+    moved.current = true;
+    if (stepIndex === 4) setReview(true);
+    else setStepIndex(stepIndex + 1);
+  }
   const registered = activeSession;
   const guest = !registered;
   const assignedReviewer = catalog.data?.assignedReviewer;
@@ -213,8 +269,6 @@ export function FeedbackSubmissionForm({
         throw new Error(
           "Sign in or open a guest invitation to submit feedback.",
         );
-      if (guest && !values.guestName.trim())
-        throw new Error("Enter your name.");
       if (!chosenValid)
         throw new Error(
           "Choose a match you can access, or select General Feedback.",
@@ -225,16 +279,12 @@ export function FeedbackSubmissionForm({
         recipientId: catalog.data?.recipientId ?? recipientId,
         sportId: sport.id,
         matchId: effectiveMatchId || null,
-        ratings: skills
-          .filter((skill) => ratings[skill.id] > 0)
-          .map((skill) => ({
-            skillId: skill.id,
-            rating: ratings[skill.id],
-            comment: comments[skill.id]?.trim() || undefined,
-          })),
+        ratings: valuesToSend,
         ...(guest || approvalRequired
           ? {
-              guestName: guest ? guestName.trim() : user.data!.me.username,
+              guestName: guest
+                ? guestName.trim() || undefined
+                : user.data!.me.username,
               token,
             }
           : {}),
@@ -257,25 +307,20 @@ export function FeedbackSubmissionForm({
   });
   function submit(values: z.infer<typeof feedbackSchema>) {
     if (lockedSubmission.current) return;
-    const unratedSkill = skills.find(
-      (skill) => comments[skill.id]?.trim() && !ratings[skill.id],
+    const unratedStep = steps.find(
+      ({ skill }) =>
+        skill &&
+        answers[skill.id]?.comment.trim() &&
+        answers[skill.id]?.rating === null,
     );
-    if (unratedSkill) {
+    if (unratedStep) {
       setValidationError(
-        `Choose a rating for ${unratedSkill.name} to include its comment.`,
+        `Choose a rating for ${unratedStep.title} to include its comment.`,
       );
       return;
     }
-
-    const valuesToSend = skills
-      .filter((skill) => ratings[skill.id] > 0)
-      .map((skill) => ({ skillId: skill.id, rating: ratings[skill.id] }));
     if (!validateRatings(valuesToSend)) {
       setValidationError("Rate at least one category from 1 to 5.");
-      return;
-    }
-    if (guest && !values.guestName.trim()) {
-      setValidationError("Enter your name.");
       return;
     }
     setValidationError("");
@@ -284,12 +329,18 @@ export function FeedbackSubmissionForm({
   }
   function nextReviewer() {
     form.reset();
-    setRatings({});
-    setComments({});
+    setAnswers({});
+    setStepIndex(0);
+    setReview(false);
     setValidationError("");
     lockedSubmission.current = false;
     mutation.reset();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    window.scrollTo({
+      top: 0,
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        ? "instant"
+        : "smooth",
+    });
   }
   if (mutation.isSuccess)
     return (
@@ -332,254 +383,334 @@ export function FeedbackSubmissionForm({
       </EmptyState>
     );
   return (
-    <>
-      <p className="eyebrow mb-3">A perspective that helps</p>
-      <h1>Leave feedback for this player</h1>
-      <section className="mb-6 mt-5 rounded-xl border border-border bg-card p-4">
-        <p className="break-anywhere font-semibold">
-          {catalog.data?.recipientUsername ?? "Player"}
-        </p>
-        {assignedReviewer && (
-          <div className="mt-3 space-y-1 border-t border-border pt-3">
-            <p className="text-sm">
-              Assigned feedback giver:{" "}
-              <strong>{assignedReviewer.username}</strong>
-            </p>
-            <p className="subtle text-sm">
-              Status after submission: Awaiting {assignedReviewer.username}’s
-              approval.
-            </p>
-            <p className="subtle text-xs">
-              Anyone with this link may prepare a draft. Only the assigned
-              player can approve it while signed in. Submitting does not confirm
-              their identity.
-            </p>
-          </div>
-        )}
-        <p className="subtle mt-2 text-xs">
-          Confirm this link came from the player you want to review.
-        </p>
-      </section>
+    <div
+      className={`feedback-experience ${token ? "feedback-invitation" : "feedback-in-app"}`}
+    >
       {!registered && !token ? (
-        <section className="panel">
-          <h2>Sign in to give feedback</h2>
-          <p className="subtle my-4">
-            Guests can use a personal feedback invitation instead.
-          </p>
-          <Button asChild>
-            <Link href={authHref("/login", returnTo)}>Sign in</Link>
-          </Button>
-        </section>
+        <div className="feedback-signin-gate">
+          <FeedbackReviewerHeader
+            reviewer={registered ? user.data!.me : null}
+            guestName={guestNameValue}
+            recipientName={catalog.data?.recipientUsername ?? "Player"}
+            assignedReviewer={assignedReviewer}
+            approvalRequired={approvalRequired}
+          />
+          <section className="feedback-setup">
+            <h2>Sign in to give feedback</h2>
+            <p className="subtle my-4">
+              Guests can use a personal feedback invitation instead.
+            </p>
+            <Button asChild>
+              <Link href={authHref("/login", returnTo)}>Sign in</Link>
+            </Button>
+          </section>
+        </div>
       ) : (
         <form
-          className="panel space-y-7"
           onSubmit={(event) => {
-            void form.handleSubmit(submit)(event);
+            event.preventDefault();
+            if (review) void form.handleSubmit(submit)(event);
           }}
         >
-          <section
-            aria-label="Reviewer identity"
-            className="space-y-4 rounded-xl bg-muted p-4"
+          <fieldset
+            disabled={mutation.isPending}
+            className="feedback-layout min-w-0"
           >
-            <h2>Your identity</h2>
-            {guest ? (
-              <>
-                <p className="subtle text-sm">
-                  {guestOnly
-                    ? "Enter your name and share your feedback."
-                    : "Continue as a guest, or use your player account."}
-                </p>
-                {!guestOnly && (
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" type="button" asChild>
-                      <Link href={authHref("/login", returnTo)}>Log in</Link>
-                    </Button>
-                    <Button variant="outline" type="button" asChild>
-                      <Link href={authHref("/signup", returnTo)}>Sign up</Link>
-                    </Button>
+            {!hasSkills ? (
+              <div className="feedback-setup">
+                <EmptyState title="No categories available">
+                  The five volleyball categories are unavailable. Please try
+                  again later.
+                </EmptyState>
+              </div>
+            ) : (
+              <div
+                ref={stepPanel}
+                tabIndex={-1}
+                className="feedback-step-panel"
+                aria-label={
+                  review ? "Review feedback" : `${currentStep.title} category`
+                }
+              >
+                <div className="feedback-progress">
+                  <p className="feedback-progress-recipient">
+                    Reviewing @{catalog.data?.recipientUsername ?? "Player"}
+                  </p>
+                  <div className="feedback-progress-label">
+                    <span>
+                      {review ? "Ready for a final look?" : currentStep.title}
+                    </span>
+                    <strong>{review ? 5 : stepIndex + 1} of 5</strong>
+                  </div>
+                  <div
+                    role="progressbar"
+                    aria-label="Feedback progress"
+                    aria-valuemin={1}
+                    aria-valuemax={5}
+                    aria-valuenow={review ? 5 : stepIndex + 1}
+                    aria-valuetext={
+                      review
+                        ? "Review your five categories"
+                        : `${currentStep.title}, ${stepIndex + 1} of 5`
+                    }
+                    className="feedback-progress-track"
+                  >
+                    {steps.map((step, index) => (
+                      <span
+                        key={step.key}
+                        className={
+                          review || index <= stepIndex ? "is-reached" : ""
+                        }
+                      />
+                    ))}
+                  </div>
+                  <p className="sr-only" role="status">
+                    {review
+                      ? "Review feedback before submitting."
+                      : `${stepIndex + 1} of 5: ${currentStep.title}`}
+                  </p>
+                </div>
+                {review ? (
+                  <section className="feedback-review feedback-card-enter">
+                    <p className="feedback-kicker">ONE LAST LOOK</p>
+                    <h2>Review feedback</h2>
+                    <p className="feedback-review-intro">
+                      Reviewing @{catalog.data?.recipientUsername ?? "Player"} ·{" "}
+                      {valuesToSend.length} of 5 categories rated.
+                    </p>
+                    <FeedbackReviewSummary
+                      steps={steps}
+                      answers={answers}
+                      onEdit={editStep}
+                      disabled={mutation.isPending}
+                    />
+                    <label className="field mt-5">
+                      Written feedback{" "}
+                      <span className="font-normal">(optional)</span>
+                      <textarea
+                        rows={3}
+                        maxLength={5000}
+                        placeholder="Anything else that could help their game?"
+                        {...form.register("overallComment")}
+                      />
+                    </label>
+                    {form.formState.errors.overallComment && (
+                      <p className="feedback-inline-error">
+                        {form.formState.errors.overallComment.message}
+                      </p>
+                    )}
+                    <details className="feedback-sharing">
+                      <summary>Privacy & sharing</summary>
+                      <div className="space-y-4 pt-3">
+                        <label className="flex items-start gap-3 font-normal">
+                          <input
+                            type="checkbox"
+                            {...form.register("analyticsAllowed")}
+                          />
+                          <span>Allow public aggregate analytics.</span>
+                        </label>
+                        <label className="flex items-start gap-3 font-normal">
+                          <input
+                            type="checkbox"
+                            {...form.register("evidenceAllowed")}
+                          />
+                          <span>
+                            Allow this feedback as supporting evidence for
+                            future insights.
+                          </span>
+                        </label>
+                      </div>
+                    </details>
+                    {!valuesToSend.length && (
+                      <p role="status" className="feedback-inline-error">
+                        Rate at least one category before submitting feedback.
+                      </p>
+                    )}
+                    {validationError && (
+                      <p role="alert" className="feedback-inline-error">
+                        {validationError}
+                      </p>
+                    )}
+                    {mutation.error && (
+                      <p role="alert" className="feedback-inline-error">
+                        {mutation.error.message}
+                      </p>
+                    )}
+                    {ownReview && (
+                      <p role="alert" className="feedback-inline-error">
+                        You can’t review yourself. Share this link with another
+                        player.
+                      </p>
+                    )}
+                    <div className="feedback-review-actions">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="feedback-secondary"
+                        onClick={() => editStep(4)}
+                      >
+                        <ArrowLeft size={16} />
+                        Back
+                      </Button>
+                      <Button
+                        type="submit"
+                        className="feedback-primary"
+                        disabled={
+                          mutation.isPending ||
+                          ownReview ||
+                          !chosenValid ||
+                          !valuesToSend.length
+                        }
+                      >
+                        {mutation.isPending ? (
+                          <Pending label="Sending feedback…" />
+                        ) : (
+                          <>
+                            <Send size={16} />
+                            Submit Feedback
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                    {approvalRequired && (
+                      <p className="feedback-final-note">
+                        This draft will wait for @{assignedReviewer?.username}’s
+                        approval before it reaches the player or affects
+                        ratings.
+                      </p>
+                    )}
+                  </section>
+                ) : (
+                  <FeedbackCategoryCard
+                    key={currentStep.key}
+                    step={currentStep}
+                    index={stepIndex}
+                    answer={
+                      currentStep.skill
+                        ? (answers[currentStep.skill.id] ??
+                          emptyFeedbackAnswer(currentStep.skill.id))
+                        : null
+                    }
+                    onChange={updateAnswer}
+                    onPrevious={() => editStep(stepIndex - 1)}
+                    onNext={() => advance()}
+                    onSkip={() => advance(true)}
+                    error={validationError}
+                  />
+                )}
+              </div>
+            )}
+            <aside
+              className="feedback-sidebar"
+              aria-label="Feedback user information"
+            >
+              <FeedbackReviewerHeader
+                reviewer={registered ? user.data!.me : null}
+                guestName={guestNameValue}
+                recipientName={catalog.data?.recipientUsername ?? "Player"}
+                assignedReviewer={assignedReviewer}
+                approvalRequired={approvalRequired}
+              />
+              <section
+                aria-label="Reviewer identity"
+                className="feedback-setup"
+              >
+                {guest ? (
+                  <>
+                    <label className="field">
+                      Your name <span className="font-normal">(optional)</span>
+                      <input
+                        aria-label="Your name"
+                        autoComplete={guestOnly ? "off" : "name"}
+                        maxLength={100}
+                        placeholder="Guest reviewer"
+                        {...form.register("guestName")}
+                      />
+                    </label>
+                    {form.formState.errors.guestName && (
+                      <p className="error">
+                        {form.formState.errors.guestName.message}
+                      </p>
+                    )}
+                    {!guestOnly && (
+                      <div className="feedback-sign-in">
+                        <span>Guest reviewer · or use your account</span>
+                        <Link href={authHref("/login", returnTo)}>Log in</Link>
+                        <Link href={authHref("/signup", returnTo)}>
+                          Sign up
+                        </Link>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="feedback-signed-in">
+                    <span>Using your signed-in player account.</span>
+                    <label className="sr-only">
+                      Your name
+                      <input
+                        value={user.data!.me.username}
+                        readOnly
+                        autoComplete="nickname"
+                      />
+                    </label>
                   </div>
                 )}
-                <label className="field">
-                  Your name
-                  <input
-                    autoComplete={guestOnly ? "off" : "name"}
-                    required
-                    {...form.register("guestName")}
+                {token ? (
+                  invitationMatch ? (
+                    <details className="feedback-match-context">
+                      <summary>
+                        Match on{" "}
+                        {invitationMatch.playedAt
+                          ? new Date(
+                              invitationMatch.playedAt,
+                            ).toLocaleDateString()
+                          : "date not recorded"}{" "}
+                        · View teams <span>(read only)</span>
+                      </summary>
+                      <div className="mt-3">
+                        <InvitedMatchPreview match={invitationMatch} />
+                      </div>
+                    </details>
+                  ) : (
+                    <p className="feedback-context-caption">
+                      General feedback · No match selected
+                    </p>
+                  )
+                ) : (
+                  <div className="mt-4">
+                    <MatchSelector
+                      matches={registered ? available : []}
+                      value={selected}
+                      onChange={setSelected}
+                      locked={!!scopedMatchId}
+                      scopedMatchId={scopedMatchId}
+                      guest={guest}
+                      hasMore={registered && matches.hasNextPage}
+                      loadingMore={matches.isFetchingNextPage}
+                      onLoadMore={() => matches.fetchNextPage()}
+                    />
+                  </div>
+                )}
+                {registered && !token && matches.error && (
+                  <ErrorState
+                    error={matches.error}
+                    retry={() => matches.refetch()}
                   />
-                  {form.formState.errors.guestName && (
-                    <span className="error">
-                      {form.formState.errors.guestName.message}
-                    </span>
+                )}
+                {registered &&
+                  !token &&
+                  selectedMatch.error &&
+                  !scopedMatchId && (
+                    <p role="alert" className="error">
+                      That match is unavailable. Choose General Feedback or a
+                      match from the list.
+                    </p>
                   )}
-                </label>
-              </>
-            ) : (
-              <>
-                <label className="field">
-                  Your name
-                  <input
-                    value={user.data!.me.username}
-                    readOnly
-                    autoComplete="nickname"
-                  />
-                </label>
-                <p role="status" className="subtle text-sm">
-                  Using your signed-in player account.
-                </p>
-              </>
-            )}
-          </section>
-          <section>
-            <p className="eyebrow mb-3">1 · Choose the context</p>
-            {token ? (
-              <InvitedMatchPreview match={invitationMatch} />
-            ) : (
-              <MatchSelector
-                matches={registered ? available : []}
-                value={selected}
-                onChange={setSelected}
-                locked={!!scopedMatchId}
-                scopedMatchId={scopedMatchId}
-                guest={guest}
-                hasMore={registered && matches.hasNextPage}
-                loadingMore={matches.isFetchingNextPage}
-                onLoadMore={() => matches.fetchNextPage()}
-              />
-            )}
-            {registered && matches.error && (
-              <div className="mt-3">
-                <ErrorState
-                  error={matches.error}
-                  retry={() => matches.refetch()}
-                />
-              </div>
-            )}
-            {registered && selectedMatch.error && !scopedMatchId && (
-              <p role="alert" className="error mt-3">
-                That match is unavailable. Choose General Feedback or a match
-                from the list.
-              </p>
-            )}
-            {registered && !token && matches.isPending && (
-              <p className="subtle mt-3 text-xs">
-                Loading matches you can access. General Feedback is always
-                available.
-              </p>
-            )}
-          </section>
-          <section className="space-y-4">
-            <div>
-              <p className="eyebrow mb-3">2 · Rate their game</p>
-              <h2>What did you notice?</h2>
-              <p className="subtle mt-1 text-xs">
-                {skills.length} categories available. Rate at least one category
-                on the 1–5 scale. Skip any skill you haven’t observed.
-              </p>
-            </div>
-            {!skills.length && (
-              <EmptyState title="No categories available">
-                This sport has no active feedback categories yet. Please try
-                again later.
-              </EmptyState>
-            )}
-            {skills.map((skill) => (
-              <CategoryRatingInput
-                key={skill.id}
-                name={skill.name}
-                description={skill.description}
-                value={ratings[skill.id] ?? 0}
-                comment={comments[skill.id] ?? ""}
-                onCommentChange={(value) =>
-                  setComments((previous) => ({
-                    ...previous,
-                    [skill.id]: value,
-                  }))
-                }
-                onChange={(value) =>
-                  setRatings((previous) => ({
-                    ...previous,
-                    [skill.id]: value,
-                  }))
-                }
-              />
-            ))}
-          </section>
-          <section className="space-y-5">
-            <p className="eyebrow">3 · Add your perspective</p>
-            <label className="field">
-              Written feedback{" "}
-              <span className="subtle font-normal">(optional)</span>
-              <textarea
-                rows={4}
-                placeholder="What stood out? What could help them improve?"
-                {...form.register("overallComment")}
-              />
-              {form.formState.errors.overallComment && (
-                <span className="error">
-                  {form.formState.errors.overallComment.message}
-                </span>
-              )}
-            </label>
-            <details className="rounded-xl bg-muted p-4">
-              <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">
-                Privacy & sharing
-              </summary>
-              <div className="space-y-4 pt-3">
-                <label className="flex items-start gap-3 font-normal">
-                  <input
-                    type="checkbox"
-                    className="mt-1 shrink-0"
-                    {...form.register("analyticsAllowed")}
-                  />
-                  <span>Allow public aggregate analytics.</span>
-                </label>
-                <label className="flex items-start gap-3 font-normal">
-                  <input
-                    type="checkbox"
-                    className="mt-1 shrink-0"
-                    {...form.register("evidenceAllowed")}
-                  />
-                  <span>
-                    Allow this feedback as supporting evidence for future
-                    insights.
-                  </span>
-                </label>
-              </div>
-            </details>
-          </section>
-          {validationError && (
-            <p role="alert" className="error">
-              {validationError}
-            </p>
-          )}
-          {mutation.error && (
-            <p role="alert" className="error">
-              {mutation.error.message}
-            </p>
-          )}
-          {ownReview && (
-            <p role="alert" className="error">
-              You can’t review yourself. Share this link with another player.
-            </p>
-          )}
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={
-              mutation.isPending || ownReview || !chosenValid || !skills.length
-            }
-          >
-            {mutation.isPending ? (
-              <Pending label="Sending feedback…" />
-            ) : (
-              <>
-                <Send size={16} />
-                Submit feedback
-              </>
-            )}
-          </Button>
+              </section>
+            </aside>
+          </fieldset>
         </form>
       )}
-    </>
+    </div>
   );
 }

@@ -96,19 +96,55 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
     const guestPage = await guest.newPage();
     await guestPage.goto(link);
     await expect(
-      guestPage.getByText(assigned.username, { exact: true }),
+      guestPage.getByText(`@${assigned.username}`, { exact: true }),
     ).toBeVisible();
     await guestPage
       .getByLabel("Your name", { exact: true })
       .fill("Court observer");
+    const artwork = guestPage.locator(".feedback-art-image");
+    await expect(artwork).toBeVisible();
+    await expect
+      .poll(() =>
+        artwork.evaluate((node) => {
+          const img = node as HTMLImageElement;
+          return img.complete && img.naturalWidth > 0;
+        }),
+      )
+      .toBe(true);
+    expect(
+      await guestPage.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await guestPage.screenshot({
+      fullPage: true,
+      animations: "disabled",
+      path: `/tmp/vbapp-feedback-cards-${info.project.name}.png`,
+    });
+    for (let i = 0; i < 2; i++)
+      await guestPage
+        .getByRole("button", { name: "Next", exact: true })
+        .click();
     await guestPage
-      .getByRole("button", { name: "Passing: 5 out of 5", exact: true })
+      .getByRole("radio", { name: "Passing: 5 out of 5", exact: true })
       .click();
+    for (let i = 2; i < 5; i++)
+      await guestPage
+        .getByRole("button", { name: /^(Next|Review Feedback)$/ })
+        .click();
+    await expect(
+      guestPage.getByRole("heading", { name: "Review feedback", exact: true }),
+    ).toBeVisible();
+    await guestPage.screenshot({
+      fullPage: true,
+      animations: "disabled",
+      path: `/tmp/vbapp-feedback-review-${info.project.name}.png`,
+    });
     await guestPage
       .getByLabel("Written feedback")
       .fill("First draft prepared by guest");
     await guestPage
-      .getByRole("button", { name: "Submit feedback", exact: true })
+      .getByRole("button", { name: "Submit Feedback", exact: true })
       .click();
     await expect(guestPage.getByText(/Your draft is awaiting/)).toBeVisible();
     const pending = (
@@ -144,13 +180,23 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
     const otherPage = await other.newPage();
     await otherPage.goto(link);
     await otherPage
-      .getByRole("button", { name: "Serving: 3 out of 5", exact: true })
+      .getByRole("radiogroup", { name: "Attacking rating" })
+      .waitFor();
+    for (let i = 0; i < 4; i++)
+      await otherPage
+        .getByRole("button", { name: "Next", exact: true })
+        .click();
+    await otherPage
+      .getByRole("radio", { name: "Serving: 3 out of 5", exact: true })
+      .click();
+    await otherPage
+      .getByRole("button", { name: "Review Feedback", exact: true })
       .click();
     await otherPage
       .getByLabel("Written feedback")
       .fill("Second draft prepared while signed in");
     await otherPage
-      .getByRole("button", { name: "Submit feedback", exact: true })
+      .getByRole("button", { name: "Submit Feedback", exact: true })
       .click();
     await expect(otherPage.getByText(/Your draft is awaiting/)).toBeVisible();
     const reviewPage = await reviewer.newPage();

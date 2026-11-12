@@ -3,8 +3,8 @@ import { Providers } from "@/components/providers";
 import "./globals.css";
 export const metadata: Metadata = {
   title: {
-    default: "Courtside — A better game starts with feedback",
-    template: "%s · Courtside",
+    default: "bvbtips — A better game starts with feedback",
+    template: "%s · bvbtips",
   },
   description:
     "Thoughtful feedback. Clear progress. A space for athletes to grow together.",

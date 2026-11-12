@@ -481,7 +481,7 @@ input SubmitFeedbackInput {
 input SubmitGuestFeedbackInput {
   analyticsAllowed: Boolean
   evidenceAllowed: Boolean
-  guestName: String!
+  guestName: String
   matchId: ID
   overallComment: String
   ratings: [RatingInput!]!

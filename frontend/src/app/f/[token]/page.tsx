@@ -16,15 +16,15 @@ export default async function Page({
   const guestOnly = (await searchParams).mode === "device";
   return (
     <div className="min-h-dvh">
-      <header className="mx-auto flex max-w-3xl items-center justify-between px-4 py-6">
+      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
         {guestOnly ? (
-          <span className="text-xl font-bold">courtside.</span>
+          <span className="text-xl font-bold">bvbtips.</span>
         ) : (
           <Brand />
         )}
         <ThemeToggle />
       </header>
-      <main className="mx-auto max-w-2xl px-4 pb-12 pt-4">
+      <main className="mx-auto max-w-6xl px-4 pb-12 pt-4">
         <FeedbackSubmissionForm
           recipientId=""
           sportId=""

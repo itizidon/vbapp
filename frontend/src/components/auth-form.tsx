@@ -28,7 +28,7 @@ function AuthFrame({
   return (
     <main className="grid min-h-dvh lg:grid-cols-2">
       <section className="hidden flex-col justify-between bg-[#192e68] p-12 text-white lg:flex">
-        <div className="text-xl font-bold">courtside.</div>
+        <div className="text-xl font-bold">bvbtips.</div>
         <div className="max-w-md">
           <div className="mb-7 flex size-16 items-center justify-center rounded-2xl bg-white/10">
             <ShieldCheck size={32} />

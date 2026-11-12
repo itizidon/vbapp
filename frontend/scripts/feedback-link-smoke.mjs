@@ -70,7 +70,7 @@ try {
     exact: true,
   });
   await expect(code).toBeVisible();
-  await code.screenshot({ path: "/tmp/courtside-feedback-link-qr.png" });
+  await code.screenshot({ path: "/tmp/bvbtips-feedback-link-qr.png" });
   const url = await page
     .getByRole("textbox", { name: "Feedback link", exact: true })
     .inputValue();

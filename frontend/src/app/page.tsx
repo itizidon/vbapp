@@ -37,7 +37,7 @@ export default async function Home() {
             </Button>
             <Button asChild>
               <Link href="/signup">
-                Join Courtside
+                Join bvbtips
                 <ArrowRight size={17} />
               </Link>
             </Button>
@@ -73,7 +73,7 @@ export default async function Home() {
         </section>
       </main>
       <footer className="mx-auto max-w-6xl border-t border-border px-4 py-6 text-xs text-muted-foreground sm:px-6">
-        © {new Date().getFullYear()} Courtside. See you on the sand.
+        © {new Date().getFullYear()} bvbtips. See you on the sand.
       </footer>
     </>
   );

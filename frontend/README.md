@@ -1,4 +1,4 @@
-# Courtside — Matches, Feedback, Account
+# bvbtips — Matches, Feedback, Account
 
 Beach Volleyball frontend for the existing NestJS GraphQL backend. This refactors the existing Next.js App Router app, retaining its authentication, typed GraphQL proxy, TanStack Query state, React Hook Form/Zod forms, Tailwind tokens, and reusable shadcn/Radix controls.
 
@@ -72,7 +72,7 @@ npm run test:e2e
 
 Playwright covers the four-tab navigation, match list/details/creation, request-to-guest-to-recipient workflow, general versus match feedback, registered match selection, private match isolation for guests, legacy redirects, and responsive overflow at 320, 375, 768, 1024, 1440, and 1920px. Fixtures are test-only; runtime pages call the real API.
 
-With both servers running, `npm run test:live` uses real API/PostgreSQL/browser interactions for general and match-specific requests, submissions, recipient feedback, account sign out, and login. It creates one temporary account and match, removes its own records in a `finally` block, and writes preview screenshots under `/tmp/courtside-*`. Run this only against a local development database; root backend dependencies and `.env` are required for cleanup.
+With both servers running, `npm run test:live` uses real API/PostgreSQL/browser interactions for general and match-specific requests, submissions, recipient feedback, account sign out, and login. It creates one temporary account and match, removes its own records in a `finally` block, and writes preview screenshots under `/tmp/bvbtips-*`. Run this only against a local development database; root backend dependencies and `.env` are required for cleanup.
 
 ## Verification
 
@@ -164,3 +164,5 @@ The self-assessment and internal-rating cards now include five-axis skill radars
 Analytics now presents that profile over a locally hosted sunset beach court, with career statistics, a multicolor radar and interactive skill gauges. See [dashboard components, summary definitions, image provenance and verification](../docs/performance-dashboard.md). Restart the backend and frontend together to include the new authenticated `myPerformanceSummary` query; this redesign adds no migration or dependency.
 
 Feedback links now support optional reviewer assignment and read-only reviewer identity on the form. Account includes a one-card Pending Feedback Approvals queue. See [workflow, data/privacy rules, validation and migration instructions](../docs/feedback-approvals.md).
+
+Feedback forms now use five illustrated skill cards followed by a review-and-submit screen. See [component files, existing image mappings, state, identity/approval behavior and verification](../docs/feedback-cards.md).

@@ -127,7 +127,64 @@ async function api(
         json: { errors: [{ message: "API unavailable" }] },
       });
     let data: object = {};
-    if (q.includes("Catalog"))
+    const feedbackSkill = {
+      id: skillId,
+      sportId,
+      name: "Passing",
+      slug: "passing",
+      active: true,
+      requiredForSelfAssessment: true,
+      description:
+        "Control the first touch so your partner can play the next ball.",
+    };
+    const feedbackSport = {
+      id: sportId,
+      name: "Beach Volleyball",
+      slug: "beach-volleyball",
+      skills: [feedbackSkill],
+    };
+    if (q.includes("FeedbackInvitation")) {
+      const claims = JSON.parse(
+        Buffer.from(vars.token.split(".")[1], "base64url").toString(),
+      );
+      const match = claims.matchId
+        ? state.matches.find((row) => row.id === claims.matchId)
+        : null;
+      data = {
+        feedbackInvitation: {
+          recipientId: claims.recipientId,
+          recipientUsername: "Alex",
+          approvalRequired: false,
+          assignedReviewer: null,
+          sport: feedbackSport,
+          match: match
+            ? {
+                id: match.id,
+                playedAt: match.playedAt,
+                teams: (match.teams ?? []).map((team) => ({
+                  teamNumber: team.teamNumber,
+                  score: team.score,
+                  players: (match.participants ?? [])
+                    .filter((player) => player.teamId === team.id)
+                    .map(
+                      (player) =>
+                        player.user?.username ?? player.guestName ?? "Player",
+                    ),
+                })),
+                unassignedPlayers: [],
+              }
+            : null,
+        },
+      };
+    } else if (q.includes("FeedbackCategories"))
+      data = {
+        sport: feedbackSport,
+        skills: [feedbackSkill],
+        playerProfile: {
+          username: vars.recipientId === userId ? "Alex" : "Taylor",
+        },
+      };
+    else if (q.includes("Catalog"))
       data = {
         sports: [
           {
@@ -500,6 +557,20 @@ async function noOverflow(page: Page) {
   }));
   expect(size.scroll).toBeLessThanOrEqual(size.width);
 }
+async function openPassingCard(page: Page) {
+  await page
+    .getByRole("article", { name: "Attacking feedback card" })
+    .waitFor();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+}
+async function reviewPassingFeedback(page: Page) {
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Review Feedback", exact: true })
+    .click();
+}
 test("four tabs and readable matches, feedback, and account layouts", async ({
   page,
 }) => {
@@ -584,19 +655,18 @@ test("request, copy, guest review, confirmation, and recipient feedback", async 
   const reviewer = await context.newPage();
   await api(reviewer, { guest: true, state });
   await reviewer.goto(link);
+  await openPassingCard(reviewer);
+  await reviewer.getByRole("radio", { name: "Passing: 5 out of 5" }).click();
   await reviewer
-    .getByRole("radio", { name: /No match — General Feedback/ })
-    .check();
-  await reviewer.getByRole("button", { name: "Passing: 5 out of 5" }).click();
-  await reviewer
-    .getByRole("textbox", { name: "Passing comment (optional)" })
+    .getByRole("textbox", { name: "Add a comment (optional)" })
     .fill("Reliable first touch.");
+  await reviewPassingFeedback(reviewer);
   await reviewer
     .getByRole("textbox", { name: "Written feedback" })
     .fill("Helpful on court.");
   await reviewer.getByRole("textbox", { name: "Your name" }).fill("Taylor");
   await noOverflow(reviewer);
-  await reviewer.getByRole("button", { name: "Submit feedback" }).click();
+  await reviewer.getByRole("button", { name: "Submit Feedback" }).click();
   await expect(
     reviewer.getByRole("heading", { name: "Thanks for your feedback." }),
   ).toBeVisible();
@@ -624,11 +694,16 @@ test("match-bound guest links preserve match scope without private match reads",
   const state = store();
   await api(page, { guest: true, state });
   await page.goto(`/f/${token(matchId)}`);
-  await expect(page.getByText("Feedback for the invited match")).toBeVisible();
+  await page.locator("summary").filter({ hasText: "View teams" }).click();
+  await expect(
+    page.getByRole("region", { name: "Invited match" }),
+  ).toBeVisible();
   await expect(page.getByRole("radio", { name: /No match/ })).not.toBeVisible();
-  await page.getByRole("button", { name: "Passing: 4 out of 5" }).click();
+  await openPassingCard(page);
+  await page.getByRole("radio", { name: "Passing: 4 out of 5" }).click();
+  await reviewPassingFeedback(page);
   await page.getByRole("textbox", { name: "Your name" }).fill("Taylor");
-  await page.getByRole("button", { name: "Submit feedback" }).click();
+  await page.getByRole("button", { name: "Submit Feedback" }).click();
   await expect(
     page.getByRole("heading", { name: "Thanks for your feedback." }),
   ).toBeVisible();
@@ -648,8 +723,10 @@ test("registered reviewers can choose a shared match or general feedback", async
   await page
     .getByRole("radio", { name: /No match — General Feedback/ })
     .check();
-  await page.getByRole("button", { name: "Passing: 3 out of 5" }).click();
-  await page.getByRole("button", { name: "Submit feedback" }).click();
+  await openPassingCard(page);
+  await page.getByRole("radio", { name: "Passing: 3 out of 5" }).click();
+  await reviewPassingFeedback(page);
+  await page.getByRole("button", { name: "Submit Feedback" }).click();
   await expect(
     page.getByRole("heading", { name: "Thanks for your feedback." }),
   ).toBeVisible();
@@ -791,7 +868,7 @@ test("landing and signup fit without dashboard navigation", async ({
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Good games/ })).toBeVisible();
   await noOverflow(page);
-  await page.getByRole("link", { name: "Join Courtside" }).click();
+  await page.getByRole("link", { name: "Join bvbtips" }).click();
   await expect(
     page.getByRole("heading", { name: "Let’s grow your game." }),
   ).toBeVisible();
@@ -804,15 +881,16 @@ test("feedback descriptions and login/signup return links", async ({
   await api(page, { guest: true });
   const path = `/f/${token()}`;
   await page.goto(path);
+  await openPassingCard(page);
   await expect(
     page.getByText(
       "Control the first touch so your partner can play the next ball.",
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("group", { name: "Passing" }),
+    page.getByRole("radiogroup", { name: "Passing rating" }),
   ).toHaveAccessibleDescription(
-    "Control the first touch so your partner can play the next ball.",
+    /Control the first touch so your partner can play the next ball/,
   );
   const signup = page.getByRole("link", { name: "Sign up", exact: true });
   expect(
@@ -868,13 +946,14 @@ test("a skill comment requires a rating for that skill", async ({ page }) => {
   await api(page, { guest: true });
   await page.goto(`/f/${token()}`);
   await page.getByRole("textbox", { name: "Your name" }).fill("Taylor");
+  await openPassingCard(page);
   await page
-    .getByRole("textbox", { name: "Passing comment (optional)" })
+    .getByRole("textbox", { name: "Add a comment (optional)" })
     .fill("Useful observation.");
-  await page.getByRole("button", { name: "Submit feedback" }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
   await expect(
     page.getByRole("alert").filter({
-      hasText: "Choose a rating for Passing to include its comment.",
+      hasText: /Choose a rating for Passing to include its comment/,
     }),
   ).toBeVisible();
 });
@@ -1342,7 +1421,7 @@ test("analytics uses backend categories and interactive time frames", async ({
   }
   expect(state.analyticsRequests.at(-1)?.from).toBeNull();
   await page.screenshot({
-    path: `/tmp/courtside-analytics-${page.viewportSize()!.width}.png`,
+    path: `/tmp/bvbtips-analytics-${page.viewportSize()!.width}.png`,
     fullPage: true,
   });
   await page.getByText("View daily data", { exact: true }).click();
@@ -1491,4 +1570,132 @@ test("top bar suggestions are limited to five and clear without navigating", asy
   await expect(page.getByRole("listbox")).toHaveCount(0);
   await expect(page).toHaveURL(/\/matches$/);
   await noOverflow(page);
+});
+
+test("feedback artwork has immutable hashed URLs and supports light and dark themes", async ({
+  page,
+}, info) => {
+  await page.addInitScript(() => localStorage.setItem("theme", "light"));
+  await api(page, { guest: true });
+  const requestedImages: string[] = [];
+  page.on("request", (request) => {
+    if (request.url().includes("/_next/image?"))
+      requestedImages.push(request.url());
+  });
+  await page.goto(`/f/${token()}`);
+  const image = page.locator(".feedback-art-image");
+  await expect
+    .poll(() =>
+      image.evaluate((node) => {
+        const img = node as HTMLImageElement;
+        return img.complete && img.naturalWidth > 0;
+      }),
+    )
+    .toBe(true);
+  const cardBounds = await page.locator(".feedback-step-panel").boundingBox();
+  const sidebarBounds = await page
+    .getByRole("complementary", { name: "Feedback user information" })
+    .boundingBox();
+  expect(cardBounds).not.toBeNull();
+  expect(sidebarBounds).not.toBeNull();
+  if (info.project.use.viewport!.width >= 1024) {
+    expect(sidebarBounds!.x).toBeGreaterThanOrEqual(
+      cardBounds!.x + cardBounds!.width,
+    );
+    expect(Math.abs(sidebarBounds!.y - cardBounds!.y)).toBeLessThan(2);
+  } else {
+    expect(sidebarBounds!.y).toBeGreaterThanOrEqual(
+      cardBounds!.y + cardBounds!.height,
+    );
+  }
+  const source = new URL((await image.getAttribute("src"))!, page.url());
+  const hashed = source.searchParams.get("url")!;
+  expect(hashed).toMatch(
+    /\/_next\/static\/media\/feedback_bg_attacking\.[a-zA-Z0-9_-]+\.png$/,
+  );
+  const original = await page.request.get(new URL(hashed, page.url()).href);
+  expect(original.headers()["cache-control"]).toContain("immutable");
+  const optimized = await page.request.get(source.href, {
+    headers: { accept: "image/webp" },
+  });
+  expect(optimized.headers()["content-type"]).toContain("image/webp");
+  await expect
+    .poll(async () => {
+      const cached = await page.request.get(source.href, {
+        headers: { accept: "image/webp" },
+      });
+      return cached.headers()["x-nextjs-cache"];
+    })
+    .toBe("HIT");
+  expect(
+    requestedImages.every((url) => url.includes("feedback_bg_attacking")),
+  ).toBe(true);
+  for (const theme of ["light", "dark"]) {
+    if (theme === "dark")
+      await page.getByRole("button", { name: "Toggle color theme" }).click();
+    await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+    const styles = await page
+      .locator(".feedback-skill-card")
+      .evaluate((node) => {
+        const card = getComputedStyle(node),
+          heading = getComputedStyle(node.querySelector("h2")!),
+          description = getComputedStyle(
+            node.querySelector(".feedback-skill-description")!,
+          );
+        const luminance = (color: string) => {
+          const parts = color
+            .match(/[\d.]+/g)!
+            .slice(0, 3)
+            .map(Number)
+            .map((n) => {
+              const v = n / 255;
+              return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+            });
+          return parts[0] * 0.2126 + parts[1] * 0.7152 + parts[2] * 0.0722;
+        };
+        const ratio = (a: string, b: string) => {
+          const x = luminance(a),
+            y = luminance(b);
+          return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+        };
+        return {
+          background: card.backgroundColor,
+          headingContrast: ratio(heading.color, card.backgroundColor),
+          descriptionContrast: ratio(description.color, card.backgroundColor),
+        };
+      });
+    expect(styles.headingContrast).toBeGreaterThan(7);
+    expect(styles.descriptionContrast).toBeGreaterThan(4.5);
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      fullPage: true,
+      animations: "disabled",
+      path: `/tmp/vbapp-feedback-${theme}-${info.project.name}.png`,
+    });
+  }
+  await openPassingCard(page);
+  await page.getByRole("radio", { name: "Passing: 4 out of 5" }).click();
+  await reviewPassingFeedback(page);
+  await page
+    .getByLabel("Written feedback")
+    .fill("Keep this draft when changing themes.");
+  for (const theme of ["light", "dark"]) {
+    await page.getByRole("button", { name: "Toggle color theme" }).click();
+    await expect(page.locator("html")).toHaveClass(new RegExp(theme));
+    await expect(page.getByLabel("Written feedback")).toHaveValue(
+      "Keep this draft when changing themes.",
+    );
+    await expect(
+      page.getByRole("article", { name: "Passing summary" }),
+    ).toContainText("4 / 5");
+    await page.screenshot({
+      fullPage: true,
+      animations: "disabled",
+      path: `/tmp/vbapp-feedback-review-${theme}-${info.project.name}.png`,
+    });
+  }
 });

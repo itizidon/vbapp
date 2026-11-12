@@ -263,12 +263,18 @@ it("shows assigned reviewer read-only and submits a pending draft through the in
   mount(
     <FeedbackSubmissionForm recipientId="" sportId="" token="opaque-token" />,
   );
-  await screen.findByText("DesignatedReviewer");
+  await screen.findByText("@DesignatedReviewer");
   expect(
     screen.getByText(/Only the assigned player can approve/),
   ).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Passing: 4 out of 5" }));
-  fireEvent.click(screen.getByRole("button", { name: "Submit feedback" }));
+  for (let i = 0; i < 2; i++)
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Passing: 4 out of 5" }));
+  for (let i = 2; i < 5; i++)
+    fireEvent.click(
+      screen.getByRole("button", { name: /^(Next|Review Feedback)$/ }),
+    );
+  fireEvent.click(screen.getByRole("button", { name: "Submit Feedback" }));
   await screen.findByText(/Your draft is awaiting DesignatedReviewer/);
   const sent = fetcher.mock.calls
     .map((c) => JSON.parse(c[1].body))

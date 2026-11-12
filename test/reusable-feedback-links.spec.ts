@@ -21,7 +21,10 @@ it('allows repeated submissions with the same signed invitation and retains its 
  const service=new FeedbackService({$transaction:(fn:any)=>fn(tx)}as any,jwt,{syncFeedback:jest.fn()} as any);
  const input={recipientId,sportId,token,guestName:'First',ratings:[{skillId,rating:4}]};
  await service.submitGuest(input);await service.submitGuest({...input,guestName:'Second'});
- expect(tx.feedback.create).toHaveBeenCalledTimes(2);
+ await service.submitGuest({...input,guestName:undefined});await service.submitGuest({...input,guestName:'   '});
+ expect(tx.feedback.create).toHaveBeenCalledTimes(4);
+ expect(tx.feedback.create.mock.calls[2][0].data.guestName).toBe('Guest reviewer');
+ expect(tx.feedback.create.mock.calls[3][0].data.guestName).toBe('Guest reviewer');
  for(const call of tx.feedback.create.mock.calls)expect(call[0].data.guestInviteNonce).toBe(nonce);
 });
 it('rejects expired and scope-changed invitations before writing feedback',async()=>{
