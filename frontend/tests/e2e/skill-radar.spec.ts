@@ -105,20 +105,14 @@ test("shows current five-skill radar profiles without snapshot controls", async 
     const page = await owner.newPage();
     await page.goto("/account");
     await expect(
-      page.getByRole("group", {
-        name: "Self-assessment radar chart",
-        exact: true,
-      }),
+      page.getByRole("heading", { name: "Your account" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("group", {
-        name: "Internal rating radar chart",
-        exact: true,
-      }),
-    ).toBeVisible();
+      page.getByRole("region", { name: "Self-assessment", exact: true }),
+    ).toHaveCount(0);
     await expect(
-      page.locator(".recharts-polar-grid-concentric-polygon").last(),
-    ).toBeVisible();
+      page.getByRole("region", { name: "Internal rating", exact: true }),
+    ).toHaveCount(0);
     expect(
       await page.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,

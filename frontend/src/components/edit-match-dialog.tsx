@@ -180,7 +180,11 @@ function MatchDetailsForm({
         </label>
         <label className="field">
           Date and time
-          <input type="datetime-local" {...form.register("playedAt")} />
+          <input
+            type="datetime-local"
+            max={localDateTimeValue()}
+            {...form.register("playedAt")}
+          />
         </label>
         <label className="field">
           Match status

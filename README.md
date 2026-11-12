@@ -115,3 +115,7 @@ Volleyball and Beach Volleyball use five active feedback categories: Attack, Def
 ## Internal player ratings V1
 
 The complete internal skill rating system and self-assessment history are implemented separately from feedback averages. See [architecture, formulas, API, migration and backfill instructions](docs/internal-ratings.md). Analytics offers Internal Rating and Self-Assessment history modes alongside Daily Average and Each Feedback. The Railway config now explicitly clears automatic pre-deploy migration commands: migrations and the optional backfill must be run by an authorized release operator before the new API serves traffic.
+
+## Assigned feedback approvals
+
+Feedback invitations can optionally designate a registered reviewer. Assigned drafts remain private and Pending until that reviewer approves or rejects them from Account. Approval atomically publishes feedback and integrates with existing internal ratings. See [workflow, GraphQL operations, migration and Railway deployment instructions](docs/feedback-approvals.md).

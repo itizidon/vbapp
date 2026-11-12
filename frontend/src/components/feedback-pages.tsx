@@ -121,8 +121,9 @@ export function FeedbackDetails({ id }: { id: string }) {
         Only Beach Volleyball feedback is available here.
       </EmptyState>
     );
-  const name =
-    feedback.guestName ?? (feedback.reviewerId ? "Registered player" : "Guest");
+  const name = feedback.reviewerId
+    ? (feedback.reviewerUsername ?? "Registered player")
+    : (feedback.guestName ?? "Guest");
   return (
     <>
       <Link

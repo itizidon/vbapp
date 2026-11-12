@@ -3,14 +3,16 @@ import { UnauthorizedException } from '@nestjs/common';
 import { FeedbackService } from '../src/feedback/feedback.service';
 const recipientId='11111111-1111-4111-8111-111111111111',sportId='22222222-2222-4222-8222-222222222222',skillId='33333333-3333-4333-8333-333333333333';
 const secret='feedback-link-test-secret-longer-than-32';
-it('issues a signed invitation that expires after 24 hours',async()=>{
+it('issues an opaque stored invitation that expires after 24 hours',async()=>{
  const jwt=new JwtService({secret});
- const db:any={sport:{findUnique:jest.fn().mockResolvedValue({id:sportId})}};
+ const db:any={sport:{findUnique:jest.fn().mockResolvedValue({id:sportId})},feedbackLink:{create:jest.fn().mockResolvedValue({id:'link'})}};
+ const before=Date.now();
  const invite=await new FeedbackService(db,jwt).invite(recipientId,recipientId,sportId);
- const claims=await jwt.verifyAsync(invite.token);
- expect(claims.exp-claims.iat).toBe(86400);
- expect(claims.recipientId).toBe(recipientId);
- expect(claims.nonce).toEqual(expect.any(String));
+ expect(invite.token).toMatch(/^[a-f0-9]{64}$/);
+ expect(invite.expiresAt.getTime()-before).toBeGreaterThanOrEqual(86400000);
+ expect(invite.expiresAt.getTime()-before).toBeLessThan(86401000);
+ expect(db.feedbackLink.create).toHaveBeenCalledWith({data:expect.objectContaining({recipientId,sportId,tokenHash:expect.any(String)})});
+ expect(db.feedbackLink.create.mock.calls[0][0].data.tokenHash).not.toBe(invite.token);
 });
 it('allows repeated submissions with the same signed invitation and retains its audit nonce',async()=>{
  const jwt=new JwtService({secret});const nonce='44444444-4444-4444-8444-444444444444';

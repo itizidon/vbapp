@@ -162,3 +162,5 @@ The feedback request dialog offers **Create feedback link** (copy/QR sharing) an
 The self-assessment and internal-rating cards now include five-axis skill radars. Analytics also offers a Performance Profile radar with source selection and comparison, always showing current ratings. See [data sources, missing-value behavior, query and preview instructions](../docs/skill-radar.md).
 
 Analytics now presents that profile over a locally hosted sunset beach court, with career statistics, a multicolor radar and interactive skill gauges. See [dashboard components, summary definitions, image provenance and verification](../docs/performance-dashboard.md). Restart the backend and frontend together to include the new authenticated `myPerformanceSummary` query; this redesign adds no migration or dependency.
+
+Feedback links now support optional reviewer assignment and read-only reviewer identity on the form. Account includes a one-card Pending Feedback Approvals queue. See [workflow, data/privacy rules, validation and migration instructions](../docs/feedback-approvals.md).

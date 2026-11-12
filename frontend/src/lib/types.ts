@@ -26,6 +26,7 @@ export interface Rating {
   comment?: string | null;
 }
 export interface Feedback {
+  reviewerUsername?: string | null;
   id: string;
   recipientId: string;
   matchId?: string | null;
@@ -34,7 +35,7 @@ export interface Feedback {
   guestName: string | null;
   overallComment: string | null;
   createdAt: string;
-  status: "PUBLISHED" | "PENDING" | "HIDDEN" | "DELETED";
+  status: "PUBLISHED" | "PENDING" | "HIDDEN" | "DELETED" | "REJECTED";
   ratings: Rating[] | null;
   analyticsAllowed: boolean;
   evidenceAllowed: boolean;

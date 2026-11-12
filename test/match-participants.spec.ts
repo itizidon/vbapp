@@ -6,7 +6,7 @@ import {validate} from 'class-validator';
 import {CreateMatchInput} from '../src/common/inputs';
 
 describe('match participant creation',()=>{
- it('creates members and trimmed guests in one atomic nested write',async()=>{const db:any={match:{create:jest.fn().mockResolvedValue({id:'match'})}};await new MatchesService(db).create('owner',{memberIds:['owner','member'],guestNames:[' Taylor ']});expect(db.match.create).toHaveBeenCalledWith(expect.objectContaining({data:{createdById:'owner',participants:{create:[{userId:'owner'},{userId:'member'},{guestName:'Taylor'}]}}}))});
+ it('creates members and trimmed guests in one atomic nested write',async()=>{const db:any={match:{create:jest.fn().mockResolvedValue({id:'match'})}};await new MatchesService(db).create('owner',{memberIds:['owner','member'],guestNames:[' Taylor ']});expect(db.match.create).toHaveBeenCalledWith(expect.objectContaining({data:{createdById:'owner',status:'COMPLETED',playedAt:expect.any(Date),participants:{create:[{userId:'owner'},{userId:'member'},{guestName:'Taylor'}]}}}))});
  it.each([{memberIds:['same','same']},{guestNames:['   ']},{guestNames:Array(51).fill('Guest')}])('rejects invalid rosters before writing',async input=>{const db:any={match:{create:jest.fn()}};await expect(new MatchesService(db).create('owner',input)).rejects.toBeInstanceOf(BadRequestException);expect(db.match.create).not.toHaveBeenCalled()});
  it('validates participant input shape and UUIDs',async()=>{const errors=await validate(plainToInstance(CreateMatchInput,{memberIds:['bad-id'],guestNames:[123]}));expect(errors.map(e=>e.property)).toEqual(expect.arrayContaining(['memberIds','guestNames']))});
 });
@@ -19,7 +19,8 @@ describe('team rosters at creation',()=>{
  it('creates teams before assigning registered and guest participants in the transaction',async()=>{
   const tx:any={match:{create:jest.fn().mockResolvedValue({id:'m'}),findUniqueOrThrow:jest.fn().mockResolvedValue({id:'m'})},matchTeam:{create:jest.fn().mockResolvedValueOnce({id:'t1'}).mockResolvedValueOnce({id:'t2'})},matchParticipant:{createMany:jest.fn()}};
   const db:any={$transaction:jest.fn(fn=>fn(tx))};
-  await new MatchesService(db).create('owner',{memberIds:['unassigned'],teams:[{name:' Sand ',score:0,memberIds:['owner']},{name:'Sea',score:21,guestNames:[' Taylor ']}]});
+  await new MatchesService(db).create('owner',{status:'SCHEDULED',playedAt:new Date('2020-01-01T12:00:00Z'),memberIds:['unassigned'],teams:[{name:' Sand ',score:0,memberIds:['owner']},{name:'Sea',score:21,guestNames:[' Taylor ']}]});
+  expect(tx.match.create).toHaveBeenCalledWith({data:{createdById:'owner',status:'COMPLETED',playedAt:new Date('2020-01-01T12:00:00Z')}});
   expect(tx.matchTeam.create).toHaveBeenNthCalledWith(1,{data:{matchId:'m',teamNumber:1,name:'Sand',score:0}});
   expect(tx.matchTeam.create).toHaveBeenNthCalledWith(2,{data:{matchId:'m',teamNumber:2,name:'Sea',score:21}});
   expect(tx.matchParticipant.createMany).toHaveBeenCalledWith({data:[{matchId:'m',userId:'unassigned'},{matchId:'m',teamId:'t1',userId:'owner'},{matchId:'m',teamId:'t2',guestName:'Taylor'}]});
@@ -37,5 +38,26 @@ describe('scores at match creation',()=>{
  it.each([-1, 1.5, 2147483648])('validates nested score input: %s',async score=>{
   const errors=await validate(plainToInstance(CreateMatchInput,{teams:[{score}]}));
   expect(errors.some(error=>error.property==='teams')).toBe(true);
+ });
+});
+
+
+describe('match date validation',()=>{
+ it.each([{teams:undefined},{teams:[]},{teams:[{memberIds:['owner']}]}])('rejects future dates before creating matches or teams: %s', async ({teams})=>{
+  const db:any={match:{create:jest.fn()},$transaction:jest.fn()};
+  await expect(new MatchesService(db).create('owner',{playedAt:new Date(Date.now()+86_400_000),teams})).rejects.toThrow('cannot be in the future');
+  expect(db.match.create).not.toHaveBeenCalled();
+  expect(db.$transaction).not.toHaveBeenCalled();
+ });
+ it('rejects future dates when editing an owned match',async()=>{
+  const db:any={match:{findUnique:jest.fn().mockResolvedValue({id:'match',createdById:'owner'}),update:jest.fn()}};
+  await expect(new MatchesService(db).update('owner',{id:'match',playedAt:new Date(Date.now()+86_400_000)})).rejects.toThrow('cannot be in the future');
+  expect(db.match.update).not.toHaveBeenCalled();
+ });
+ it('allows an existing past date when editing',async()=>{
+  const db:any={match:{findUnique:jest.fn().mockResolvedValue({id:'match',createdById:'owner'}),update:jest.fn()}};
+  const playedAt=new Date('2020-01-01T12:00:00Z');
+  await new MatchesService(db).update('owner',{id:'match',playedAt});
+  expect(db.match.update).toHaveBeenCalledWith(expect.objectContaining({data:{playedAt}}));
  });
 });

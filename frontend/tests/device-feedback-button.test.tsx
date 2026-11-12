@@ -55,6 +55,7 @@ it("offers separate link creation and direct device review actions", async () =>
     recipientId: "owner",
     sportId: "beach",
     matchId: null,
+    assignedReviewerId: null,
   });
 });
 it("retains the QR/copy-link flow and can reuse that link for a device review", async () => {

@@ -5,7 +5,7 @@ import {
   ObjectType,
   GraphQLISODateTime,
 } from "@nestjs/graphql";
-import { SportModel } from "../common/models";
+import { SportModel, MemberModel } from "../common/models";
 @ObjectType()
 export class InvitedTeamModel {
   @Field(() => Int) teamNumber!: number;
@@ -21,6 +21,11 @@ export class InvitedMatchModel {
 }
 @ObjectType()
 export class FeedbackInvitationModel {
+  @Field(() => MemberModel, { nullable: true }) assignedReviewer?: {
+    id: string;
+    username: string;
+  };
+  @Field() approvalRequired!: boolean;
   @Field(() => ID) recipientId!: string;
   @Field() recipientUsername!: string;
   @Field(() => SportModel) sport!: SportModel;

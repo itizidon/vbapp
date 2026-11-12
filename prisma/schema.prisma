@@ -16,6 +16,7 @@ enum MatchStatus {
 }
 
 enum FeedbackStatus {
+  REJECTED
   PENDING
   PUBLISHED
   HIDDEN
@@ -40,9 +41,15 @@ model User {
   internalRatings   PlayerInternalRating[]
   selfRatingEvents  SelfAssessmentRatingEvent[]
   internalReviews   InternalRatingContribution[] @relation("InternalReviewer")
+  feedbackLinks     FeedbackLink[]               @relation("LinkRecipient")
+  assignedLinks     FeedbackLink[]               @relation("LinkReviewer")
+  preparedFeedback  Feedback[]                   @relation("FeedbackSubmitter")
+  approvedFeedback  Feedback[]                   @relation("FeedbackApprover")
+  rejectedFeedback  Feedback[]                   @relation("FeedbackRejector")
 }
 
 model Sport {
+  feedbackLinks   FeedbackLink[]
   id              String           @id @default(uuid()) @db.Uuid
   name            String
   slug            String           @unique
@@ -76,19 +83,20 @@ model Skill {
 }
 
 model Match {
-  id           String             @id @default(uuid()) @db.Uuid
-  createdById  String             @db.Uuid
-  sportId      String?            @db.Uuid
-  playedAt     DateTime?
-  description  String?
-  status       MatchStatus        @default(DRAFT)
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
-  createdBy    User               @relation("MatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  sport        Sport?             @relation(fields: [sportId], references: [id], onDelete: SetNull)
-  teams        MatchTeam[]
-  participants MatchParticipant[]
-  feedback     Feedback[]
+  feedbackLinks FeedbackLink[]
+  id            String             @id @default(uuid()) @db.Uuid
+  createdById   String             @db.Uuid
+  sportId       String?            @db.Uuid
+  playedAt      DateTime?
+  description   String?
+  status        MatchStatus        @default(DRAFT)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  createdBy     User               @relation("MatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  sport         Sport?             @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  teams         MatchTeam[]
+  participants  MatchParticipant[]
+  feedback      Feedback[]
 
   @@index([createdById, createdAt])
   @@index([sportId])
@@ -128,6 +136,18 @@ model MatchParticipant {
 }
 
 model Feedback {
+  feedbackLinkId                              String?                         @db.Uuid
+  approvalRequired                            Boolean                         @default(false)
+  submittedById                               String?                         @db.Uuid
+  approvedById                                String?                         @db.Uuid
+  approvedAt                                  DateTime?
+  rejectedById                                String?                         @db.Uuid
+  rejectedAt                                  DateTime?
+  rejectionReason                             String?
+  feedbackLink                                FeedbackLink?                   @relation(fields: [feedbackLinkId], references: [id], onDelete: Restrict)
+  submittedBy                                 User?                           @relation("FeedbackSubmitter", fields: [submittedById], references: [id], onDelete: Restrict)
+  approvedBy                                  User?                           @relation("FeedbackApprover", fields: [approvedById], references: [id], onDelete: Restrict)
+  rejectedBy                                  User?                           @relation("FeedbackRejector", fields: [rejectedById], references: [id], onDelete: Restrict)
   id                                          String                          @id @default(uuid()) @db.Uuid
   recipientId                                 String                          @db.Uuid
   reviewerId                                  String?                         @db.Uuid
@@ -155,6 +175,8 @@ model Feedback {
   internalContributions                       InternalRatingContribution[]
   internalEvents                              PlayerInternalRatingEvent[]
 
+  @@index([reviewerId, approvalRequired, status, createdAt, id])
+  @@index([feedbackLinkId])
   @@index([guestInviteNonce])
   @@index([recipientId, createdAt])
   @@index([sportId, createdAt])
@@ -326,4 +348,24 @@ model InternalRatingContribution {
   @@unique([feedbackId, skillId])
   @@index([userId, skillId, sequence])
   @@index([userId, skillId, eligible, reviewerId])
+}
+
+model FeedbackLink {
+  id                 String     @id @default(uuid()) @db.Uuid
+  recipientId        String     @db.Uuid
+  assignedReviewerId String?    @db.Uuid
+  sportId            String     @db.Uuid
+  matchId            String?    @db.Uuid
+  tokenHash          String     @unique
+  expiresAt          DateTime
+  revokedAt          DateTime?
+  createdAt          DateTime   @default(now())
+  recipient          User       @relation("LinkRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+  assignedReviewer   User?      @relation("LinkReviewer", fields: [assignedReviewerId], references: [id], onDelete: Restrict)
+  sport              Sport      @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  match              Match?     @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  feedback           Feedback[]
+
+  @@index([recipientId, createdAt])
+  @@index([assignedReviewerId])
 }

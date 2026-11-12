@@ -11,7 +11,7 @@ import {
 import { dateRangeBounds } from "../common/date-range";
 import { JwtService } from "@nestjs/jwt";
 import { Prisma, FeedbackStatus } from "@prisma/client";
-import { randomUUID } from "crypto";
+import { randomBytes, createHash } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import {
   SubmitFeedbackInput,
@@ -24,6 +24,8 @@ type Invite = {
   recipientId: string;
   sportId: string;
   matchId?: string;
+  linkId?: string;
+  assignedReviewerId?: string;
 };
 @Injectable()
 export class FeedbackService {
@@ -37,6 +39,7 @@ export class FeedbackService {
     recipientId: string,
     sportId: string,
     matchId?: string,
+    assignedReviewerId?: string,
   ) {
     if (actor !== recipientId)
       throw new ForbiddenException(
@@ -45,22 +48,75 @@ export class FeedbackService {
     if (!(await this.db.sport.findUnique({ where: { id: sportId } })))
       throw new NotFoundException("Sport not found");
     await this.validateMatch(recipientId, sportId, matchId);
-    const nonce = randomUUID();
+    if (assignedReviewerId) {
+      if (!isUUID(assignedReviewerId) || assignedReviewerId === recipientId)
+        throw new BadRequestException(
+          "Choose a reviewer other than the recipient",
+        );
+      if (
+        !(await this.db.user.findUnique({
+          where: { id: assignedReviewerId },
+          select: { id: true },
+        }))
+      )
+        throw new NotFoundException("Reviewer not found");
+    }
+    const token = randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-    return {
-      token: await this.jwt.signAsync(
-        { kind: "guest-feedback", nonce, recipientId, sportId, matchId },
-        { expiresIn: "24h" },
-      ),
-      expiresAt,
-    };
+    const link = await this.db.feedbackLink.create({
+      data: {
+        recipientId,
+        sportId,
+        matchId,
+        assignedReviewerId,
+        tokenHash: this.tokenHash(token),
+        expiresAt,
+      },
+    });
+    return { token, expiresAt, linkId: link.id };
   }
+  private tokenHash(token: string) {
+    return createHash("sha256").update(token).digest("hex");
+  }
+  async revokeLink(actor: string, id: string) {
+    return ratingTransaction(this.db, async (tx) => {
+      const link = await tx.feedbackLink.findUnique({ where: { id } });
+      if (!link) throw new NotFoundException("Feedback link not found");
+      if (link.recipientId !== actor) throw new ForbiddenException();
+      await tx.feedbackLink.update({
+        where: { id },
+        data: { revokedAt: link.revokedAt ?? new Date() },
+      });
+      return true;
+    });
+  }
+
   async submit(reviewerId: string, input: SubmitFeedbackInput) {
     return this.create(input, { reviewerId });
   }
-  private async verifyInvitation(token: string) {
+  private async verifyInvitation(
+    token: string,
+    tx: Prisma.TransactionClient | PrismaService = this.db,
+  ): Promise<Invite & { exp: number }> {
     try {
       if (typeof token !== "string" || token.length > 8192) throw new Error();
+      if (/^[a-f0-9]{64}$/.test(token)) {
+        const link = await tx.feedbackLink.findUnique({
+          where: { tokenHash: this.tokenHash(token) },
+        });
+        if (!link || link.revokedAt || link.expiresAt.getTime() <= Date.now())
+          throw new Error();
+        return {
+          kind: "guest-feedback",
+          nonce: link.id,
+          linkId: link.id,
+          recipientId: link.recipientId,
+          sportId: link.sportId,
+          matchId: link.matchId ?? undefined,
+          assignedReviewerId: link.assignedReviewerId ?? undefined,
+          exp: Math.floor(link.expiresAt.getTime() / 1000),
+        };
+      }
       const payload = await this.jwt.verifyAsync<Invite & { exp: number }>(
         token,
       );
@@ -142,11 +198,18 @@ export class FeedbackService {
     return {
       recipientId: payload.recipientId,
       recipientUsername: recipient.username,
+      assignedReviewer: payload.assignedReviewerId
+        ? await this.db.user.findUnique({
+            where: { id: payload.assignedReviewerId },
+            select: { id: true, username: true },
+          })
+        : null,
+      approvalRequired: !!payload.assignedReviewerId,
       sport,
       match,
     };
   }
-  async submitGuest(input: SubmitGuestFeedbackInput) {
+  async submitGuest(input: SubmitGuestFeedbackInput, submittedById?: string) {
     const payload = await this.verifyInvitation(input.token);
     if (
       payload.recipientId !== input.recipientId ||
@@ -155,6 +218,8 @@ export class FeedbackService {
     )
       throw new UnauthorizedException("Invitation does not match submission");
     return this.create(input, {
+      linkToken: input.token,
+      submittedById,
       guestName: input.guestName.trim(),
       nonce: payload.nonce,
       expiresAt: new Date(payload.exp * 1000),
@@ -163,16 +228,35 @@ export class FeedbackService {
 
   private async create(
     input: SubmitFeedbackInput,
-    identity:
-      | { reviewerId: string }
-      | { guestName: string; nonce: string; expiresAt: Date },
+    identity: {
+      reviewerId?: string;
+      guestName?: string;
+      nonce?: string;
+      expiresAt?: Date;
+      linkToken?: string;
+      submittedById?: string;
+    },
   ) {
-    if ("reviewerId" in identity && identity.reviewerId === input.recipientId)
+    if (identity.reviewerId === input.recipientId)
       throw new BadRequestException("Self-feedback is not allowed");
     const skillIds = input.ratings.map((r) => r.skillId);
     if (new Set(skillIds).size !== skillIds.length)
       throw new BadRequestException("Duplicate skill rating");
     return ratingTransaction(this.db, async (tx) => {
+      const invitation = identity.linkToken
+        ? await this.verifyInvitation(identity.linkToken, tx)
+        : null;
+      if (
+        invitation &&
+        (invitation.recipientId !== input.recipientId ||
+          invitation.sportId !== input.sportId ||
+          (invitation.matchId ?? null) !== (input.matchId ?? null))
+      )
+        throw new UnauthorizedException("Invitation does not match submission");
+      const assignedReviewerId = invitation?.assignedReviewerId;
+      const approvalRequired = !!assignedReviewerId;
+      if (assignedReviewerId === input.recipientId)
+        throw new BadRequestException("Self-feedback is not allowed");
       const [recipient, sport, skills] = await Promise.all([
         tx.user.findUnique({
           where: { id: input.recipientId },
@@ -206,7 +290,7 @@ export class FeedbackService {
         updatedAt: Date;
         ratings: { skillId: string; rating: number; updatedAt: Date }[];
       } = null;
-      if ("reviewerId" in identity) {
+      if (identity.reviewerId && !approvalRequired) {
         // Serialize self-assessment rating writers with snapshot readers. PostgreSQL's row lock plus
         // the SERIALIZABLE transaction prevents a mixed overall/rating version.
         const rows = await tx.$queryRaw<
@@ -226,13 +310,14 @@ export class FeedbackService {
           overallComment: input.overallComment,
           analyticsAllowed: input.analyticsAllowed ?? false,
           evidenceAllowed: input.evidenceAllowed ?? false,
-          ...("reviewerId" in identity
-            ? { reviewerId: identity.reviewerId }
-            : {
-                guestName: identity.guestName,
-                guestInviteNonce: identity.nonce,
-                guestInviteExpiresAt: identity.expiresAt,
-              }),
+          reviewerId: assignedReviewerId ?? identity.reviewerId,
+          guestName: identity.guestName,
+          guestInviteNonce: identity.nonce,
+          guestInviteExpiresAt: identity.expiresAt,
+          feedbackLinkId: invitation?.linkId,
+          submittedById: identity.submittedById ?? identity.reviewerId,
+          approvalRequired,
+          status: approvalRequired ? "PENDING" : "PUBLISHED",
           ...(assessment
             ? {
                 reviewerOverallLevelAtSubmission: assessment.overallLevel,
@@ -262,7 +347,7 @@ export class FeedbackService {
             capturedAt,
           })),
         });
-      await this.internal.syncFeedback(tx, feedback.id);
+      if (!approvalRequired) await this.internal.syncFeedback(tx, feedback.id);
       return tx.feedback.findUniqueOrThrow({
         where: { id: feedback.id },
         include: { ratings: true, reviewerSkillSnapshots: true },
@@ -295,6 +380,117 @@ export class FeedbackService {
     if (!match.participants.length)
       throw new BadRequestException("Recipient is not a match participant");
   }
+  async pendingApprovals(actor: string, cursor?: string) {
+    const where: Prisma.FeedbackWhereInput = {
+      reviewerId: actor,
+      approvalRequired: true,
+      status: "PENDING",
+    };
+    const [totalCount, rows] = await this.db.$transaction(
+      async (tx) =>
+        Promise.all([
+          tx.feedback.count({ where }),
+          tx.feedback.findMany({
+            where,
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+            take: 11,
+            ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+            include: {
+              recipient: { select: { username: true } },
+              match: {
+                select: { id: true, playedAt: true, description: true },
+              },
+              ratings: { include: { skill: { select: { name: true } } } },
+            },
+          }),
+        ]),
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+    const hasMore = rows.length > 10;
+    const items = rows.slice(0, 10).map((row) => ({
+      ...row,
+      recipientUsername: row.recipient.username,
+      ratings: row.ratings.map((r) => ({ ...r, skillName: r.skill.name })),
+    }));
+    return {
+      totalCount,
+      items,
+      nextCursor: hasMore ? items[items.length - 1].id : null,
+    };
+  }
+  async decide(actor: string, id: string, approve: boolean, reason?: string) {
+    if (reason && reason.length > 1000)
+      throw new BadRequestException("Rejection reason is too long");
+    return ratingTransaction(this.db, async (tx) => {
+      const feedback = await tx.feedback.findUnique({
+        where: { id },
+        include: { feedbackLink: true },
+      });
+      if (!feedback) throw new NotFoundException("Feedback not found");
+      const link = feedback.feedbackLink;
+      if (feedback.reviewerId !== actor || feedback.recipientId === actor)
+        throw new ForbiddenException("Only the designated reviewer may decide");
+      if (
+        !feedback.approvalRequired ||
+        !link ||
+        link.assignedReviewerId !== actor ||
+        link.recipientId !== feedback.recipientId ||
+        link.sportId !== feedback.sportId ||
+        link.matchId !== feedback.matchId
+      )
+        throw new BadRequestException(
+          "Feedback has no matching reviewer assignment",
+        );
+      const target = approve ? "PUBLISHED" : "REJECTED";
+      if (
+        (approve &&
+          feedback.approvedById === actor &&
+          feedback.approvedAt &&
+          feedback.status === target) ||
+        (!approve &&
+          feedback.rejectedById === actor &&
+          feedback.rejectedAt &&
+          feedback.status === target)
+      )
+        return feedback;
+      if (feedback.status !== "PENDING")
+        throw new BadRequestException("Feedback has already been processed");
+      if (approve && link.revokedAt)
+        throw new BadRequestException("This feedback link was revoked");
+      if (approve) {
+        const activeSkills = await tx.feedbackRating.findMany({
+          where: { feedbackId: id, skill: { active: true } },
+          select: { skillId: true },
+        });
+        const initialized = await tx.playerInternalRating.count({
+          where: {
+            userId: feedback.recipientId,
+            skillId: { in: activeSkills.map((row) => row.skillId) },
+          },
+        });
+        if (initialized !== activeSkills.length)
+          throw new BadRequestException(
+            "The recipient’s internal ratings must be initialized before approval",
+          );
+      }
+      await tx.feedback.update({
+        where: { id },
+        data: approve
+          ? { status: "PUBLISHED", approvedAt: new Date(), approvedById: actor }
+          : {
+              status: "REJECTED",
+              rejectedAt: new Date(),
+              rejectedById: actor,
+              rejectionReason: reason?.trim() || null,
+            },
+      });
+      if (approve) await this.internal.syncFeedback(tx, id);
+      return tx.feedback.findUniqueOrThrow({
+        where: { id },
+        include: { ratings: true, reviewerSkillSnapshots: true },
+      });
+    });
+  }
   async update(actor: string, input: UpdateFeedbackInput) {
     return ratingTransaction(this.db, async (tx) => {
       const old = await tx.feedback.findUnique({
@@ -305,6 +501,18 @@ export class FeedbackService {
       if (old.reviewerId !== actor)
         throw new ForbiddenException(
           "Only the registered reviewer can edit feedback",
+        );
+      if (
+        old.approvalRequired &&
+        (old.status !== "PUBLISHED" ||
+          (input.status && input.status !== old.status))
+      )
+        throw new BadRequestException(
+          "Use approval or rejection to process assigned feedback",
+        );
+      if (!old.approvalRequired && input.status === "REJECTED")
+        throw new BadRequestException(
+          "Rejection is only available for assigned feedback",
         );
       const { id, ratings, ...data } = input;
       await tx.feedback.update({ where: { id }, data });
@@ -340,6 +548,10 @@ export class FeedbackService {
     return ratingTransaction(this.db, async (tx) => {
       const f = await tx.feedback.findUnique({ where: { id } });
       if (!f) throw new NotFoundException();
+      if (f.approvalRequired && f.status !== "PUBLISHED")
+        throw new BadRequestException(
+          "Pending and rejected drafts must be retained for review",
+        );
       if (f.reviewerId !== actor && f.recipientId !== actor)
         throw new ForbiddenException();
       await tx.feedback.update({
@@ -356,9 +568,19 @@ export class FeedbackService {
   async get(actor: string, id: string) {
     const f = await this.db.feedback.findUnique({
       where: { id },
-      include: { ratings: true, reviewerSkillSnapshots: true },
+      include: {
+        ratings: true,
+        reviewerSkillSnapshots: true,
+        reviewer: { select: { username: true } },
+      },
     });
     if (!f) throw new NotFoundException();
+    if (
+      f.approvalRequired &&
+      f.status !== "PUBLISHED" &&
+      actor !== f.reviewerId
+    )
+      throw new ForbiddenException();
     if (actor !== f.recipientId && actor !== f.reviewerId)
       throw new ForbiddenException();
     return this.privateView(f, actor);
@@ -374,6 +596,7 @@ export class FeedbackService {
     return this.list(
       {
         recipientId: actor,
+        OR: [{ approvalRequired: false }, { status: "PUBLISHED" }],
         ...(bounds ? { createdAt: bounds } : {}),
         ...(matchOnly == null
           ? {}
@@ -393,7 +616,11 @@ export class FeedbackService {
   ) {
     const rows = await this.db.feedback.findMany({
       where: { ...where, status: { not: FeedbackStatus.DELETED } },
-      include: { ratings: true, reviewerSkillSnapshots: true },
+      include: {
+        ratings: true,
+        reviewerSkillSnapshots: true,
+        reviewer: { select: { username: true } },
+      },
       take: 11,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -403,14 +630,16 @@ export class FeedbackService {
   private privateView<
     T extends {
       reviewerId: string | null;
+      reviewer?: { username: string } | null;
       reviewerSkillSnapshots: any[];
       reviewerOverallLevelAtSubmission: string | null;
       reviewerSnapshotCapturedAt: Date | null;
     },
   >(f: T, actor: string): T {
-    if (f.reviewerId === actor) return f;
+    const view = { ...f, reviewerUsername: f.reviewer?.username ?? null };
+    if (f.reviewerId === actor) return view;
     return {
-      ...f,
+      ...view,
       reviewerSkillSnapshots: [],
       reviewerOverallLevelAtSubmission: null,
       reviewerSnapshotCapturedAt: null,

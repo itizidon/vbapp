@@ -467,16 +467,6 @@
   color: #c3cfca;
   margin-top: 9px;
 }
-.radar-immersive .radar-detail {
-  max-width: 520px;
-  margin-inline: auto;
-}
-.radar-immersive .radar-detail > div {
-  background: rgba(6, 25, 34, 0.85);
-  border-color: #ead2a13d;
-  font-size: 11px;
-  line-height: 1.7;
-}
 @media (min-width: 1200px) {
   .radar-immersive .radar-stage {
     min-height: 570px;
@@ -600,3 +590,6 @@
     background-color: #71614c;
   }
 }
+
+@keyframes approval-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+.approval-card { animation: approval-enter 180ms ease-out; }

@@ -43,8 +43,9 @@ export function FeedbackCard({
   const average = ratings.length
     ? ratings.reduce((n, r) => n + r.rating, 0) / ratings.length
     : null;
-  const name =
-    feedback.guestName ?? (feedback.reviewerId ? "Registered player" : "Guest");
+  const name = feedback.reviewerId
+    ? (feedback.reviewerUsername ?? "Registered player")
+    : (feedback.guestName ?? "Guest");
   return (
     <article className="panel min-w-0">
       <Link href={`/feedback/${feedback.id}`} className="block rounded-lg">

@@ -45,16 +45,15 @@ export function CreateMatchDialog() {
       const sport = catalog.data?.sports[0];
       if (!sport || !user.data)
         throw new Error("Beach Volleyball is unavailable. Try again.");
+      const playedAt = input.playedAt ? new Date(input.playedAt) : null;
       const response = await gql<{ createMatch: Match }>(
         `mutation CreateMatch($input:CreateMatchInput){createMatch(input:$input){${MATCH_FIELDS}}}`,
         {
           input: {
             sportId: sport.id,
             description: input.description.trim() || undefined,
-            playedAt: input.playedAt
-              ? new Date(input.playedAt).toISOString()
-              : undefined,
-            status: input.playedAt ? "SCHEDULED" : "DRAFT",
+            playedAt: playedAt?.toISOString(),
+            status: "COMPLETED",
             ...buildMatchRoster({
               organizerId: user.data.me.id,
               members,
@@ -139,6 +138,7 @@ export function CreateMatchDialog() {
               <span className="subtle font-normal">(optional)</span>
               <input
                 type="datetime-local"
+                max={localDateTimeValue()}
                 disabled={busy}
                 {...form.register("playedAt")}
               />

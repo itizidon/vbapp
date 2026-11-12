@@ -1,7 +1,7 @@
 import{BadRequestException}from'@nestjs/common';import{MatchesService}from'../src/matches/matches.service';import{AuthService}from'../src/auth/auth.service';
 import{FeedbackService}from'../src/feedback/feedback.service';
 describe('core service rules',()=>{
- it('creates an empty match with only its owner association',async()=>{const db:any={match:{create:jest.fn().mockResolvedValue({id:'m',status:'DRAFT'})}};const s=new MatchesService(db);await expect(s.create('u',{})).resolves.toMatchObject({status:'DRAFT'});expect(db.match.create).toHaveBeenCalledWith(expect.objectContaining({data:{createdById:'u'}}))});
+ it('creates a completed match with its owner and current date',async()=>{const db:any={match:{create:jest.fn().mockResolvedValue({id:'m',status:'COMPLETED'})}};const s=new MatchesService(db);await expect(s.create('u',{})).resolves.toMatchObject({status:'COMPLETED'});expect(db.match.create).toHaveBeenCalledWith(expect.objectContaining({data:{createdById:'u',status:'COMPLETED',playedAt:expect.any(Date)}}))});
  it('rejects duplicate registration skill entries before writing',async()=>{const db:any={sport:{findUnique:jest.fn().mockResolvedValue({id:'s',slug:'volleyball',skills:[{id:'k',name:'Bump',requiredForSelfAssessment:true}]})}};const jwt:any={};const s=new AuthService(db,jwt);await expect(s.register({username:'name',email:'a@b.co',password:'very-long-password',age:20,heightCm:170,sportId:'00000000-0000-0000-0000-000000000001',overallLevel:'B',ratings:[{skillId:'k',rating:3},{skillId:'k',rating:4}]})).rejects.toBeInstanceOf(BadRequestException)});
 });
 

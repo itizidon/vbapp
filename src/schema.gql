@@ -25,6 +25,19 @@ type AnalyticsDashboard {
   wins: Int!
 }
 
+type ApprovalMatchModel {
+  description: String
+  id: ID!
+  playedAt: DateTime
+}
+
+type ApprovalRatingModel {
+  comment: String
+  rating: Int!
+  skillId: ID!
+  skillName: String!
+}
+
 input AssessmentRatingInput {
   rating: Int!
   skillId: ID!
@@ -88,6 +101,8 @@ type FeedbackCount {
 }
 
 type FeedbackInvitationModel {
+  approvalRequired: Boolean!
+  assignedReviewer: MemberModel
   match: InvitedMatchModel
   recipientId: ID!
   recipientUsername: String!
@@ -96,6 +111,7 @@ type FeedbackInvitationModel {
 
 type FeedbackModel {
   analyticsAllowed: Boolean!
+  approvedAt: DateTime
   createdAt: DateTime!
   evidenceAllowed: Boolean!
   guestName: String
@@ -104,10 +120,13 @@ type FeedbackModel {
   overallComment: String
   ratings: [FeedbackRatingModel!]
   recipientId: ID!
+  rejectedAt: DateTime
+  rejectionReason: String
   reviewerId: ID
   reviewerOverallLevelAtSubmission: String
   reviewerSkillSnapshots: [ReviewerSnapshotModel!]
   reviewerSnapshotCapturedAt: DateTime
+  reviewerUsername: String
   sportId: ID!
   status: FeedbackStatus!
   updatedAt: DateTime!
@@ -124,10 +143,12 @@ enum FeedbackStatus {
   HIDDEN
   PENDING
   PUBLISHED
+  REJECTED
 }
 
 type GuestInvitePayload {
   expiresAt: DateTime!
+  linkId: ID
   token: String!
 }
 
@@ -226,8 +247,9 @@ type MemberModel {
 type Mutation {
   addGuestMatchParticipant(input: AddGuestParticipantInput!): MatchParticipantModel!
   addMatchParticipant(input: AddParticipantInput!): MatchParticipantModel!
+  approveFeedback(feedbackId: ID!): FeedbackModel!
   assignParticipantToTeam(participantId: ID!, teamId: ID): MatchParticipantModel!
-  createGuestFeedbackInvite(matchId: ID, recipientId: ID!, sportId: ID!): GuestInvitePayload!
+  createGuestFeedbackInvite(assignedReviewerId: ID, matchId: ID, recipientId: ID!, sportId: ID!): GuestInvitePayload!
   createMatch(input: CreateMatchInput): MatchModel!
   createMatchTeam(input: CreateTeamInput!): MatchTeamModel!
   createSelfAssessment(input: CreateSelfAssessmentInput!): SelfAssessmentModel!
@@ -236,8 +258,10 @@ type Mutation {
   login(input: LoginInput!): AuthPayload!
   moveParticipantToTeam(participantId: ID!, teamId: ID!): MatchParticipantModel!
   register(input: RegisterInput!): AuthPayload!
+  rejectFeedback(feedbackId: ID!, reason: String): FeedbackModel!
   removeMatchParticipant(id: ID!): MatchParticipantModel!
   removeMatchTeam(id: ID!): MatchTeamModel!
+  revokeFeedbackLink(linkId: ID!): Boolean!
   submitFeedback(input: SubmitFeedbackInput!): FeedbackModel!
   submitGuestFeedback(input: SubmitGuestFeedbackInput!): FeedbackModel!
   updateAccountVisibility(isPublic: Boolean!): UserModel!
@@ -247,6 +271,37 @@ type Mutation {
   updateSelfAssessment(input: UpdateSelfAssessmentInput!): SelfAssessmentModel!
   updateSelfAssessmentRatings(input: UpdateSelfAssessmentRatingsInput!): SelfAssessmentModel!
   updateTeamScore(score: Int, teamId: ID!): MatchTeamModel!
+}
+
+type PendingApprovalModel {
+  analyticsAllowed: Boolean!
+  approvedAt: DateTime
+  createdAt: DateTime!
+  evidenceAllowed: Boolean!
+  guestName: String
+  id: ID!
+  match: ApprovalMatchModel
+  matchId: ID
+  overallComment: String
+  ratings: [ApprovalRatingModel!]!
+  recipientId: ID!
+  recipientUsername: String!
+  rejectedAt: DateTime
+  rejectionReason: String
+  reviewerId: ID
+  reviewerOverallLevelAtSubmission: String
+  reviewerSkillSnapshots: [ReviewerSnapshotModel!]
+  reviewerSnapshotCapturedAt: DateTime
+  reviewerUsername: String
+  sportId: ID!
+  status: FeedbackStatus!
+  updatedAt: DateTime!
+}
+
+type PendingApprovalsPage {
+  items: [PendingApprovalModel!]!
+  nextCursor: ID
+  totalCount: Int!
 }
 
 type PerformanceSummary {
@@ -279,6 +334,7 @@ type Query {
   members(search: String!): [MemberModel!]!
   myAnalytics(before: DateTime, from: DateTime, timeZone: String! = "UTC"): AnalyticsDashboard!
   myCategoryFeedback(before: DateTime, from: DateTime, skillId: ID!): [IndividualCategoryFeedback!]!
+  myPendingFeedbackApprovals(cursor: ID): PendingApprovalsPage!
   myPerformanceSummary: PerformanceSummary!
   mySelfAssessments: [SelfAssessmentModel!]!
   playerMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime, userId: ID!): [MatchModel!]!

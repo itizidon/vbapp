@@ -5,7 +5,9 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service'; import { AddGuestParticipantInput,AddParticipantInput,CreateMatchInput,CreateTeamInput,UpdateMatchInput,UpdateTeamInput } from '../common/inputs';
 @Injectable() export class MatchesService {
  constructor(private db:PrismaService){} private include={teams:true,participants:{include:{user:{select:{id:true,username:true}}}}} as const;
+ private validatePlayedAt(playedAt?:Date|null){if(playedAt&&(!Number.isFinite(playedAt.getTime())||playedAt.getTime()>Date.now()))throw new BadRequestException('Match date and time cannot be in the future')}
  async create(userId:string,input:CreateMatchInput={}){
+  this.validatePlayedAt(input.playedAt);
   const {memberIds:members,guestNames:guests,teams:requestedTeams,...match}=input;
   const unassigned={memberIds:members??[],guestNames:(guests??[]).map(name=>name.trim())};
   const teams=(requestedTeams??[]).map(team=>({name:team.name?.trim()||undefined,score:team.score,memberIds:team.memberIds??[],guestNames:(team.guestNames??[]).map(name=>name.trim())}));
@@ -17,9 +19,9 @@ import { PrismaService } from '../prisma/prisma.service'; import { AddGuestParti
   if(teams.some(team=>team.name&&team.name.length>100))throw new BadRequestException('Team names must contain at most 100 characters');
   if(guestNames.some(name=>!name||name.length>100))throw new BadRequestException('Guest names must contain 1–100 characters');
   try{
-   if(!teams.length){const participants=[...memberIds.map(userId=>({userId})),...guestNames.map(guestName=>({guestName}))];return await this.db.match.create({data:{createdById:userId,...match,...(participants.length?{participants:{create:participants}}:{})},include:this.include})}
+   if(!teams.length){const participants=[...memberIds.map(userId=>({userId})),...guestNames.map(guestName=>({guestName}))];return await this.db.match.create({data:{createdById:userId,...match,status:'COMPLETED',playedAt:match.playedAt??new Date(),...(participants.length?{participants:{create:participants}}:{})},include:this.include})}
    return await this.db.$transaction(async tx=>{
-    const created=await tx.match.create({data:{createdById:userId,...match}});
+    const created=await tx.match.create({data:{createdById:userId,...match,status:'COMPLETED',playedAt:match.playedAt??new Date()}});
     const participants:{matchId:string;teamId?:string;userId?:string;guestName?:string}[]=[...unassigned.memberIds.map(userId=>({matchId:created.id,userId})),...unassigned.guestNames.map(guestName=>({matchId:created.id,guestName}))];
     for(const [index,team] of teams.entries()){
      const saved=await tx.matchTeam.create({data:{matchId:created.id,teamNumber:index+1,name:team.name,score:team.score}});
@@ -31,7 +33,7 @@ import { PrismaService } from '../prisma/prisma.service'; import { AddGuestParti
   }catch(error){if(error instanceof Prisma.PrismaClientKnownRequestError&&error.code==='P2003')throw new BadRequestException('A selected member or sport is no longer available');throw error}
  }
  async owned(id:string,userId:string){const match=await this.db.match.findUnique({where:{id}});if(!match)throw new NotFoundException('Match not found');if(match.createdById!==userId)throw new ForbiddenException('Only the organizer can modify this match');return match}
- async update(userId:string,input:UpdateMatchInput){await this.owned(input.id,userId);const {id,...data}=input;return this.db.match.update({where:{id},data,include:this.include})}
+ async update(userId:string,input:UpdateMatchInput){await this.owned(input.id,userId);this.validatePlayedAt(input.playedAt);const {id,...data}=input;return this.db.match.update({where:{id},data,include:this.include})}
  async delete(userId:string,id:string){await this.owned(id,userId);return this.db.match.delete({where:{id},include:this.include})}
  async get(id:string,userId:string){const match=await this.db.match.findUnique({where:{id},include:this.include});if(!match)return null;if(match.createdById!==userId&&!match.participants.some(p=>p.userId===userId))throw new ForbiddenException('Match details are limited to organizers and participants');return match}
  list(userId:string,cursor?:string,playedFrom?:Date,playedBefore?:Date){return this.db.match.findMany({where:{...matchDateFilter(playedFrom,playedBefore),OR:[{createdById:userId},{participants:{some:{userId}}}]},include:this.include,take:11,...cursor?{cursor:{id:cursor},skip:1}:{},orderBy:[{createdAt:'desc'},{id:'desc'}]})}

@@ -23,13 +23,13 @@ it('applies dates before fetching a ten-row page plus lookahead without changing
 it.each([true,false,undefined,null])('filters feedback before pagination and preserves actor scope: %s',async matchOnly=>{
  const db:any={feedback:{findMany:jest.fn().mockResolvedValue([])}};
  await new FeedbackService(db,{} as any).received('me','cursor',matchOnly as boolean|undefined);
- expect(db.feedback.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{recipientId:'me',...(matchOnly==null?{}:{matchId:matchOnly?{not:null}:null}),status:{not:'DELETED'}},take:11,cursor:{id:'cursor'},skip:1}));
+ expect(db.feedback.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{recipientId:'me',OR:[{approvalRequired:false},{status:'PUBLISHED'}],...(matchOnly==null?{}:{matchId:matchOnly?{not:null}:null}),status:{not:'DELETED'}},take:11,cursor:{id:'cursor'},skip:1}));
 });
 
 it('combines submitted dates and feedback type before paging while retaining recipient permissions',async()=>{
  const db:any={feedback:{findMany:jest.fn().mockResolvedValue([])}};
  await new FeedbackService(db,{} as any).received('me','cursor',true,from,before);
- expect(db.feedback.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{recipientId:'me',matchId:{not:null},createdAt:{gte:from,lt:before},status:{not:'DELETED'}},take:11,cursor:{id:'cursor'},skip:1}));
+ expect(db.feedback.findMany).toHaveBeenCalledWith(expect.objectContaining({where:{recipientId:'me',OR:[{approvalRequired:false},{status:'PUBLISHED'}],matchId:{not:null},createdAt:{gte:from,lt:before},status:{not:'DELETED'}},take:11,cursor:{id:'cursor'},skip:1}));
 });
 it('rejects invalid feedback dates before loading any data',()=>{
  const db:any={feedback:{findMany:jest.fn()}};

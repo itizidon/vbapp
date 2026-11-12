@@ -116,11 +116,13 @@ export function FeedbackSubmissionForm({
           feedbackInvitation: {
             recipientId: string;
             recipientUsername: string;
+            assignedReviewer: { id: string; username: string } | null;
+            approvalRequired: boolean;
             sport: Sport;
             match: InvitedMatch | null;
           };
         }>(
-          `query FeedbackInvitation($token:String!){feedbackInvitation(token:$token){recipientId recipientUsername sport{id name slug skills{id sportId name slug description active requiredForSelfAssessment}} match{id playedAt teams{teamNumber score players} unassignedPlayers}}}`,
+          `query FeedbackInvitation($token:String!){feedbackInvitation(token:$token){recipientId recipientUsername assignedReviewer{id username} approvalRequired sport{id name slug skills{id sportId name slug description active requiredForSelfAssessment}} match{id playedAt teams{teamNumber score players} unassignedPlayers}}}`,
           { token },
         );
         return result.feedbackInvitation;
@@ -137,6 +139,8 @@ export function FeedbackSubmissionForm({
         sport: result.sport ? { ...result.sport, skills: result.skills } : null,
         recipientId,
         recipientUsername: result.playerProfile.username,
+        assignedReviewer: null,
+        approvalRequired: false,
         match: null as InvitedMatch | null,
       };
     },
@@ -176,7 +180,12 @@ export function FeedbackSubmissionForm({
   const skills = sport?.skills.filter((skill) => skill.active) ?? [];
   const registered = activeSession;
   const guest = !registered;
-  const ownReview = registered && user.data?.me.id === recipientId;
+  const assignedReviewer = catalog.data?.assignedReviewer;
+  const approvalRequired = !!catalog.data?.approvalRequired;
+  const ownReview =
+    !approvalRequired &&
+    registered &&
+    user.data?.me.id === (catalog.data?.recipientId ?? recipientId);
   const eligible = recipientMatches(matches.data?.rows ?? [], recipientId);
   const extra = selectedMatch.data?.match;
   if (
@@ -223,10 +232,15 @@ export function FeedbackSubmissionForm({
             rating: ratings[skill.id],
             comment: comments[skill.id]?.trim() || undefined,
           })),
-        ...(guest ? { guestName: guestName.trim(), token } : {}),
+        ...(guest || approvalRequired
+          ? {
+              guestName: guest ? guestName.trim() : user.data!.me.username,
+              token,
+            }
+          : {}),
       };
       return gql(
-        guest
+        guest || approvalRequired
           ? `mutation GuestFeedback($input:SubmitGuestFeedbackInput!){submitGuestFeedback(input:$input){id}}`
           : `mutation SubmitFeedback($input:SubmitFeedbackInput!){submitFeedback(input:$input){id}}`,
         { input },
@@ -285,7 +299,9 @@ export function FeedbackSubmissionForm({
         </span>
         <h1>Thanks for your feedback.</h1>
         <p className="subtle mt-4">
-          Your perspective has been sent to the player.
+          {approvalRequired
+            ? `Your draft is awaiting ${assignedReviewer?.username ?? "the assigned reviewer"}’s approval. It will reach the player after approval.`
+            : "Your perspective has been sent to the player."}
         </p>
         {guestOnly && (
           <Button className="mt-6" onClick={nextReviewer}>
@@ -323,6 +339,23 @@ export function FeedbackSubmissionForm({
         <p className="break-anywhere font-semibold">
           {catalog.data?.recipientUsername ?? "Player"}
         </p>
+        {assignedReviewer && (
+          <div className="mt-3 space-y-1 border-t border-border pt-3">
+            <p className="text-sm">
+              Assigned feedback giver:{" "}
+              <strong>{assignedReviewer.username}</strong>
+            </p>
+            <p className="subtle text-sm">
+              Status after submission: Awaiting {assignedReviewer.username}’s
+              approval.
+            </p>
+            <p className="subtle text-xs">
+              Anyone with this link may prepare a draft. Only the assigned
+              player can approve it while signed in. Submitting does not confirm
+              their identity.
+            </p>
+          </div>
+        )}
         <p className="subtle mt-2 text-xs">
           Confirm this link came from the player you want to review.
         </p>
@@ -427,7 +460,7 @@ export function FeedbackSubmissionForm({
                 from the list.
               </p>
             )}
-            {registered && matches.isPending && (
+            {registered && !token && matches.isPending && (
               <p className="subtle mt-3 text-xs">
                 Loading matches you can access. General Feedback is always
                 available.

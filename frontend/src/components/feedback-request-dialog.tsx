@@ -1,4 +1,5 @@
 "use client";
+import { ReviewerPicker } from "./reviewer-picker";
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -14,7 +15,7 @@ import {
 import { useUser, useCatalog, useMatches } from "@/lib/hooks";
 import { recipientMatches } from "@/lib/matches";
 import { gql } from "@/lib/api";
-import type { Match } from "@/lib/types";
+import type { Match, Member } from "@/lib/types";
 import { Button } from "./ui/button";
 import {
   Dialog,
@@ -110,6 +111,7 @@ export function FeedbackRequestDialog({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [reviewer, setReviewer] = useState<Member | null>(null);
   const [matchId, setMatchId] = useState(initialMatch?.id ?? "");
   const [invite, setInvite] = useState<{
     url: string;
@@ -145,11 +147,12 @@ export function FeedbackRequestDialog({
       return gql<{
         createGuestFeedbackInvite: { token: string; expiresAt: string };
       }>(
-        `mutation Invite($recipientId:ID!,$sportId:ID!,$matchId:ID){createGuestFeedbackInvite(recipientId:$recipientId,sportId:$sportId,matchId:$matchId){token expiresAt}}`,
+        `mutation Invite($recipientId:ID!,$sportId:ID!,$matchId:ID,$assignedReviewerId:ID){createGuestFeedbackInvite(recipientId:$recipientId,sportId:$sportId,matchId:$matchId,assignedReviewerId:$assignedReviewerId){token expiresAt}}`,
         {
           recipientId: user.data.me.id,
           sportId: sport.id,
           matchId: matchId || null,
+          assignedReviewerId: reviewer?.id ?? null,
         },
       );
     },
@@ -172,6 +175,7 @@ export function FeedbackRequestDialog({
         onClick={() => {
           setOpen(true);
           setInvite(null);
+          setReviewer(null);
           setMatchId(initialMatch?.id ?? "");
           create.reset();
         }}
@@ -204,6 +208,12 @@ export function FeedbackRequestDialog({
             </div>
           ) : (
             <div className="space-y-5">
+              <ReviewerPicker
+                recipientId={user.data?.me.id ?? ""}
+                value={reviewer}
+                onChange={setReviewer}
+                disabled={create.isPending}
+              />
               <MatchSelector
                 matches={available}
                 value={matchId}
@@ -227,7 +237,8 @@ export function FeedbackRequestDialog({
               )}
               <p className="subtle text-xs">
                 The link is restricted to your choice and can be used by
-                multiple reviewers for 24 hours.
+                multiple submissions for 24 hours. Assigned submissions wait for
+                the designated reviewer’s approval.
               </p>
               {catalog.error && (
                 <ErrorState

@@ -373,9 +373,11 @@ export function PlayerSkillRadarChart({
           ))}
         </div>
       )}
-      <div className="radar-detail" aria-live="polite">
-        <SkillDetails point={active} mode={mode} compare={comparing} />
-      </div>
+      {!immersive && (
+        <div className="radar-detail" aria-live="polite">
+          <SkillDetails point={active} mode={mode} compare={comparing} />
+        </div>
+      )}
     </div>
   );
 }

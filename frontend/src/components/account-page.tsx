@@ -1,27 +1,21 @@
 "use client";
-import { useCatalog, useSummary, useUser } from "@/lib/hooks";
+import { PendingFeedbackApprovals } from "./pending-feedback-approvals";
+import { useUser } from "@/lib/hooks";
 import { UserAvatar, ErrorState, LoadingSkeleton } from "./common";
-import { SelfSkillRatings, InternalRatingCard } from "./profile-skill-ratings";
-import { AssessmentEditor } from "./assessment-editor";
 import { FeedbackRequestDialog } from "./feedback-request-dialog";
 import { AccountVisibilitySwitch } from "./account-visibility-switch";
 import { AccountMenu } from "./app-shell";
 import { PageHeader } from "./page-header";
 export function AccountPage() {
   const user = useUser();
-  const catalog = useCatalog();
-  const summary = useSummary(user.data?.me.id);
-  if (user.isPending || catalog.isPending || summary.isPending)
-    return <LoadingSkeleton />;
-  const error = user.error ?? catalog.error ?? summary.error;
+  if (user.isPending) return <LoadingSkeleton />;
+  const error = user.error;
   if (error)
     return (
       <ErrorState
         error={error}
         retry={() => {
           user.refetch();
-          catalog.refetch();
-          summary.refetch();
         }}
       />
     );
@@ -45,8 +39,7 @@ export function AccountPage() {
             Member since {new Date(me.createdAt).toLocaleDateString()}
           </p>
           <p className="subtle text-sm">
-            Name, email, and photo editing are not available yet. You can update
-            your playing level and self-assessment below.
+            Name, email, and photo editing are not available yet.
           </p>
         </section>
         <AccountMenu />
@@ -68,34 +61,7 @@ export function AccountPage() {
           <AccountVisibilitySwitch me={me} />
         </section>
       </div>
-      {catalog.data?.sports.map((sport) => {
-        const assessment = summary.data?.mySelfAssessments.find(
-          (a) => a.sportId === sport.id,
-        );
-        return (
-          <div
-            key={sport.id}
-            className="mt-5 grid min-w-0 gap-5 lg:grid-cols-2"
-          >
-            <section className="panel min-w-0" aria-label="Self-assessment">
-              <h2>Self-assessment</h2>
-              <p className="subtle mb-5 mt-1 text-sm">
-                Your own view of your game.
-              </p>
-              <h3 className="mb-4">
-                {sport.name} · {assessment?.overallLevel ?? "Unrated"}
-              </h3>
-              <SelfSkillRatings sport={sport} assessment={assessment} />
-              <AssessmentEditor sport={sport} assessment={assessment} />
-            </section>
-            <InternalRatingCard
-              userId={me.id}
-              sport={sport}
-              assessment={assessment}
-            />
-          </div>
-        );
-      })}
+      <PendingFeedbackApprovals />
     </>
   );
 }

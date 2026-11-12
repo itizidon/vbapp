@@ -1,3 +1,5 @@
+import { OptionalGqlAuthGuard } from "../common/optional-gql-auth.guard";
+import { PendingApprovalsPage } from "./approval.models";
 import { FeedbackInvitationModel } from "./invitation.models";
 import {
   Args,
@@ -31,10 +33,13 @@ export class FeedbackResolver {
   ) {
     return this.s.submit(u.id, i);
   }
-  @Mutation(() => FeedbackModel) submitGuestFeedback(
+  @UseGuards(OptionalGqlAuthGuard)
+  @Mutation(() => FeedbackModel)
+  submitGuestFeedback(
     @Args("input") i: SubmitGuestFeedbackInput,
+    @CurrentUser() u?: AuthUser,
   ) {
-    return this.s.submitGuest(i);
+    return this.s.submitGuest(i, u?.id);
   }
   @UseGuards(GqlAuthGuard)
   @Mutation(() => GuestInvitePayload)
@@ -43,8 +48,43 @@ export class FeedbackResolver {
     @Args("recipientId", { type: () => ID }) r: string,
     @Args("sportId", { type: () => ID }) s: string,
     @Args("matchId", { type: () => ID, nullable: true }) m?: string,
+    @Args("assignedReviewerId", { type: () => ID, nullable: true })
+    reviewer?: string,
   ) {
-    return this.s.invite(u.id, r, s, m);
+    return this.s.invite(u.id, r, s, m, reviewer);
+  }
+  @UseGuards(GqlAuthGuard)
+  @Query(() => PendingApprovalsPage)
+  myPendingFeedbackApprovals(
+    @CurrentUser() u: AuthUser,
+    @Args("cursor", { type: () => ID, nullable: true }) cursor?: string,
+  ) {
+    return this.s.pendingApprovals(u.id, cursor);
+  }
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => FeedbackModel)
+  approveFeedback(
+    @CurrentUser() u: AuthUser,
+    @Args("feedbackId", { type: () => ID }) id: string,
+  ) {
+    return this.s.decide(u.id, id, true);
+  }
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => FeedbackModel)
+  rejectFeedback(
+    @CurrentUser() u: AuthUser,
+    @Args("feedbackId", { type: () => ID }) id: string,
+    @Args("reason", { nullable: true }) reason?: string,
+  ) {
+    return this.s.decide(u.id, id, false, reason);
+  }
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => Boolean)
+  revokeFeedbackLink(
+    @CurrentUser() u: AuthUser,
+    @Args("linkId", { type: () => ID }) id: string,
+  ) {
+    return this.s.revokeLink(u.id, id);
   }
   @UseGuards(GqlAuthGuard) @Mutation(() => FeedbackModel) updateFeedback(
     @CurrentUser() u: AuthUser,
