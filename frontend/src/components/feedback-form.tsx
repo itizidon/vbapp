@@ -2,7 +2,7 @@
 import { useRef, useState, useId } from "react";
 import Link from "next/link";
 import { useSearchParams, usePathname } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check, Send } from "lucide-react";
@@ -12,6 +12,9 @@ import { gql, ApiError } from "@/lib/api";
 import { recipientMatches } from "@/lib/matches";
 import { feedbackSchema, validateRatings } from "@/lib/validation";
 import type { z } from "zod";
+import { InvitedMatchPreview } from "./invited-match-preview";
+import type { InvitedMatch } from "@/lib/invites";
+import type { Sport, Skill } from "@/lib/types";
 import { Button } from "./ui/button";
 import {
   RatingStars,
@@ -98,7 +101,38 @@ export function FeedbackSubmissionForm({
   scopedMatchId?: string;
   initialMatchId?: string;
 }) {
-  const catalog = useCatalog();
+  const catalog = useQuery({
+    queryKey: ["feedback-categories", sportId, token ?? "registered"],
+    queryFn: async () => {
+      if (token) {
+        const result = await gql<{
+          feedbackInvitation: {
+            recipientId: string;
+            sport: Sport;
+            match: InvitedMatch | null;
+          };
+        }>(
+          `query FeedbackInvitation($token:String!){feedbackInvitation(token:$token){recipientId sport{id name slug skills{id sportId name slug description active requiredForSelfAssessment}} match{id playedAt teams{teamNumber score players} unassignedPlayers}}}`,
+          { token },
+        );
+        return result.feedbackInvitation;
+      }
+      const result = await gql<{
+        sport: Pick<Sport, "id" | "name" | "slug"> | null;
+        skills: Skill[];
+      }>(
+        `query FeedbackCategories($sportId:ID!){sport(id:$sportId){id name slug} skills(sportId:$sportId){id sportId name slug description active requiredForSelfAssessment}}`,
+        { sportId },
+      );
+      return {
+        sport: result.sport ? { ...result.sport, skills: result.skills } : null,
+        recipientId,
+        match: null as InvitedMatch | null,
+      };
+    },
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
   const user = useUser();
   const activeSession =
     !!user.data &&
@@ -107,11 +141,11 @@ export function FeedbackSubmissionForm({
   const search = useSearchParams();
   const returnTo = path + (search.size ? `?${search.toString()}` : "");
   const client = useQueryClient();
-  const matches = useMatches(activeSession);
+  const matches = useMatches(activeSession && !token);
   const [selected, setSelected] = useState(
     scopedMatchId ?? initialMatchId ?? "",
   );
-  const selectedMatch = useMatch(selected, activeSession);
+  const selectedMatch = useMatch(selected, activeSession && !token);
   const [ratings, setRatings] = useState<Record<string, number>>({});
   const [comments, setComments] = useState<Record<string, string>>({});
   const [validationError, setValidationError] = useState("");
@@ -125,7 +159,10 @@ export function FeedbackSubmissionForm({
       evidenceAllowed: false,
     },
   });
-  const sport = catalog.data?.sports.find((s) => s.id === sportId);
+  const sport = catalog.data?.sport;
+  const invitationMatch = catalog.data?.match ?? null;
+  const effectiveMatchId = token ? (invitationMatch?.id ?? "") : selected;
+  const skills = sport?.skills.filter((skill) => skill.active) ?? [];
   const registered = activeSession;
   const guest = !registered;
   const ownReview = registered && user.data?.me.id === recipientId;
@@ -140,12 +177,15 @@ export function FeedbackSubmissionForm({
     eligible.unshift(extra);
   const available = eligible.filter((m) => !m.sportId || m.sportId === sportId);
   const chosenValid =
-    !selected || !!scopedMatchId || available.some((m) => m.id === selected);
+    !!token ||
+    !selected ||
+    !!scopedMatchId ||
+    available.some((m) => m.id === selected);
   const mutation = useMutation({
     mutationFn: async (values: z.infer<typeof feedbackSchema>) => {
       if (!sport)
         throw new Error(
-          "This invitation is not for Beach Volleyball. Ask the player for a new link.",
+          "This invitation’s sport is unavailable. Ask the player for a new link.",
         );
       if (ownReview)
         throw new Error("You cannot leave feedback about yourself.");
@@ -162,15 +202,15 @@ export function FeedbackSubmissionForm({
       const { guestName, ...rest } = values;
       const input = {
         ...rest,
-        recipientId,
-        sportId,
-        matchId: selected || null,
-        ratings: Object.entries(ratings)
-          .filter(([, v]) => v > 0)
-          .map(([skillId, rating]) => ({
-            skillId,
-            rating,
-            comment: comments[skillId]?.trim() || undefined,
+        recipientId: catalog.data?.recipientId ?? recipientId,
+        sportId: sport.id,
+        matchId: effectiveMatchId || null,
+        ratings: skills
+          .filter((skill) => ratings[skill.id] > 0)
+          .map((skill) => ({
+            skillId: skill.id,
+            rating: ratings[skill.id],
+            comment: comments[skill.id]?.trim() || undefined,
           })),
         ...(guest ? { guestName: guestName.trim(), token } : {}),
       };
@@ -192,7 +232,7 @@ export function FeedbackSubmissionForm({
   });
   function submit(values: z.infer<typeof feedbackSchema>) {
     if (lockedSubmission.current) return;
-    const unratedSkill = sport?.skills.find(
+    const unratedSkill = skills.find(
       (skill) => comments[skill.id]?.trim() && !ratings[skill.id],
     );
     if (unratedSkill) {
@@ -202,9 +242,9 @@ export function FeedbackSubmissionForm({
       return;
     }
 
-    const valuesToSend = Object.entries(ratings)
-      .filter(([, rating]) => rating > 0)
-      .map(([skillId, rating]) => ({ skillId, rating }));
+    const valuesToSend = skills
+      .filter((skill) => ratings[skill.id] > 0)
+      .map((skill) => ({ skillId: skill.id, rating: ratings[skill.id] }));
     if (!validateRatings(valuesToSend)) {
       setValidationError("Rate at least one category from 1 to 5.");
       return;
@@ -245,7 +285,7 @@ export function FeedbackSubmissionForm({
   if (!sport)
     return (
       <EmptyState title="This sport is unavailable">
-        Ask for a Beach Volleyball feedback link.
+        Ask the player for a new feedback link.
       </EmptyState>
     );
   return (
@@ -325,17 +365,21 @@ export function FeedbackSubmissionForm({
           </section>
           <section>
             <p className="eyebrow mb-3">1 · Choose the context</p>
-            <MatchSelector
-              matches={registered ? available : []}
-              value={selected}
-              onChange={setSelected}
-              locked={!!scopedMatchId}
-              scopedMatchId={scopedMatchId}
-              guest={guest}
-              hasMore={registered && matches.hasNextPage}
-              loadingMore={matches.isFetchingNextPage}
-              onLoadMore={() => matches.fetchNextPage()}
-            />
+            {token ? (
+              <InvitedMatchPreview match={invitationMatch} />
+            ) : (
+              <MatchSelector
+                matches={registered ? available : []}
+                value={selected}
+                onChange={setSelected}
+                locked={!!scopedMatchId}
+                scopedMatchId={scopedMatchId}
+                guest={guest}
+                hasMore={registered && matches.hasNextPage}
+                loadingMore={matches.isFetchingNextPage}
+                onLoadMore={() => matches.fetchNextPage()}
+              />
+            )}
             {registered && matches.error && (
               <div className="mt-3">
                 <ErrorState
@@ -362,33 +406,37 @@ export function FeedbackSubmissionForm({
               <p className="eyebrow mb-3">2 · Rate their game</p>
               <h2>What did you notice?</h2>
               <p className="subtle mt-1 text-xs">
-                Rate at least one category on the 1–5 scale. Skip any skill you
-                haven’t observed.
+                {skills.length} categories available. Rate at least one category
+                on the 1–5 scale. Skip any skill you haven’t observed.
               </p>
             </div>
-            {sport.skills
-              .filter((s) => s.active)
-              .map((skill) => (
-                <CategoryRatingInput
-                  key={skill.id}
-                  name={skill.name}
-                  description={skill.description}
-                  value={ratings[skill.id] ?? 0}
-                  comment={comments[skill.id] ?? ""}
-                  onCommentChange={(value) =>
-                    setComments((previous) => ({
-                      ...previous,
-                      [skill.id]: value,
-                    }))
-                  }
-                  onChange={(value) =>
-                    setRatings((previous) => ({
-                      ...previous,
-                      [skill.id]: value,
-                    }))
-                  }
-                />
-              ))}
+            {!skills.length && (
+              <EmptyState title="No categories available">
+                This sport has no active feedback categories yet. Please try
+                again later.
+              </EmptyState>
+            )}
+            {skills.map((skill) => (
+              <CategoryRatingInput
+                key={skill.id}
+                name={skill.name}
+                description={skill.description}
+                value={ratings[skill.id] ?? 0}
+                comment={comments[skill.id] ?? ""}
+                onCommentChange={(value) =>
+                  setComments((previous) => ({
+                    ...previous,
+                    [skill.id]: value,
+                  }))
+                }
+                onChange={(value) =>
+                  setRatings((previous) => ({
+                    ...previous,
+                    [skill.id]: value,
+                  }))
+                }
+              />
+            ))}
           </section>
           <section className="space-y-5">
             <p className="eyebrow">3 · Add your perspective</p>
@@ -451,7 +499,9 @@ export function FeedbackSubmissionForm({
           <Button
             type="submit"
             className="w-full"
-            disabled={mutation.isPending || ownReview || !chosenValid}
+            disabled={
+              mutation.isPending || ownReview || !chosenValid || !skills.length
+            }
           >
             {mutation.isPending ? (
               <Pending label="Sending feedback…" />

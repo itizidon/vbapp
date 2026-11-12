@@ -180,11 +180,13 @@ export function FeedbackRequestDialog({
                 matches={available}
                 value={matchId}
                 onChange={setMatchId}
-                hasMore={matches.hasNextPage}
+                locked={!!initialMatch}
+                scopedMatchId={initialMatch?.id}
+                hasMore={!initialMatch && matches.hasNextPage}
                 loadingMore={matches.isFetchingNextPage}
                 onLoadMore={() => matches.fetchNextPage()}
               />
-              {matches.isPending && (
+              {!initialMatch && matches.isPending && (
                 <p className="subtle text-xs">
                   Loading your matches. You can still request general feedback.
                 </p>

@@ -11,7 +11,8 @@ const inviteSchema = z.object({
 });
 export type InviteClaims = z.infer<typeof inviteSchema>;
 // Decoding supplies routing hints only. The backend must verify the signature,
-// scope, expiration, and nonce at submission; decoded claims grant no read access.
+// scope, expiration, and nonce before invitation reads and submission.
+// Decoded claims alone grant no read access.
 export function decodeInviteToken(
   token: string,
   now = Date.now(),
@@ -29,4 +30,11 @@ export function decodeInviteToken(
   } catch {
     return null;
   }
+}
+
+export interface InvitedMatch {
+  id: string;
+  playedAt: string | null;
+  teams: { teamNumber: number; score: number | null; players: string[] }[];
+  unassignedPlayers: string[];
 }

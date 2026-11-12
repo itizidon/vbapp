@@ -23,130 +23,138 @@ enum FeedbackStatus {
 }
 
 model User {
-  id String @id @default(uuid()) @db.Uuid
-  username String @unique @db.Citext
-  email String @unique @db.Citext
-  isPublic Boolean @default(false)
-  passwordHash String
-  age Int
-  heightCm Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  createdMatches Match[] @relation("MatchCreator")
+  id                String                       @id @default(uuid()) @db.Uuid
+  username          String                       @unique @db.Citext
+  email             String                       @unique @db.Citext
+  isPublic          Boolean                      @default(false)
+  passwordHash      String
+  age               Int
+  heightCm          Int
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+  createdMatches    Match[]                      @relation("MatchCreator")
   matchParticipants MatchParticipant[]
-  receivedFeedback Feedback[] @relation("FeedbackRecipient")
-  submittedFeedback Feedback[] @relation("FeedbackReviewer")
-  selfAssessments SelfAssessment[]
-  playerSkillRatings PlayerSkillRating[]
-  playerSportRatings PlayerSportRating[]
+  receivedFeedback  Feedback[]                   @relation("FeedbackRecipient")
+  submittedFeedback Feedback[]                   @relation("FeedbackReviewer")
+  selfAssessments   SelfAssessment[]
+  internalRatings   PlayerInternalRating[]
+  selfRatingEvents  SelfAssessmentRatingEvent[]
+  internalReviews   InternalRatingContribution[] @relation("InternalReviewer")
 }
 
 model Sport {
-  id String @id @default(uuid()) @db.Uuid
-  name String
-  slug String @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  skills Skill[]
-  matches Match[]
-  feedback Feedback[]
+  id              String           @id @default(uuid()) @db.Uuid
+  name            String
+  slug            String           @unique
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  skills          Skill[]
+  matches         Match[]
+  feedback        Feedback[]
   selfAssessments SelfAssessment[]
-  playerSportRatings PlayerSportRating[]
 }
 
 model Skill {
-  id String @id @default(uuid()) @db.Uuid
-  sportId String @db.Uuid
-  name String
-  slug String
-  description String?
-  active Boolean @default(true)
-  requiredForSelfAssessment Boolean @default(false)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  sport Sport @relation(fields:[sportId], references:[id], onDelete:Restrict)
-  feedbackRatings FeedbackRating[]
-  selfAssessmentRatings SelfAssessmentRating[]
-  reviewerSnapshots FeedbackReviewerSkillSnapshot[]
-  playerRatings PlayerSkillRating[]
+  id                        String                          @id @default(uuid()) @db.Uuid
+  sportId                   String                          @db.Uuid
+  name                      String
+  slug                      String
+  description               String?
+  active                    Boolean                         @default(true)
+  requiredForSelfAssessment Boolean                         @default(false)
+  createdAt                 DateTime                        @default(now())
+  updatedAt                 DateTime                        @updatedAt
+  sport                     Sport                           @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  feedbackRatings           FeedbackRating[]
+  selfAssessmentRatings     SelfAssessmentRating[]
+  reviewerSnapshots         FeedbackReviewerSkillSnapshot[]
+  internalRatings           PlayerInternalRating[]
+  selfRatingEvents          SelfAssessmentRatingEvent[]
+
   @@unique([sportId, slug])
   @@index([sportId, active])
 }
 
 model Match {
-  id String @id @default(uuid()) @db.Uuid
-  createdById String @db.Uuid
-  sportId String? @db.Uuid
-  playedAt DateTime?
-  description String?
-  status MatchStatus @default(DRAFT)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  createdBy User @relation("MatchCreator", fields:[createdById], references:[id], onDelete:Restrict)
-  sport Sport? @relation(fields:[sportId], references:[id], onDelete:SetNull)
-  teams MatchTeam[]
+  id           String             @id @default(uuid()) @db.Uuid
+  createdById  String             @db.Uuid
+  sportId      String?            @db.Uuid
+  playedAt     DateTime?
+  description  String?
+  status       MatchStatus        @default(DRAFT)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  createdBy    User               @relation("MatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  sport        Sport?             @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  teams        MatchTeam[]
   participants MatchParticipant[]
-  feedback Feedback[]
+  feedback     Feedback[]
+
   @@index([createdById, createdAt])
   @@index([sportId])
 }
 
 model MatchTeam {
-  id String @id @default(uuid()) @db.Uuid
-  matchId String @db.Uuid
-  teamNumber Int
-  name String?
-  score Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  match Match @relation(fields:[matchId], references:[id], onDelete:Cascade)
+  id           String             @id @default(uuid()) @db.Uuid
+  matchId      String             @db.Uuid
+  teamNumber   Int
+  name         String?
+  score        Int?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  match        Match              @relation(fields: [matchId], references: [id], onDelete: Cascade)
   participants MatchParticipant[]
+
   @@unique([matchId, teamNumber])
   @@unique([matchId, id])
   @@index([matchId])
 }
 
 model MatchParticipant {
-  id String @id @default(uuid()) @db.Uuid
-  matchId String @db.Uuid
-  teamId String? @db.Uuid
-  userId String? @db.Uuid
+  id        String     @id @default(uuid()) @db.Uuid
+  matchId   String     @db.Uuid
+  teamId    String?    @db.Uuid
+  userId    String?    @db.Uuid
   guestName String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  match Match @relation(fields:[matchId], references:[id], onDelete:Cascade)
-  team MatchTeam? @relation(fields:[matchId, teamId], references:[matchId, id], onDelete:Restrict)
-  user User? @relation(fields:[userId], references:[id], onDelete:Restrict)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  match     Match      @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  team      MatchTeam? @relation(fields: [matchId, teamId], references: [matchId, id], onDelete: Restrict)
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
   @@unique([matchId, userId])
   @@index([matchId, teamId])
   @@index([userId])
 }
 
 model Feedback {
-  id String @id @default(uuid()) @db.Uuid
-  recipientId String @db.Uuid
-  reviewerId String? @db.Uuid
-  sportId String @db.Uuid
-  matchId String? @db.Uuid
-  overallComment String?
-  guestName String?
-  guestInviteNonce String? @db.Uuid
-  guestInviteExpiresAt DateTime?
-  status FeedbackStatus @default(PUBLISHED)
-  analyticsAllowed Boolean @default(false)
-  evidenceAllowed Boolean @default(false)
-  reviewerOverallLevelAtSubmission String?
-  reviewerSnapshotCapturedAt DateTime?
+  id                                          String                          @id @default(uuid()) @db.Uuid
+  recipientId                                 String                          @db.Uuid
+  reviewerId                                  String?                         @db.Uuid
+  sportId                                     String                          @db.Uuid
+  matchId                                     String?                         @db.Uuid
+  overallComment                              String?
+  guestName                                   String?
+  guestInviteNonce                            String?                         @db.Uuid
+  guestInviteExpiresAt                        DateTime?
+  status                                      FeedbackStatus                  @default(PUBLISHED)
+  analyticsAllowed                            Boolean                         @default(false)
+  evidenceAllowed                             Boolean                         @default(false)
+  reviewerOverallLevelAtSubmission            String?
+  reviewerSnapshotCapturedAt                  DateTime?
   reviewerSelfAssessmentUpdatedAtAtSubmission DateTime?
-  reviewerSelfAssessmentIdAtSubmission String? @db.Uuid
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  recipient User @relation("FeedbackRecipient", fields:[recipientId], references:[id], onDelete:Restrict)
-  reviewer User? @relation("FeedbackReviewer", fields:[reviewerId], references:[id], onDelete:Restrict)
-  sport Sport @relation(fields:[sportId], references:[id], onDelete:Restrict)
-  match Match? @relation(fields:[matchId], references:[id], onDelete:SetNull)
-  ratings FeedbackRating[]
-  reviewerSkillSnapshots FeedbackReviewerSkillSnapshot[]
+  reviewerSelfAssessmentIdAtSubmission        String?                         @db.Uuid
+  createdAt                                   DateTime                        @default(now())
+  updatedAt                                   DateTime                        @updatedAt
+  recipient                                   User                            @relation("FeedbackRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+  reviewer                                    User?                           @relation("FeedbackReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  sport                                       Sport                           @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  match                                       Match?                          @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  ratings                                     FeedbackRating[]
+  reviewerSkillSnapshots                      FeedbackReviewerSkillSnapshot[]
+  internalContributions                       InternalRatingContribution[]
+  internalEvents                              PlayerInternalRatingEvent[]
+
   @@index([guestInviteNonce])
   @@index([recipientId, createdAt])
   @@index([sportId, createdAt])
@@ -156,87 +164,166 @@ model Feedback {
 }
 
 model FeedbackRating {
-  feedbackId String @db.Uuid
-  skillId String @db.Uuid
-  rating Int
-  comment String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  feedback Feedback @relation(fields:[feedbackId], references:[id], onDelete:Cascade)
-  skill Skill @relation(fields:[skillId], references:[id], onDelete:Restrict)
+  feedbackId String   @db.Uuid
+  skillId    String   @db.Uuid
+  rating     Int
+  comment    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  skill      Skill    @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
   @@id([feedbackId, skillId])
   @@index([skillId])
 }
 
 model SelfAssessment {
-  id String @id @default(uuid()) @db.Uuid
-  userId String @db.Uuid
-  sportId String @db.Uuid
+  id           String                      @id @default(uuid()) @db.Uuid
+  userId       String                      @db.Uuid
+  sportId      String                      @db.Uuid
   overallLevel String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
-  sport Sport @relation(fields:[sportId], references:[id], onDelete:Restrict)
-  ratings SelfAssessmentRating[]
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+  user         User                        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sport        Sport                       @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  ratings      SelfAssessmentRating[]
+  history      SelfAssessmentRatingEvent[]
+
   @@unique([userId, sportId])
   @@index([userId, sportId])
 }
 
 model SelfAssessmentRating {
-  selfAssessmentId String @db.Uuid
-  skillId String @db.Uuid
-  rating Int
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  selfAssessment SelfAssessment @relation(fields:[selfAssessmentId], references:[id], onDelete:Cascade)
-  skill Skill @relation(fields:[skillId], references:[id], onDelete:Restrict)
+  selfAssessmentId String         @db.Uuid
+  skillId          String         @db.Uuid
+  rating           Int
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  selfAssessment   SelfAssessment @relation(fields: [selfAssessmentId], references: [id], onDelete: Cascade)
+  skill            Skill          @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
   @@id([selfAssessmentId, skillId])
   @@index([skillId])
 }
 
 model FeedbackReviewerSkillSnapshot {
-  feedbackId String @db.Uuid
-  skillId String @db.Uuid
-  ratingAtSubmission Int
+  feedbackId            String   @db.Uuid
+  skillId               String   @db.Uuid
+  ratingAtSubmission    Int
   sourceRatingUpdatedAt DateTime
-  capturedAt DateTime
-  feedback Feedback @relation(fields:[feedbackId], references:[id], onDelete:Cascade)
-  skill Skill @relation(fields:[skillId], references:[id], onDelete:Restrict)
+  capturedAt            DateTime
+  feedback              Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  skill                 Skill    @relation(fields: [skillId], references: [id], onDelete: Restrict)
+
   @@id([feedbackId, skillId])
   @@index([skillId])
 }
 
-model PlayerSkillRating {
-  userId String @db.Uuid
-  skillId String @db.Uuid
-  calculatedRating Decimal? @db.Decimal(4, 2)
-  confidence Decimal? @db.Decimal(5, 4)
-  feedbackCount Int @default(0)
-  reviewerCount Int @default(0)
-  algorithmVersion String?
-  calculatedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
-  skill Skill @relation(fields:[skillId], references:[id], onDelete:Restrict)
-  @@id([userId, skillId])
+enum InternalRatingEventType {
+  INITIALIZED
+  FEEDBACK_APPLIED
+  CORRECTION
+  REBUILT
+}
+
+enum SelfRatingEventType {
+  CREATED
+  UPDATED
+  BASELINE
+}
+
+model PlayerInternalRating {
+  id               String                       @id @default(uuid()) @db.Uuid
+  userId           String                       @db.Uuid
+  skillId          String                       @db.Uuid
+  initialRating    Decimal                      @db.Decimal(12, 8)
+  currentRating    Decimal                      @db.Decimal(12, 8)
+  feedbackCount    Int                          @default(0)
+  algorithmVersion Int                          @default(1)
+  revision         Int                          @default(1)
+  createdAt        DateTime                     @default(dbgenerated("timezone('UTC', clock_timestamp())"))
+  updatedAt        DateTime                     @updatedAt
+  user             User                         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  skill            Skill                        @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  events           PlayerInternalRatingEvent[]
+  contributions    InternalRatingContribution[]
+
+  @@unique([userId, skillId])
   @@index([skillId])
 }
 
-model PlayerSportRating {
-  userId String @db.Uuid
-  sportId String @db.Uuid
-  calculatedRating Decimal? @db.Decimal(4, 2)
-  overallLevel String?
-  confidence Decimal? @db.Decimal(5, 4)
-  feedbackCount Int @default(0)
-  reviewerCount Int @default(0)
-  algorithmVersion String?
-  calculatedAt DateTime?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
-  sport Sport @relation(fields:[sportId], references:[id], onDelete:Restrict)
-  @@id([userId, sportId])
-  @@index([sportId])
+model PlayerInternalRatingEvent {
+  id                     String                  @id @default(uuid()) @db.Uuid
+  sequence               BigInt                  @unique @default(autoincrement())
+  userId                 String                  @db.Uuid
+  skillId                String                  @db.Uuid
+  feedbackId             String?                 @db.Uuid
+  sourceKey              String?                 @unique
+  type                   InternalRatingEventType
+  previousRating         Decimal                 @db.Decimal(12, 8)
+  submittedRating        Int?
+  reviewerId             String?                 @db.Uuid
+  reviewerInternalRating Decimal?                @db.Decimal(12, 8)
+  rawWeight              Decimal?                @db.Decimal(20, 12)
+  confidence             Decimal?                @db.Decimal(14, 12)
+  effectiveRate          Decimal?                @db.Decimal(14, 12)
+  finalRate              Decimal?                @db.Decimal(14, 12)
+  delta                  Decimal                 @db.Decimal(12, 8)
+  newRating              Decimal                 @db.Decimal(12, 8)
+  algorithmVersion       Int                     @default(1)
+  revision               Int                     @default(1)
+  chartPoint             Boolean                 @default(true)
+  createdAt              DateTime                @default(dbgenerated("timezone('UTC', clock_timestamp())"))
+  effectiveAt            DateTime
+  rating                 PlayerInternalRating    @relation(fields: [userId, skillId], references: [userId, skillId], onDelete: Restrict)
+  feedback               Feedback?               @relation(fields: [feedbackId], references: [id], onDelete: Restrict)
+
+  @@index([userId, skillId, revision, effectiveAt, sequence])
+}
+
+model SelfAssessmentRatingEvent {
+  id               String              @id @default(uuid()) @db.Uuid
+  sequence         BigInt              @unique @default(autoincrement())
+  userId           String              @db.Uuid
+  skillId          String              @db.Uuid
+  selfAssessmentId String              @db.Uuid
+  previousRating   Int?
+  newRating        Int
+  type             SelfRatingEventType
+  createdAt        DateTime            @default(dbgenerated("timezone('UTC', clock_timestamp())"))
+  user             User                @relation(fields: [userId], references: [id], onDelete: Restrict)
+  skill            Skill               @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  selfAssessment   SelfAssessment      @relation(fields: [selfAssessmentId], references: [id], onDelete: Restrict)
+
+  @@index([userId, skillId, createdAt, sequence])
+}
+
+// Private, stable reviewer snapshots and current source eligibility for replay.
+model InternalRatingContribution {
+  id                     String               @id @default(uuid()) @db.Uuid
+  sequence               BigInt               @unique @default(autoincrement())
+  feedbackId             String               @db.Uuid
+  userId                 String               @db.Uuid
+  skillId                String               @db.Uuid
+  reviewerId             String?              @db.Uuid
+  reviewerInternalRating Decimal?             @db.Decimal(12, 8)
+  rawWeight              Decimal              @db.Decimal(20, 12)
+  confidence             Decimal              @db.Decimal(14, 12)
+  effectiveRate          Decimal              @db.Decimal(14, 12)
+  finalRate              Decimal              @db.Decimal(14, 12)
+  algorithmVersion       Int                  @default(1)
+  // Registered reviewer ID or guest invite nonce; one influence per UTC day.
+  identityKey            String
+  submittedRating        Int
+  published              Boolean              @default(false)
+  eligible               Boolean              @default(false)
+  effectiveAt            DateTime             @default(dbgenerated("timezone('UTC', clock_timestamp())"))
+  createdAt              DateTime             @default(dbgenerated("timezone('UTC', clock_timestamp())"))
+  rating                 PlayerInternalRating @relation(fields: [userId, skillId], references: [userId, skillId], onDelete: Restrict)
+  reviewer               User?                @relation("InternalReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  feedback               Feedback             @relation(fields: [feedbackId], references: [id], onDelete: Restrict)
+
+  @@unique([feedbackId, skillId])
+  @@index([userId, skillId, sequence])
+  @@index([userId, skillId, eligible, reviewerId])
 }

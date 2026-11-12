@@ -1,2 +1,85 @@
-import {Args,ID,GraphQLISODateTime,Mutation,Query,Resolver} from '@nestjs/graphql'; import {UseGuards} from '@nestjs/common'; import {FeedbackService} from './feedback.service'; import {FeedbackModel,GuestInvitePayload} from '../common/models'; import {SubmitFeedbackInput,SubmitGuestFeedbackInput,UpdateFeedbackInput} from '../common/inputs'; import {GqlAuthGuard} from '../common/gql-auth.guard'; import {AuthUser,CurrentUser} from '../common/current-user.decorator';
-@Resolver() export class FeedbackResolver {constructor(private s:FeedbackService){} @UseGuards(GqlAuthGuard) @Mutation(()=>FeedbackModel) submitFeedback(@CurrentUser()u:AuthUser,@Args('input')i:SubmitFeedbackInput){return this.s.submit(u.id,i)} @Mutation(()=>FeedbackModel) submitGuestFeedback(@Args('input')i:SubmitGuestFeedbackInput){return this.s.submitGuest(i)} @UseGuards(GqlAuthGuard) @Mutation(()=>GuestInvitePayload) createGuestFeedbackInvite(@CurrentUser()u:AuthUser,@Args('recipientId',{type:()=>ID})r:string,@Args('sportId',{type:()=>ID})s:string,@Args('matchId',{type:()=>ID,nullable:true})m?:string){return this.s.invite(u.id,r,s,m)} @UseGuards(GqlAuthGuard) @Mutation(()=>FeedbackModel) updateFeedback(@CurrentUser()u:AuthUser,@Args('input')i:UpdateFeedbackInput){return this.s.update(u.id,i)} @UseGuards(GqlAuthGuard) @Mutation(()=>FeedbackModel) deleteFeedback(@CurrentUser()u:AuthUser,@Args('id',{type:()=>ID})id:string){return this.s.delete(u.id,id)} @UseGuards(GqlAuthGuard) @Query(()=>FeedbackModel) feedback(@CurrentUser()u:AuthUser,@Args('id',{type:()=>ID})id:string){return this.s.get(u.id,id)} @UseGuards(GqlAuthGuard) @Query(()=>[FeedbackModel]) receivedFeedback(@CurrentUser()u:AuthUser,@Args('cursor',{nullable:true})c?:string,@Args('matchOnly',{type:()=>Boolean,nullable:true})matchOnly?:boolean,@Args('createdFrom',{type:()=>GraphQLISODateTime,nullable:true})from?:Date,@Args('createdBefore',{type:()=>GraphQLISODateTime,nullable:true})before?:Date){return this.s.received(u.id,c,matchOnly,from,before)} @UseGuards(GqlAuthGuard) @Query(()=>[FeedbackModel]) submittedFeedback(@CurrentUser()u:AuthUser,@Args('cursor',{nullable:true})c?:string){return this.s.submitted(u.id,c)} }
+import { FeedbackInvitationModel } from "./invitation.models";
+import {
+  Args,
+  ID,
+  GraphQLISODateTime,
+  Mutation,
+  Query,
+  Resolver,
+} from "@nestjs/graphql";
+import { UseGuards } from "@nestjs/common";
+import { FeedbackService } from "./feedback.service";
+import { FeedbackModel, GuestInvitePayload } from "../common/models";
+import {
+  SubmitFeedbackInput,
+  SubmitGuestFeedbackInput,
+  UpdateFeedbackInput,
+} from "../common/inputs";
+import { GqlAuthGuard } from "../common/gql-auth.guard";
+import { AuthUser, CurrentUser } from "../common/current-user.decorator";
+@Resolver()
+export class FeedbackResolver {
+  constructor(private s: FeedbackService) {}
+  @Query(() => FeedbackInvitationModel) feedbackInvitation(
+    @Args("token") token: string,
+  ) {
+    return this.s.invitation(token);
+  }
+  @UseGuards(GqlAuthGuard) @Mutation(() => FeedbackModel) submitFeedback(
+    @CurrentUser() u: AuthUser,
+    @Args("input") i: SubmitFeedbackInput,
+  ) {
+    return this.s.submit(u.id, i);
+  }
+  @Mutation(() => FeedbackModel) submitGuestFeedback(
+    @Args("input") i: SubmitGuestFeedbackInput,
+  ) {
+    return this.s.submitGuest(i);
+  }
+  @UseGuards(GqlAuthGuard)
+  @Mutation(() => GuestInvitePayload)
+  createGuestFeedbackInvite(
+    @CurrentUser() u: AuthUser,
+    @Args("recipientId", { type: () => ID }) r: string,
+    @Args("sportId", { type: () => ID }) s: string,
+    @Args("matchId", { type: () => ID, nullable: true }) m?: string,
+  ) {
+    return this.s.invite(u.id, r, s, m);
+  }
+  @UseGuards(GqlAuthGuard) @Mutation(() => FeedbackModel) updateFeedback(
+    @CurrentUser() u: AuthUser,
+    @Args("input") i: UpdateFeedbackInput,
+  ) {
+    return this.s.update(u.id, i);
+  }
+  @UseGuards(GqlAuthGuard) @Mutation(() => FeedbackModel) deleteFeedback(
+    @CurrentUser() u: AuthUser,
+    @Args("id", { type: () => ID }) id: string,
+  ) {
+    return this.s.delete(u.id, id);
+  }
+  @UseGuards(GqlAuthGuard) @Query(() => FeedbackModel) feedback(
+    @CurrentUser() u: AuthUser,
+    @Args("id", { type: () => ID }) id: string,
+  ) {
+    return this.s.get(u.id, id);
+  }
+  @UseGuards(GqlAuthGuard) @Query(() => [FeedbackModel]) receivedFeedback(
+    @CurrentUser() u: AuthUser,
+    @Args("cursor", { nullable: true }) c?: string,
+    @Args("matchOnly", { type: () => Boolean, nullable: true })
+    matchOnly?: boolean,
+    @Args("createdFrom", { type: () => GraphQLISODateTime, nullable: true })
+    from?: Date,
+    @Args("createdBefore", { type: () => GraphQLISODateTime, nullable: true })
+    before?: Date,
+  ) {
+    return this.s.received(u.id, c, matchOnly, from, before);
+  }
+  @UseGuards(GqlAuthGuard) @Query(() => [FeedbackModel]) submittedFeedback(
+    @CurrentUser() u: AuthUser,
+    @Args("cursor", { nullable: true }) c?: string,
+  ) {
+    return this.s.submitted(u.id, c);
+  }
+}

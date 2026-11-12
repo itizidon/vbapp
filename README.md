@@ -38,7 +38,6 @@ The schema contains 13 domain models:
 - `Feedback` belongs to a recipient and sport, with optional reviewer/match and immutable copied reviewer metadata. `FeedbackRating` stores the reviewer's assessment of the recipient.
 - `SelfAssessment` and `SelfAssessmentRating` hold one mutable current self-report per user/sport.
 - `FeedbackReviewerSkillSnapshot` stores the registered reviewer's own individual ratings at submission. It is deliberately separate from `FeedbackRating`.
-- `PlayerSkillRating` and `PlayerSportRating` hold the platform's nullable current calculated ratings per user/skill and user/sport. They include confidence, evidence counts, algorithm version, and calculation time, but are never initialized from or updated by self-assessments.
 
 The initial migration enables `citext`, creates enums/tables/indexes/checks, enforces cross-sport rating integrity with triggers, touches the parent assessment when a rating changes, and rejects updates to historical snapshot columns/rows. Match deletion sets independent feedback's `matchId` to null. Feedback deletion is a soft-delete by default; physical retention deletion cascades ratings and snapshots.
 
@@ -50,7 +49,6 @@ The initial migration enables `citext`, creates enums/tables/indexes/checks, enf
 - Feedback: `submitFeedback`, `submitGuestFeedback`, `createGuestFeedbackInvite`, `updateFeedback`, `deleteFeedback`, `feedback`, `receivedFeedback`, `submittedFeedback`
 - Self-assessments: `mySelfAssessments`, `userSelfAssessment`, `createSelfAssessment`, `updateSelfAssessment`, `updateSelfAssessmentRatings`
 - Analytics: `myAnalytics`, `averageSkillRating`, `userSkillRatings`, `feedbackCount`, `skillRatingTrends`, `selfVsPeerRatings`, `userSportFeedbackSummary`, `userMatchHistory`, `matchResults`
-- System ratings: `playerSkillRatings`, `playerSportRating`, `playerRatingProfile`
 
 `createMatch(input: null)` and `createMatch` both create a draft with server-generated metadata. List operations use stable `(createdAt, id)` ordering and accept an opaque ID cursor; production clients should request at most 50 records and treat the 51st as a next-page sentinel.
 
@@ -62,11 +60,9 @@ No-assessment and guest submissions create no snapshot. A guest invite is a sign
 
 Raw snapshots are private: only the registered reviewer sees their snapshot on authorized feedback reads. Recipients receive feedback with snapshot fields redacted. Public analytics only use rows explicitly marked `analyticsAllowed`; user-specific analytics require the subject's token. This is intentionally conservative and can later be replaced by an explicit sharing policy or administrator role.
 
-## System-calculated ratings
+## Feedback ratings
 
-System ratings are distinct from both current self-assessments and historical reviewer snapshots. New users have no `PlayerSkillRating` or `PlayerSportRating` rows and remain unrated. Nullable calculated values also support a pre-created but not-yet-rated record. PostgreSQL checks enforce ratings from 1–5, confidence from 0–1, and nonnegative evidence counts.
-
-The three system-rating queries are owner-only under the current conservative privacy policy. `playerRatingProfile` returns the sport, current self-reported values, nullable system overall values, system skill values, confidence, and feedback count in one response. No public GraphQL mutation can create or edit system ratings. A future internal calculation worker can write these records without modifying self-assessments or historical snapshots.
+Displayed skill averages are calculated directly from published `FeedbackRating` rows. The unused calculated-rating storage models and their `playerSkillRatings`, `playerSportRating`, and `playerRatingProfile` GraphQL queries have been removed. The pending removal migration archives `PlayerSkillRating` and `PlayerSportRating` as `LegacyPlayerSkillRating` and `LegacyPlayerSportRating` rather than dropping their rows. Feedback, self-assessments, and reviewer snapshots remain intact. Existing migration history is preserved.
 
 ## Security and operations
 
@@ -74,8 +70,7 @@ Passwords use Argon2id and never enter GraphQL output types. JWTs default to 15 
 
 ## Current limitations
 
-- No calculated ranking algorithm, embeddings, RAG, set-by-set scoring, guest account claiming, moderator/admin workflow, refresh tokens, or object storage is implemented.
-- There is intentionally no public or user-facing write API for system ratings; an authenticated internal worker/service boundary still needs to be designed with the future algorithm.
+- No embeddings, RAG, set-by-set scoring, guest account claiming, moderator/admin workflow, refresh tokens, or object storage is implemented.
 - The simple in-process rate limiter is per application instance; a shared gateway policy is needed when horizontally scaled.
 - Guest invite TTL is currently 24 hours in the service. Make it configuration-driven if products need multiple invite policies.
 - Analytics are baseline SQL queries. Benchmark them on production-like volume before adding targeted indexes, materialized views, or partitions.
@@ -105,13 +100,18 @@ Use a separate QA database and JWT secret, keep `NODE_ENV=production`, and provi
 
 ### Initialize the Railway QA database
 
-The backend-only configuration is checked in as `railway.backend.json`. In the backend Railway service, set **Railway Config File** to `/railway.backend.json` (relative to the repository root), then deploy that commit. This applies the build, pre-deploy, and start commands below. Use this configuration only for the backend service. Deployment details should show `pnpm db:deploy` as the pre-deploy command; the pre-deploy logs should show migrations being applied or no pending migrations. A failed pre-deploy prevents the new release from starting, while an older release may continue serving requests.
+The backend-only configuration is checked in as `railway.backend.json`. In the backend Railway service, set **Railway Config File** to `/railway.backend.json` (relative to the repository root), then deploy that commit. This applies the build and start commands, and explicitly clears automatic pre-deploy commands. Use this configuration only for the backend service. The internal-rating rollout now clears automatic pre-deploy commands; run reviewed migrations manually before starting the new release. Check the explicit migration job logs for successful application or no pending migrations.
 
-`The table public.Sport does not exist` means the target database is missing schema tables; seeds cannot create them. Keep `DATABASE_URL` pointed at the QA PostgreSQL service. After `pnpm build`, set the backend Railway **Pre-Deploy Command** to `pnpm db:deploy` and **Start Command** to `pnpm start:prod`. The pre-deploy command applies the existing migrations, then runs the compiled seed using Railway environment variables (no `.env` file is required). Ensure Prisma CLI is installed in the deployment image so migrations can run. Build alone does not connect to or initialize the database.
+`The table public.Sport does not exist` means the target database is missing schema tables; seeds cannot create them. Keep `DATABASE_URL` pointed at the QA PostgreSQL service. After `pnpm build`, explicitly run `pnpm db:deploy` in the selected release environment and use **Start Command** `pnpm start:prod`. Do not configure automatic production migration or backfill execution. The explicit `db:deploy` command applies the existing migrations, then runs the compiled seed using Railway environment variables (no `.env` file is required). Ensure Prisma CLI is installed in the deployment image so migrations can run. Build alone does not connect to or initialize the database.
 
 `pnpm db:deploy` preserves the Sport table and upserts all existing sport/skill catalog entries, including Beach Volleyball. Keep `SEED_DEMO_DATA=false` to avoid creating demonstration accounts. The standalone `pnpm prisma:seed:deploy` command only seeds an already migrated database. These commands run against whichever database `DATABASE_URL` selects; they do not reset or drop the database. Signup automatically uses Beach Volleyball without a sport selector, retaining the backend sport association and required skill self-assessment.
 
-If the missing-table error persists, inspect the latest backend pre-deploy logs rather than rebuilding the frontend. A successful migration against a different database will not fix the running backend: verify that `DATABASE_URL` references the intended QA PostgreSQL service and that the frontend's `GRAPHQL_API_URL` points at this same QA backend. Share pre-deploy error output for diagnosis, but never share the database connection string.
+If the missing-table error persists, inspect the latest backend migration job logs rather than rebuilding the frontend. A successful migration against a different database will not fix the running backend: verify that `DATABASE_URL` references the intended QA PostgreSQL service and that the frontend's `GRAPHQL_API_URL` points at this same QA backend. Share migration error output for diagnosis, but never share the database connection string.
 
 
 Volleyball and Beach Volleyball use five active feedback categories: Attack, Defense, Passing, Setting, and Serving. Deploy migrations (`pnpm prisma:deploy`) and seed (`pnpm prisma:seed`, or `pnpm db:deploy` after building on Railway) to update existing databases. Equivalent old skills are renamed in place where possible, preserving their rating links; any remaining previous categories are inactive and excluded from the active catalog. Other sports are unchanged.
+
+
+## Internal player ratings V1
+
+The complete internal skill rating system and self-assessment history are implemented separately from feedback averages. See [architecture, formulas, API, migration and backfill instructions](docs/internal-ratings.md). Analytics offers Internal Rating and Self-Assessment history modes alongside Daily Average and Each Feedback. The Railway config now explicitly clears automatic pre-deploy migration commands: migrations and the optional backfill must be run by an authorized release operator before the new API serves traffic.

@@ -17,6 +17,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "tsx --env-file=.env prisma/seed.ts",
     "prisma:seed:deploy": "node dist/prisma/seed.js",
+    "ratings:backfill": "node dist/prisma/backfill-internal-ratings.js",
     "db:deploy": "pnpm prisma:deploy && pnpm prisma:seed:deploy"
   },
   "dependencies": {

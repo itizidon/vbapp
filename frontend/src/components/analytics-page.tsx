@@ -13,6 +13,7 @@ import {
   type IndividualFeedback,
   displayFeedbackTime,
 } from "@/lib/analytics";
+import { RatingHistoryChart } from "./rating-history-chart";
 import { AnalyticsChart } from "./analytics-chart";
 import { PageHeader } from "./page-header";
 import { Button } from "./ui/button";
@@ -20,7 +21,9 @@ import { LoadingSkeleton, ErrorState, EmptyState } from "./common";
 export function AnalyticsPage() {
   const [range, setRange] = useState<AnalyticsRange>("1M");
   const [selected, setSelected] = useState("winRate");
-  const [individualMode, setIndividualMode] = useState(false);
+  const [mode, setMode] = useState("daily");
+  const individualMode = mode === "individual";
+  const historyMode = mode === "internal" || mode === "self";
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const analytics = useQuery({
     queryKey: ["analytics", range, timeZone],
@@ -106,7 +109,9 @@ export function AnalyticsPage() {
             value={category?.id ?? "winRate"}
             onChange={(event) => setSelected(event.target.value)}
           >
-            <option value="winRate">Win rate</option>
+            <option value="winRate" disabled={historyMode}>
+              Win rate
+            </option>
             {data?.categories.map((item) => (
               <option key={item.id} value={item.id}>
                 {item.name}
@@ -114,48 +119,72 @@ export function AnalyticsPage() {
             ))}
           </select>
         </label>
+        <label className="field max-w-sm">
+          Chart mode
+          <select
+            value={mode}
+            onChange={(event) => {
+              setMode(event.target.value);
+              if (
+                ["internal", "self"].includes(event.target.value) &&
+                !category &&
+                data?.categories[0]
+              )
+                setSelected(data.categories[0].id);
+            }}
+          >
+            <option value="daily">Daily average</option>
+            <option value="individual">Each feedback</option>
+            <option value="internal">Internal rating</option>
+            <option value="self">Self-assessment</option>
+          </select>
+        </label>
         {category?.description && (
           <p className="subtle text-sm">{category.description}</p>
         )}
-        <div className="space-y-2">
-          <div className="grid max-w-sm grid-cols-[1fr_auto_1fr] items-center gap-2 text-center text-sm">
-            <span
-              className={!individual ? "font-semibold text-primary" : "subtle"}
-            >
-              Daily average
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-label="Individual feedback"
-              aria-checked={individual}
-              disabled={winRate}
-              aria-describedby="analytics-mode-description"
-              className="inline-flex min-h-11 items-center rounded-lg p-1 disabled:opacity-50"
-              onClick={() => setIndividualMode((previous) => !previous)}
-            >
+        {!historyMode && (
+          <div className="space-y-2">
+            <div className="grid max-w-sm grid-cols-[1fr_auto_1fr] items-center gap-2 text-center text-sm">
               <span
-                className={`inline-flex h-7 w-12 items-center rounded-full p-1 transition-colors ${individual ? "bg-primary" : "bg-muted-foreground"}`}
+                className={
+                  !individual ? "font-semibold text-primary" : "subtle"
+                }
+              >
+                Daily average
+              </span>
+              <button
+                type="button"
+                role="switch"
+                aria-label="Individual feedback"
+                aria-checked={individual}
+                disabled={winRate}
+                aria-describedby="analytics-mode-description"
+                className="inline-flex min-h-11 items-center rounded-lg p-1 disabled:opacity-50"
+                onClick={() => setMode(individualMode ? "daily" : "individual")}
               >
                 <span
-                  className={`size-5 rounded-full bg-white shadow transition-transform ${individual ? "translate-x-5" : "translate-x-0"}`}
-                />
+                  className={`inline-flex h-7 w-12 items-center rounded-full p-1 transition-colors ${individual ? "bg-primary" : "bg-muted-foreground"}`}
+                >
+                  <span
+                    className={`size-5 rounded-full bg-white shadow transition-transform ${individual ? "translate-x-5" : "translate-x-0"}`}
+                  />
+                </span>
+              </button>
+              <span
+                className={individual ? "font-semibold text-primary" : "subtle"}
+              >
+                Individual feedback
               </span>
-            </button>
-            <span
-              className={individual ? "font-semibold text-primary" : "subtle"}
-            >
-              Individual feedback
-            </span>
+            </div>
+            <p id="analytics-mode-description" className="subtle text-xs">
+              {winRate
+                ? "Select a feedback category to view individual ratings. Win rate is shown per day."
+                : individual
+                  ? "Each point is one received rating at its submission time."
+                  : "Each point is the daily average for the selected category."}
+            </p>
           </div>
-          <p id="analytics-mode-description" className="subtle text-xs">
-            {winRate
-              ? "Select a feedback category to view individual ratings. Win rate is shown per day."
-              : individual
-                ? "Each point is one received rating at its submission time."
-                : "Each point is the daily average for the selected category."}
-          </p>
-        </div>
+        )}
         <div
           className="grid gap-3 sm:grid-cols-3"
           aria-label="Analytics summary"
@@ -191,7 +220,17 @@ export function AnalyticsPage() {
           </div>
         </div>
         <div aria-busy={busy}>
-          {chartError ? (
+          {historyMode && category && data && !analytics.isPlaceholderData ? (
+            <RatingHistoryChart
+              key={`${category.id}:${mode}:${range}`}
+              skillId={category.id}
+              name={category.name}
+              mode={mode as "internal" | "self"}
+              from={data.from}
+              before={data.before}
+              timeZone={timeZone}
+            />
+          ) : chartError ? (
             <ErrorState
               error={chartError}
               retry={() =>
@@ -214,12 +253,14 @@ export function AnalyticsPage() {
             )
           )}
         </div>
-        <p className="subtle text-xs leading-6">
-          {individual
-            ? "Individual mode shows every published rating you received for this category, on a 1–5 scale. Points use the exact submission time; lines connect submissions without averaging them."
-            : "Win rate uses your team’s fully recorded scores by date played. Cancelled and in-progress games are excluded. The selected category shows daily average ratings received from feedback submission dates, on a 1–5 scale. Lines connect recorded days; missing days are not counted as zero."}
-        </p>
-        {category && !busy && data && (
+        {!historyMode && (
+          <p className="subtle text-xs leading-6">
+            {individual
+              ? "Individual mode shows every published rating you received for this category, on a 1–5 scale. Points use the exact submission time; lines connect submissions without averaging them."
+              : "Win rate uses your team’s fully recorded scores by date played. Cancelled and in-progress games are excluded. The selected category shows daily average ratings received from feedback submission dates, on a 1–5 scale. Lines connect recorded days; missing days are not counted as zero."}
+          </p>
+        )}
+        {!historyMode && category && !busy && data && (
           <p className="subtle text-sm">
             {category.name}:{" "}
             <strong className="text-foreground">
@@ -228,62 +269,73 @@ export function AnalyticsPage() {
             / 5
           </p>
         )}
-        {!busy && data && !!(individual ? samples.length : points.length) && (
-          <details className="min-w-0">
-            <summary className="cursor-pointer text-sm font-semibold">
-              {individual ? "View individual feedback" : "View daily data"}
-            </summary>
-            <div className="mt-4 max-h-80 overflow-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr>
-                    <th className="p-2">{individual ? "Submitted" : "Date"}</th>
-                    {winRate && <th className="p-2">Win rate</th>}
-                    {category && <th className="p-2">{category.name}</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {individual
-                    ? samples.map((sample) => (
-                        <tr key={sample.id} className="border-t border-border">
-                          <td className="p-2">
-                            {displayFeedbackTime(
-                              Date.parse(sample.submittedAt),
-                              timeZone,
+        {!historyMode &&
+          !busy &&
+          data &&
+          !!(individual ? samples.length : points.length) && (
+            <details className="min-w-0">
+              <summary className="cursor-pointer text-sm font-semibold">
+                {individual ? "View individual feedback" : "View daily data"}
+              </summary>
+              <div className="mt-4 max-h-80 overflow-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr>
+                      <th className="p-2">
+                        {individual ? "Submitted" : "Date"}
+                      </th>
+                      {winRate && <th className="p-2">Win rate</th>}
+                      {category && <th className="p-2">{category.name}</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {individual
+                      ? samples.map((sample) => (
+                          <tr
+                            key={sample.id}
+                            className="border-t border-border"
+                          >
+                            <td className="p-2">
+                              {displayFeedbackTime(
+                                Date.parse(sample.submittedAt),
+                                timeZone,
+                              )}
+                            </td>
+                            <td className="p-2">{sample.rating} / 5</td>
+                          </tr>
+                        ))
+                      : points.map((point) => (
+                          <tr
+                            key={point.date}
+                            className="border-t border-border"
+                          >
+                            <td className="whitespace-nowrap p-2">
+                              {displayDay(dayTimestamp(point.date), true)}
+                            </td>
+                            {winRate && (
+                              <td className="p-2">
+                                {point.winRate === null
+                                  ? "—"
+                                  : `${point.winRate.toFixed(1)}% (${point.wins}W / ${point.losses}L)`}
+                              </td>
                             )}
-                          </td>
-                          <td className="p-2">{sample.rating} / 5</td>
-                        </tr>
-                      ))
-                    : points.map((point) => (
-                        <tr key={point.date} className="border-t border-border">
-                          <td className="whitespace-nowrap p-2">
-                            {displayDay(dayTimestamp(point.date), true)}
-                          </td>
-                          {winRate && (
-                            <td className="p-2">
-                              {point.winRate === null
-                                ? "—"
-                                : `${point.winRate.toFixed(1)}% (${point.wins}W / ${point.losses}L)`}
-                            </td>
-                          )}
-                          {category && (
-                            <td className="p-2">
-                              {(() => {
-                                const rating = point.ratings.find(
-                                  (item) => item.skillId === category.id,
-                                )!;
-                                return `${rating.average.toFixed(2)} / 5 (${rating.count})`;
-                              })()}
-                            </td>
-                          )}
-                        </tr>
-                      ))}
-                </tbody>
-              </table>
-            </div>
-          </details>
-        )}
+                            {category && (
+                              <td className="p-2">
+                                {(() => {
+                                  const rating = point.ratings.find(
+                                    (item) => item.skillId === category.id,
+                                  )!;
+                                  return `${rating.average.toFixed(2)} / 5 (${rating.count})`;
+                                })()}
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                  </tbody>
+                </table>
+              </div>
+            </details>
+          )}
       </section>
     </>
   );

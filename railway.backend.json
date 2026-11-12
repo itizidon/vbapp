@@ -4,7 +4,7 @@
     "buildCommand": "pnpm build"
   },
   "deploy": {
-    "preDeployCommand": ["pnpm db:deploy"],
+    "preDeployCommand": [],
     "startCommand": "pnpm start:prod"
   }
 }

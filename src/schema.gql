@@ -87,6 +87,12 @@ type FeedbackCount {
   count: Int!
 }
 
+type FeedbackInvitationModel {
+  match: InvitedMatchModel
+  recipientId: ID!
+  sport: SportModel!
+}
+
 type FeedbackModel {
   analyticsAllowed: Boolean!
   createdAt: DateTime!
@@ -128,6 +134,30 @@ type IndividualCategoryFeedback {
   id: ID!
   rating: Int!
   submittedAt: DateTime!
+}
+
+type InternalSkillRatingModel {
+  algorithmVersion: Int!
+  currentRating: Float!
+  feedbackCount: Int!
+  initialRating: Float!
+  revision: Int!
+  skillId: ID!
+  skillName: String!
+  updatedAt: DateTime!
+}
+
+type InvitedMatchModel {
+  id: ID!
+  playedAt: DateTime
+  teams: [InvitedTeamModel!]!
+  unassignedPlayers: [String!]!
+}
+
+type InvitedTeamModel {
+  players: [String!]!
+  score: Int
+  teamNumber: Int!
 }
 
 input LoginInput {
@@ -217,48 +247,14 @@ type PlayerDirectoryModel {
   username: String!
 }
 
-type PlayerRatingProfileModel {
-  feedbackCount: Int!
-  selfOverallLevel: String
-  selfSkillRatings: [SelfAssessmentRatingModel!]!
-  sport: SportModel!
-  systemCalculatedRating: Float
-  systemConfidence: Float
-  systemOverallLevel: String
-  systemSkillRatings: [PlayerSkillRatingModel!]!
-}
-
-type PlayerSkillRatingModel {
-  algorithmVersion: String
-  calculatedAt: DateTime
-  calculatedRating: Float
-  confidence: Float
-  createdAt: DateTime!
-  feedbackCount: Int!
-  reviewerCount: Int!
-  skillId: ID!
-  updatedAt: DateTime!
-  userId: ID!
-}
-
-type PlayerSportRatingModel {
-  algorithmVersion: String
-  calculatedAt: DateTime
-  calculatedRating: Float
-  confidence: Float
-  createdAt: DateTime!
-  feedbackCount: Int!
-  overallLevel: String
-  reviewerCount: Int!
-  sportId: ID!
-  updatedAt: DateTime!
-  userId: ID!
-}
-
 type Query {
   averageSkillRating(skillId: ID!): AverageSkillRating
   feedback(id: ID!): FeedbackModel!
   feedbackCount(userId: ID): FeedbackCount!
+  feedbackInvitation(token: String!): FeedbackInvitationModel!
+  internalRatingAudit(before: DateTime, cursor: String, from: DateTime, limit: Int! = 100, skillId: ID!, userId: ID!): RatingHistoryPage!
+  internalRatingHistory(before: DateTime, cursor: String, from: DateTime, limit: Int! = 100, revision: Int, skillId: ID!, userId: ID!): RatingHistoryPage!
+  internalRatings(sportId: ID!, userId: ID!): [InternalSkillRatingModel!]!
   match(id: ID!): MatchModel
   matchResults(matchId: ID!): MatchModel
   me: UserModel!
@@ -268,12 +264,10 @@ type Query {
   mySelfAssessments: [SelfAssessmentModel!]!
   playerMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime, userId: ID!): [MatchModel!]!
   playerProfile(id: ID!): PlayerDirectoryModel!
-  playerRatingProfile(sportId: ID!, userId: ID!): PlayerRatingProfileModel!
-  playerSkillRatings(sportId: ID!, userId: ID!): [PlayerSkillRatingModel!]!
-  playerSportRating(sportId: ID!, userId: ID!): PlayerSportRatingModel
   playerSuggestions(search: String!): [PlayerDirectoryModel!]!
   receivedFeedback(createdBefore: DateTime, createdFrom: DateTime, cursor: String, matchOnly: Boolean): [FeedbackModel!]!
   searchPlayers(cursor: String, search: String! = ""): [PlayerDirectoryModel!]!
+  selfAssessmentHistory(before: DateTime, cursor: String, from: DateTime, limit: Int! = 100, skillId: ID!, userId: ID!): RatingHistoryPage!
   selfVsPeerRatings(sportId: ID!): [SelfVsPeerRating!]!
   skillRatingTrends(skillId: ID!): [SkillRatingPoint!]!
   skills(sportId: ID!): [SkillModel!]!
@@ -285,6 +279,26 @@ type Query {
   userSelfAssessment(sportId: ID!, userId: ID!): SelfAssessmentModel
   userSkillRatings(userId: ID!): [AverageSkillRating!]!
   userSportFeedbackSummary: [SportFeedbackSummary!]!
+}
+
+type RatingHistoryPage {
+  baseline: RatingHistoryPoint
+  hasMore: Boolean!
+  items: [RatingHistoryPoint!]!
+  nextCursor: String
+  revision: Int!
+}
+
+type RatingHistoryPoint {
+  delta: Float!
+  id: ID!
+  newRating: Float!
+  previousRating: Float
+  recordedAt: DateTime!
+  revision: Int
+  sequence: String!
+  timestamp: DateTime!
+  type: String!
 }
 
 input RatingInput {
