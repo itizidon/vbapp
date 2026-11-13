@@ -60,6 +60,38 @@ export class InternalRatingsService {
     );
   }
 
+  // The caller holds ratingTransaction's lock, so rating and confidence describe
+  // the same committed state. Stored on FeedbackRating even for Pending drafts.
+  async snapshotReviewerInfluence(
+    tx: Prisma.TransactionClient,
+    reviewerId: string | null,
+    skillId: string,
+  ) {
+    const reviewer = reviewerId
+      ? await tx.playerInternalRating.findUnique({
+          where: { userId_skillId: { userId: reviewerId, skillId } },
+        })
+      : null;
+    const confidence = reviewerId
+      ? reviewer
+        ? await this.reviewerConfidence(tx, reviewerId, skillId)
+        : this.algorithm.parameters.confidence[0]
+      : this.algorithm.parameters.guestConfidence;
+    const influence = this.algorithm.influence(
+      reviewer?.currentRating ?? null,
+      confidence,
+    );
+    return {
+      reviewerInternalRatingAtSubmission: reviewer?.currentRating ?? null,
+      reviewerConfidenceAtSubmission: decimal(confidence),
+      reviewerRawWeightAtSubmission: influence.rawWeight,
+      reviewerEffectiveRateAtSubmission: influence.effectiveRate,
+      reviewerFinalRateAtSubmission: influence.finalRate,
+      reviewerAlgorithmVersionAtSubmission: ALGORITHM_VERSION,
+      reviewerInternalSnapshotCapturedAt: new Date(),
+    };
+  }
+
   // Called only inside the same transaction which writes the source feedback.
   async syncFeedback(tx: Prisma.TransactionClient, feedbackId: string) {
     const feedback = await tx.feedback.findUniqueOrThrow({
@@ -109,37 +141,48 @@ export class InternalRatingsService {
         });
         await this.rebuild(tx, current, feedbackId);
       } else if (published && submitted) {
-        const reviewerRating = feedback.reviewerId
-          ? await tx.playerInternalRating.findUnique({
-              where: {
-                userId_skillId: { userId: feedback.reviewerId, skillId },
-              },
-            })
-          : null;
-        const confidence = feedback.reviewerId
-          ? reviewerRating
-            ? await this.reviewerConfidence(tx, feedback.reviewerId, skillId)
-            : this.algorithm.parameters.confidence[0]
-          : this.algorithm.parameters.guestConfidence;
-        const influence = this.algorithm.influence(
-          reviewerRating?.currentRating ?? null,
-          confidence,
-        );
+        // Legacy feedback has no submission snapshot. Preserve its existing
+        // approval-time behavior; never pretend a current value is historical.
+        const snapshot = submitted.reviewerInternalSnapshotCapturedAt
+          ? submitted
+          : await this.snapshotReviewerInfluence(
+              tx,
+              feedback.reviewerId,
+              skillId,
+            );
+        const {
+          reviewerInternalRatingAtSubmission: reviewerInternalRating,
+          reviewerConfidenceAtSubmission: confidence,
+          reviewerRawWeightAtSubmission: rawWeight,
+          reviewerEffectiveRateAtSubmission: effectiveRate,
+          reviewerFinalRateAtSubmission: finalRate,
+          reviewerAlgorithmVersionAtSubmission: algorithmVersion,
+        } = snapshot;
+        if (
+          confidence === null ||
+          rawWeight === null ||
+          effectiveRate === null ||
+          finalRate === null ||
+          algorithmVersion === null
+        )
+          throw new BadRequestException("Incomplete reviewer rating snapshot");
         const contribution = await tx.internalRatingContribution.create({
           data: {
             feedbackId,
             userId: current.userId,
             skillId,
             reviewerId: feedback.reviewerId,
-            reviewerInternalRating: reviewerRating?.currentRating ?? null,
-            ...influence,
+            reviewerInternalRating,
+            rawWeight,
+            effectiveRate,
+            finalRate,
             confidence,
             submittedRating: submitted.rating,
             published: true,
             identityKey: feedback.reviewerId
               ? `user:${feedback.reviewerId}`
               : `guest:${feedback.guestInviteNonce ?? feedback.id}`,
-            algorithmVersion: ALGORITHM_VERSION,
+            algorithmVersion,
           },
         });
         const preceding = await tx.internalRatingContribution.findFirst({

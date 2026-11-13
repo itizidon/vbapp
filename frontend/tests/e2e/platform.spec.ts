@@ -1,4 +1,4 @@
-import type { Match } from "../../src/lib/types";
+import type { Match, Feedback, Skill } from "../../src/lib/types";
 import { test, expect, type Page } from "@playwright/test";
 const userId = "11111111-1111-4111-8111-111111111111",
   sportId = "22222222-2222-4222-8222-222222222222",
@@ -41,7 +41,7 @@ const baseMatch: Match = {
     },
   ],
 };
-const baseFeedback = {
+const baseFeedback: Feedback = {
   id: feedbackId,
   recipientId: userId,
   sportId,
@@ -70,6 +70,7 @@ function store() {
     submissions: [] as Record<string, unknown>[],
     calls: [] as string[],
     isPublic: false,
+    historySkills: null as Skill[] | null,
     analyticsCategories: [
       { id: skillId, name: "Passing", description: "Control the first touch." },
       {
@@ -191,7 +192,7 @@ async function api(
             id: sportId,
             name: "Beach Volleyball",
             slug: "beach-volleyball",
-            skills: [
+            skills: state.historySkills ?? [
               {
                 id: skillId,
                 sportId,
@@ -439,7 +440,26 @@ async function api(
     } else if (q.includes("Submitted")) data = { submittedFeedback: [] };
     else if (q.includes("FeedbackDetail"))
       data = { feedback: state.feedback.find((f) => f.id === vars.id) };
-    else if (q.includes("Summary"))
+    else if (q.includes("FeedbackHistorySummary")) {
+      const rows = (empty ? [] : state.feedback).filter(
+        (row) => row.status === "PUBLISHED" && row.sportId === vars.sportId,
+      );
+      const groups = new Map<string, number[]>();
+      for (const row of rows)
+        for (const rating of row.ratings ?? []) {
+          const values = groups.get(rating.skillId) ?? [];
+          values.push(rating.rating);
+          groups.set(rating.skillId, values);
+        }
+      data = {
+        feedbackCount: { count: rows.length },
+        userSkillRatings: [...groups].map(([skillId, values]) => ({
+          skillId,
+          count: values.length,
+          average: values.reduce((sum, n) => sum + n, 0) / values.length,
+        })),
+      };
+    } else if (q.includes("Summary"))
       data = {
         userSkillRatings: [],
         userSportFeedbackSummary: [],
@@ -546,6 +566,14 @@ async function api(
           json: { errors: [{ message: "Invalid credentials" }] },
         });
     } else if (body.action === "logout") data = { logout: true };
+    else if (q.includes("query PendingApprovals"))
+      data = {
+        myPendingFeedbackApprovals: {
+          totalCount: 0,
+          nextCursor: null,
+          items: [],
+        },
+      };
     else throw new Error(`Unhandled fixture operation: ${q.slice(0, 80)}`);
     return route.fulfill({ json: { data } });
   });
@@ -578,7 +606,7 @@ test("four tabs and readable matches, feedback, and account layouts", async ({
   await api(page);
   await page.goto("/matches");
   await expect(
-    page.getByRole("heading", { name: "Your matches" }),
+    page.getByRole("heading", { name: "YOUR MATCH HISTORY" }),
   ).toBeVisible();
   const nav = page.getByRole("navigation", {
     name:
@@ -607,7 +635,7 @@ test("four tabs and readable matches, feedback, and account layouts", async ({
   await noOverflow(page);
   await page.goto("/feedback");
   await expect(
-    page.getByRole("heading", { name: "Your feedback" }),
+    page.getByRole("heading", { name: "YOUR FEEDBACK" }),
   ).toBeVisible();
   await page
     .getByRole("button", { name: "General feedback", exact: true })
@@ -1099,17 +1127,81 @@ test("match cards reflect the logged-in player's result", async ({ page }) => {
     has: page.getByRole("heading", { name: "Organizer only", exact: true }),
   });
   await expect(lossCard.getByText("You lost", { exact: true })).toBeVisible();
-  await expect(lossCard).toHaveClass(/bg-red-50/);
+  await expect(lossCard).toHaveClass(/match-history-card--loss/);
   await expect(winCard.getByText("You won", { exact: true })).toBeVisible();
-  await expect(winCard).toHaveClass(/bg-green-50/);
-  await expect(neutralCard).not.toHaveClass(/bg-(red|green)-50/);
+  await expect(winCard).toHaveClass(/match-history-card--win/);
+  await expect(neutralCard).not.toHaveClass(/match-history-card--(win|loss)/);
   const backgrounds = await Promise.all(
     [lossCard, winCard, neutralCard].map((card) =>
-      card.evaluate((element) => getComputedStyle(element).backgroundColor),
+      card.evaluate((element) => getComputedStyle(element).background),
     ),
   );
   expect(new Set(backgrounds).size).toBe(3);
   await noOverflow(page);
+});
+
+test("beach match history stays readable across themes with scores and no results", async ({
+  page,
+}, testInfo) => {
+  const state = store();
+  const win = structuredClone(baseMatch);
+  win.description = "Sunset doubles";
+  win.teams![0].score = 21;
+  win.teams![1].score = 18;
+  const neutral = structuredClone(baseMatch);
+  neutral.id = "99999999-9999-4999-8999-999999999999";
+  neutral.description =
+    "A beach session with a very long match description that must wrap on phones";
+  neutral.teams!.forEach((team) => {
+    team.score = null;
+  });
+  neutral.participants = [];
+  state.matches = [win, neutral];
+  await api(page, { state });
+  await page.goto("/matches");
+  await expect(
+    page.getByRole("heading", { name: "YOUR MATCH HISTORY" }),
+  ).toBeVisible();
+  await expect(page.getByText("No result yet", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("No assigned players", { exact: true }),
+  ).toHaveCount(2);
+  await expect(page.getByLabel("Score: 21", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Create match", exact: true }),
+  ).toBeVisible();
+  const background = page.locator(".matches-history .beach-court-background");
+  expect(
+    await background.evaluate(
+      (element) => getComputedStyle(element).backgroundImage,
+    ),
+  ).toContain("beach-performance.webp");
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => {
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(value);
+    }, theme);
+    await noOverflow(page);
+    const grid = await page
+      .locator(".matches-history__grid")
+      .evaluate((element) => getComputedStyle(element).gridTemplateColumns);
+    expect(grid.split(" ")).toHaveLength(
+      page.viewportSize()!.width >= 768 ? 2 : 1,
+    );
+    await page.screenshot({
+      path: `/tmp/vbapp-match-history-${testInfo.project.name}-${theme}.png`,
+      fullPage: true,
+    });
+  }
+  await page
+    .getByRole("link")
+    .filter({
+      has: page.getByRole("heading", { name: "Sunset doubles", exact: true }),
+    })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/matches/${matchId}$`), {
+    timeout: 15000,
+  });
 });
 
 test("account visibility switches between private and public and persists", async ({
@@ -1174,7 +1266,7 @@ test("player search lists private accounts and public histories are read-only", 
     page.getByRole("heading", { name: "Sunday beach session" }),
   ).toBeVisible();
   await expect(page.getByText("Taylor", { exact: true })).toBeVisible();
-  await expect(page.getByText("Won", { exact: true })).toBeVisible();
+  await expect(page.getByText("Victory", { exact: true })).toBeVisible();
   await expect(
     page.getByRole("button", { name: /Edit match|feedback/i }),
   ).toHaveCount(0);
@@ -1297,6 +1389,131 @@ test("feedback loads ten at a time on scroll and filters before pagination", asy
   );
   await noOverflow(page);
 });
+test("feedback journal shows backend totals beyond the first page and visible skill reports", async ({
+  page,
+}, testInfo) => {
+  const state = store();
+  state.historySkills = [
+    "Attack",
+    "Defense",
+    "Passing",
+    "Setting",
+    "Serving",
+  ].map((name) => ({
+    id: name === "Passing" ? skillId : `history-${name.toLowerCase()}`,
+    name,
+    slug: name.toLowerCase(),
+    sportId,
+    active: true,
+    requiredForSelfAssessment: false,
+  }));
+  const values = [5, 4, 4, 3, 5];
+  state.feedback = Array.from({ length: 13 }, (_, index) => ({
+    ...baseFeedback,
+    id: index === 0 ? feedbackId : crypto.randomUUID(),
+    guestName: `Player ${index + 1}`,
+    reviewerId: index === 0 ? otherId : null,
+    reviewerUsername: index === 0 ? "Taylor" : null,
+    matchId: index === 0 ? matchId : null,
+    overallComment:
+      index === 0
+        ? "Great control under pressure. Keep finding the open sand and communicating early with your partner."
+        : null,
+    ratings:
+      index === 0
+        ? state.historySkills!.map((skill, i) => ({
+            skillId: skill.id,
+            rating: values[i],
+          }))
+        : [
+            {
+              skillId,
+              rating: index < 10 ? 1 : 5,
+              comment: "Early calls helped us cover the court.",
+            },
+          ],
+  }));
+  state.feedback.push({
+    ...baseFeedback,
+    id: crypto.randomUUID(),
+    ratings: [],
+    overallComment: "A thoughtful teammate.",
+  });
+  await api(page, { state });
+  await page.goto("/feedback");
+  await expect(
+    page.getByRole("heading", { name: "YOUR FEEDBACK", exact: true }),
+  ).toBeVisible();
+  const summary = page.getByLabel("Feedback summary", { exact: true });
+  await expect(summary.getByText("14", { exact: true })).toBeVisible();
+  await expect(summary.getByText("2.65", { exact: true })).toBeVisible();
+  await expect(summary.getByText(/Limited data/)).toBeVisible();
+  await expect(page.getByRole("article")).toHaveCount(10);
+  const first = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "Taylor", exact: true }),
+  });
+  await expect(first.getByText("4.20 / 5", { exact: true })).toBeVisible();
+  await expect(first.getByRole("meter")).toHaveCount(5);
+  await expect(
+    first.getByText("Registered player", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    first.getByRole("link", { name: "View match", exact: true }),
+  ).toHaveAttribute("href", `/matches/${matchId}`);
+  const guest = page.getByRole("article").filter({
+    has: page.getByRole("heading", { name: "Player 2", exact: true }),
+  });
+  await expect(guest.getByRole("meter")).toHaveCount(1);
+  await expect(
+    guest.getByText("Guest reviewer", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    guest.getByText("Early calls helped us cover the court."),
+  ).toBeVisible();
+  await expect(page.locator(".feedback-history-card details")).toHaveCount(0);
+  await expect(page.locator("a a")).toHaveCount(0);
+  const columns = await page
+    .locator(".feedback-history__grid")
+    .evaluate((element) => getComputedStyle(element).gridTemplateColumns);
+  expect(columns.split(" ")).toHaveLength(
+    page.viewportSize()!.width >= 768 ? 2 : 1,
+  );
+  for (const theme of ["light", "dark"]) {
+    await page.evaluate((value) => {
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(value);
+    }, theme);
+    await noOverflow(page);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: `/tmp/vbapp-feedback-history-${testInfo.project.name}-${theme}.png`,
+    });
+    await first.screenshot({
+      path: `/tmp/vbapp-feedback-card-${testInfo.project.name}-${theme}.png`,
+    });
+  }
+  await page
+    .getByRole("button", { name: "Request feedback", exact: true })
+    .click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await first
+    .getByRole("link", { name: "View feedback from Taylor", exact: true })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/feedback/${feedbackId}$`), {
+    timeout: 15000,
+  });
+  await expect(
+    page.getByRole("heading", { name: "Feedback details" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Great control under pressure. Keep finding the open sand and communicating early with your partner.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+});
+
 test("public match history supports date filters and infinite scrolling", async ({
   page,
 }) => {
@@ -1350,7 +1567,7 @@ test("feedback date ranges combine with categories and reset infinite pagination
     .getByRole("button", { name: "General feedback", exact: true })
     .click();
   await expect(
-    page.getByRole("heading", { name: "No feedback in this date range" }),
+    page.getByRole("heading", { name: "No feedback matches these filters" }),
   ).toBeVisible();
   await expect(cards).toHaveCount(0);
   await page.getByRole("button", { name: "All feedback", exact: true }).click();

@@ -1,13 +1,8 @@
 "use client";
 import type { CSSProperties } from "react";
 import { ChevronRight, ArrowUpRight, ArrowDownRight } from "lucide-react";
-export const SKILL_ACCENTS: Record<string, string> = {
-  passing: "#e4e66a",
-  setting: "#ffb063",
-  attack: "#f37cb8",
-  serving: "#62d9ef",
-  defense: "#74e4aa",
-};
+import { SKILL_ACCENTS } from "@/lib/skill-radar";
+export { SKILL_ACCENTS } from "@/lib/skill-radar";
 export function SkillRatingCard({
   name,
   axis,

@@ -3,9 +3,16 @@ import Link from "next/link";
 import { useState } from "react";
 import { EMPTY_DATE_RANGE } from "@/lib/match-date-range";
 import { MatchDateFilter } from "./match-date-filter";
+import { BeachCourtBackground } from "./beach-court-background";
 import { InfiniteResults } from "./infinite-results";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarDays, Users, ChevronRight } from "lucide-react";
+import {
+  CalendarDays,
+  Users,
+  ChevronRight,
+  Trophy,
+  SlidersHorizontal,
+} from "lucide-react";
 import {
   useCatalog,
   useMatches,
@@ -41,16 +48,37 @@ export function MatchCard({
   playerId?: string;
 }) {
   const user = useUser();
-  const result = playerMatchResult(
-    match,
-    readOnly ? playerId : user.data?.me.id,
-  );
+  const completed = match.status === "COMPLETED";
+  const result = completed
+    ? playerMatchResult(match, readOnly ? playerId : user.data?.me.id)
+    : null;
   const cardStyle =
     result === "Win"
-      ? "bg-green-50 border-green-300 dark:bg-green-950/40 dark:border-green-800"
+      ? "match-history-card--win"
       : result === "Loss"
-        ? "bg-red-50 border-red-300 dark:bg-red-950/40 dark:border-red-800"
-        : "";
+        ? "match-history-card--loss"
+        : "match-history-card--neutral";
+  const scored =
+    completed &&
+    (match.teams?.length ?? 0) >= 2 &&
+    match.teams!.every((team) => team.score !== null);
+  const tied =
+    scored &&
+    match.teams!.every((team) => team.score === match.teams![0].score);
+  const outcome =
+    result === "Win"
+      ? readOnly
+        ? "Victory"
+        : "You won"
+      : result === "Loss"
+        ? readOnly
+          ? "Defeat"
+          : "You lost"
+        : tied
+          ? "Draw"
+          : scored
+            ? "Result recorded"
+            : "No result yet";
   const players = match.participants ?? [];
   const teams = match.teams ?? [];
   const unassigned = players.filter(
@@ -58,7 +86,7 @@ export function MatchCard({
   );
   const content = (
     <>
-      <div className="flex items-start justify-between gap-3">
+      <div className="match-history-card__heading">
         <div className="min-w-0">
           <h2 className="break-anywhere text-lg">{matchTitle(match)}</h2>
         </div>
@@ -69,37 +97,39 @@ export function MatchCard({
           />
         )}
       </div>
-      <p className="subtle mt-4 flex items-center gap-2 text-sm">
-        <CalendarDays size={16} className="shrink-0" />
-        {matchDate(match)}
-      </p>
-      <p className="subtle mt-2 flex items-center gap-2 text-sm">
-        <Users size={16} className="shrink-0" />
-        {match.participants?.length ?? 0}{" "}
-        {(match.participants?.length ?? 0) === 1
-          ? "participant"
-          : "participants"}
-      </p>
+      <div className="match-history-card__meta">
+        <p>
+          <CalendarDays size={16} className="shrink-0" />
+          {matchDate(match)}
+        </p>
+        <p>
+          <Users size={16} className="shrink-0" />
+          {match.participants?.length ?? 0}{" "}
+          {(match.participants?.length ?? 0) === 1
+            ? "participant"
+            : "participants"}
+        </p>
+      </div>
       {teams.length > 0 && (
-        <div className="mt-5 grid gap-3 border-t border-border pt-4">
+        <div className="match-history-card__teams">
           {teams.map((team) => {
-            const result = teamResult(team, teams);
+            const result = completed ? teamResult(team, teams) : null;
             const resultStyle =
               result === "Win"
-                ? "text-green-800 dark:text-green-300"
+                ? "match-team--win"
                 : result === "Loss"
-                  ? "text-red-800 dark:text-red-300"
+                  ? "match-team--loss"
                   : "";
             return (
               <div
                 key={team.id}
-                className={`flex items-start justify-between gap-3 rounded-lg p-3 text-sm ${resultStyle}`}
+                className={`match-history-card__team ${resultStyle}`}
               >
                 <div className="min-w-0">
                   <p className="break-anywhere font-semibold">
                     {team.name ?? `Team ${team.teamNumber}`}
                   </p>
-                  <p className="subtle break-anywhere mt-1 text-xs">
+                  <p className="match-history-card__players break-anywhere">
                     {players
                       .filter((player) => player.teamId === team.id)
                       .map((player) => participantName(player))
@@ -108,7 +138,7 @@ export function MatchCard({
                 </div>
                 <div className="shrink-0 text-right">
                   <strong
-                    className="block text-xl tabular-nums"
+                    className="match-history-card__score"
                     aria-label={`Score: ${team.score ?? "not recorded"}`}
                   >
                     {team.score ?? "—"}
@@ -132,6 +162,15 @@ export function MatchCard({
           </p>
         </div>
       )}
+      <div className="match-history-card__footer">
+        <span className="match-result-badge">
+          {result === "Win" && <Trophy size={14} aria-hidden="true" />}
+          {outcome}
+        </span>
+        <span className="match-history-card__hint">
+          {readOnly ? "Match record" : "View match"}
+        </span>
+      </div>
       {readOnly && (
         <p className="subtle mt-4 text-xs">
           Recorded {new Date(match.createdAt).toLocaleDateString()}
@@ -140,11 +179,14 @@ export function MatchCard({
     </>
   );
   return (
-    <article className={`panel min-w-0 ${cardStyle}`}>
+    <article className={`match-history-card min-w-0 ${cardStyle}`}>
       {readOnly ? (
-        <div>{content}</div>
+        <div className="match-history-card__content">{content}</div>
       ) : (
-        <Link href={`/matches/${match.id}`} className="block rounded-lg">
+        <Link
+          href={`/matches/${match.id}`}
+          className="match-history-card__content"
+        >
           {content}
         </Link>
       )}
@@ -155,57 +197,74 @@ export function MatchList() {
   const [range, setRange] = useState(EMPTY_DATE_RANGE);
   const matches = useMatches(true, range);
   const catalog = useCatalog();
-  if (matches.isPending || catalog.isPending) return <LoadingSkeleton />;
   const error =
     catalog.error ?? (matches.isFetchNextPageError ? null : matches.error);
-  if (error)
-    return (
-      <ErrorState
-        error={error}
-        retry={() => {
-          matches.refetch();
-          catalog.refetch();
-        }}
-      />
-    );
   return (
-    <>
-      <PageHeader
-        title="Your matches"
-        description="The games you’re part of. The people you play with."
-        action={<CreateMatchDialog />}
-      />
-      <MatchDateFilter value={range} onApply={setRange} />
-      {matches.data?.rows.length ? (
-        <div className="grid gap-4 md:grid-cols-2">
-          {matches.data.rows.map((match) => (
-            <MatchCard key={match.id} match={match} />
-          ))}
+    <section className="matches-history" aria-label="Match history">
+      <BeachCourtBackground />
+      <div className="matches-history__content">
+        <header className="performance-profile__heading matches-history__heading">
+          <div>
+            <p className="performance-profile__eyebrow">
+              BEACH VOLLEYBALL <span>/</span> YOUR TIME ON THE SAND
+            </p>
+            <h1>YOUR MATCH HISTORY</h1>
+            <p className="performance-profile__intro">
+              Track your games, teammates, and results.
+            </p>
+          </div>
+          <div className="matches-history__create">
+            <CreateMatchDialog />
+          </div>
+        </header>
+        <div className="matches-history__filters">
+          <p className="matches-history__filter-heading">
+            <SlidersHorizontal size={15} aria-hidden="true" /> FIND YOUR GAMES
+          </p>
+          <MatchDateFilter value={range} onApply={setRange} />
         </div>
-      ) : (
-        <section className="panel">
-          <EmptyState
-            title={
-              range.from || range.to
-                ? "No matches in this date range"
-                : "Your next match starts here"
-            }
-          >
-            {range.from || range.to
-              ? "No matches in this date range. Try different dates or clear the filter."
-              : "Create a match to keep your games and feedback together."}
-          </EmptyState>
-        </section>
-      )}
-      <InfiniteResults
-        hasNextPage={!!matches.hasNextPage}
-        isFetchingNextPage={matches.isFetchingNextPage}
-        error={matches.isFetchNextPageError ? matches.error : null}
-        onLoadMore={() => matches.fetchNextPage()}
-      />
-    </>
+        {error ? (
+          <ErrorState
+            error={error}
+            retry={() => {
+              void matches.refetch();
+              void catalog.refetch();
+            }}
+          />
+        ) : matches.isPending || catalog.isPending ? (
+          <LoadingSkeleton />
+        ) : matches.data?.rows.length ? (
+          <div className="matches-history__grid">
+            {matches.data.rows.map((match) => (
+              <MatchCard key={match.id} match={match} />
+            ))}
+          </div>
+        ) : (
+          <section className="matches-history__empty">
+            <EmptyState
+              title={
+                range.from || range.to
+                  ? "No matches in this date range"
+                  : "Your next match starts here"
+              }
+            >
+              {range.from || range.to
+                ? "Try different dates or clear the filter to find your games."
+                : "Create a match to keep your games and feedback together."}
+            </EmptyState>
+          </section>
+        )}
+        <InfiniteResults
+          hasNextPage={!!matches.hasNextPage}
+          isFetchingNextPage={matches.isFetchingNextPage}
+          error={matches.isFetchNextPageError ? matches.error : null}
+          onLoadMore={() => matches.fetchNextPage()}
+        />
+      </div>
+    </section>
   );
 }
+
 export function MatchDetails({ id }: { id: string }) {
   const detail = useMatch(id);
   const user = useUser();

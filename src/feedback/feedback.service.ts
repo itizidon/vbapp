@@ -407,12 +407,19 @@ export class FeedbackService {
         },
       });
       await tx.feedbackRating.createMany({
-        data: input.ratings.map((r) => ({
-          feedbackId: feedback.id,
-          skillId: r.skillId,
-          rating: r.rating,
-          comment: r.comment,
-        })),
+        data: await Promise.all(
+          input.ratings.map(async (r) => ({
+            feedbackId: feedback.id,
+            skillId: r.skillId,
+            rating: r.rating,
+            comment: r.comment,
+            ...(await this.internal.snapshotReviewerInfluence(
+              tx,
+              assignedReviewerId ?? identity.reviewerId ?? null,
+              r.skillId,
+            )),
+          })),
+        ),
       });
       if (assessment?.ratings.length)
         await tx.feedbackReviewerSkillSnapshot.createMany({
@@ -606,15 +613,38 @@ export class FeedbackService {
         });
         if (count !== ratings.length)
           throw new BadRequestException("A skill belongs to another sport");
-        await tx.feedbackRating.deleteMany({ where: { feedbackId: id } });
-        await tx.feedbackRating.createMany({
-          data: ratings.map((r) => ({
+        await tx.feedbackRating.deleteMany({
+          where: {
             feedbackId: id,
-            skillId: r.skillId,
-            rating: r.rating,
-            comment: r.comment,
-          })),
+            skillId: { notIn: ratings.map((r) => r.skillId) },
+          },
         });
+        for (const r of ratings) {
+          const where = {
+            feedbackId_skillId: { feedbackId: id, skillId: r.skillId },
+          };
+          if (old.ratings.some((saved) => saved.skillId === r.skillId)) {
+            // Editing scores/comments must not replace the submission snapshot.
+            await tx.feedbackRating.update({
+              where,
+              data: { rating: r.rating, comment: r.comment },
+            });
+          } else {
+            await tx.feedbackRating.create({
+              data: {
+                feedbackId: id,
+                skillId: r.skillId,
+                rating: r.rating,
+                comment: r.comment,
+                ...(await this.internal.snapshotReviewerInfluence(
+                  tx,
+                  old.reviewerId,
+                  r.skillId,
+                )),
+              },
+            });
+          }
+        }
       }
       await this.internal.syncFeedback(tx, id);
       return tx.feedback.findUniqueOrThrow({

@@ -186,14 +186,22 @@ model Feedback {
 }
 
 model FeedbackRating {
-  feedbackId String   @db.Uuid
-  skillId    String   @db.Uuid
-  rating     Int
-  comment    String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
-  skill      Skill    @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  feedbackId                           String    @db.Uuid
+  skillId                              String    @db.Uuid
+  rating                               Int
+  comment                              String?
+  // Private calculation inputs frozen when the feedback is submitted.
+  reviewerInternalRatingAtSubmission   Decimal?  @db.Decimal(12, 8)
+  reviewerConfidenceAtSubmission       Decimal?  @db.Decimal(14, 12)
+  reviewerRawWeightAtSubmission        Decimal?  @db.Decimal(20, 12)
+  reviewerEffectiveRateAtSubmission    Decimal?  @db.Decimal(14, 12)
+  reviewerFinalRateAtSubmission        Decimal?  @db.Decimal(14, 12)
+  reviewerAlgorithmVersionAtSubmission Int?
+  reviewerInternalSnapshotCapturedAt   DateTime?
+  createdAt                            DateTime  @default(now())
+  updatedAt                            DateTime  @updatedAt
+  feedback                             Feedback  @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  skill                                Skill     @relation(fields: [skillId], references: [id], onDelete: Restrict)
 
   @@id([feedbackId, skillId])
   @@index([skillId])

@@ -317,7 +317,7 @@ const url = process.env.TEST_DATABASE_URL;
           .status,
       ).toBe("PENDING");
     });
-    it("uses the reviewer’s internal rating at approval time and stores weighted immutable events atomically", async () => {
+    it("uses the reviewer’s internal rating and confidence at submission time and stores weighted immutable events atomically", async () => {
       const f = await fixture(),
         skill = f.sport.skills[0];
       const draft = await service.submitGuest({
@@ -340,9 +340,27 @@ const url = process.env.TEST_DATABASE_URL;
       const event = await db.playerInternalRatingEvent.findFirstOrThrow({
         where: { feedbackId: draft.id, type: "FEEDBACK_APPLIED" },
       });
-      expect(event.reviewerInternalRating!.eq(reviewerNow.currentRating)).toBe(
+      expect(event.reviewerInternalRating!.eq(5)).toBe(true);
+      expect(
+        event.confidence!.eq(internal.algorithm.parameters.confidence[0]),
+      ).toBe(true);
+      const saved = draft.ratings[0];
+      expect(saved.reviewerInternalSnapshotCapturedAt).toBeInstanceOf(Date);
+      expect(saved.reviewerInternalRatingAtSubmission!.eq(5)).toBe(true);
+      expect(event.finalRate!.eq(saved.reviewerFinalRateAtSubmission!)).toBe(
         true,
       );
+      expect(event.confidence!.eq(saved.reviewerConfidenceAtSubmission!)).toBe(
+        true,
+      );
+      await expect(
+        db.feedbackRating.update({
+          where: {
+            feedbackId_skillId: { feedbackId: draft.id, skillId: skill.id },
+          },
+          data: { reviewerFinalRateAtSubmission: 1 },
+        }),
+      ).rejects.toThrow("snapshot is immutable");
       expect(event.reviewerId).toBe(f.reviewer.id);
       expect(event.confidence).not.toBeNull();
       const expected = internal.algorithm.apply(
@@ -365,6 +383,63 @@ const url = process.env.TEST_DATABASE_URL;
           data: { delta: 0 },
         }),
       ).rejects.toThrow();
+    });
+    it("retains submission weights when published scores or comments are edited", async () => {
+      const f = await fixture();
+      const draft = await service.submitGuest({
+        ...f.input,
+        token: f.link.token,
+      });
+      await service.decide(f.reviewer.id, draft.id, true);
+      const before = draft.ratings[0];
+      const updated = await service.update(f.reviewer.id, {
+        id: draft.id,
+        ratings: [
+          { skillId: before.skillId, rating: 2, comment: "Corrected score" },
+        ],
+      });
+      expect(updated.ratings[0].reviewerInternalSnapshotCapturedAt).toEqual(
+        before.reviewerInternalSnapshotCapturedAt,
+      );
+      expect(
+        updated.ratings[0].reviewerFinalRateAtSubmission!.eq(
+          before.reviewerFinalRateAtSubmission!,
+        ),
+      ).toBe(true);
+      expect(updated.ratings[0].rating).toBe(2);
+      const contribution =
+        await db.internalRatingContribution.findUniqueOrThrow({
+          where: {
+            feedbackId_skillId: {
+              feedbackId: draft.id,
+              skillId: before.skillId,
+            },
+          },
+        });
+      expect(
+        contribution.finalRate.eq(before.reviewerFinalRateAtSubmission!),
+      ).toBe(true);
+    });
+    it("keeps approval-time weighting for legacy pending rows without submission snapshots", async () => {
+      const f = await fixture();
+      const legacy = await db.feedback.create({
+        data: {
+          recipientId: f.recipient.id,
+          reviewerId: f.reviewer.id,
+          sportId: f.sport.id,
+          feedbackLinkId: f.link.linkId,
+          approvalRequired: true,
+          status: "PENDING",
+          guestName: "Legacy guest",
+          ratings: { create: f.input.ratings },
+        },
+      });
+      await service.decide(f.reviewer.id, legacy.id, true);
+      const event = await db.playerInternalRatingEvent.findFirstOrThrow({
+        where: { feedbackId: legacy.id, type: "FEEDBACK_APPLIED" },
+      });
+      expect(event.reviewerInternalRating!.eq(5)).toBe(true);
+      expect(event.finalRate!.gt(0)).toBe(true);
     });
     it("serializes concurrent approvals and applies each skill exactly once", async () => {
       const f = await fixture();

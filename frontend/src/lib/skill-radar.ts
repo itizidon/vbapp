@@ -1,3 +1,11 @@
+export const SKILL_ACCENTS: Record<string, string> = {
+  passing: "#e4e66a",
+  setting: "#ffb063",
+  attack: "#f37cb8",
+  serving: "#62d9ef",
+  defense: "#74e4aa",
+};
+
 export type RadarMode = "internal" | "self" | "average";
 export interface SkillRadarData {
   skillId: string;

@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { CalendarDays, ChevronRight } from "lucide-react";
 import type { Feedback, Skill } from "@/lib/types";
+import { feedbackReport, feedbackSkillColor } from "@/lib/feedback-history";
 import { RatingStars, UserAvatar } from "./common";
 export function CategoryRatingDetails({
   feedback,
@@ -39,68 +40,121 @@ export function FeedbackCard({
   feedback: Feedback;
   skills: Skill[];
 }) {
-  const ratings = feedback.ratings ?? [];
-  const average = ratings.length
-    ? ratings.reduce((n, r) => n + r.rating, 0) / ratings.length
-    : null;
+  const { ratings, average, comment } = feedbackReport(feedback);
   const name = feedback.reviewerId
     ? (feedback.reviewerUsername ?? "Registered player")
-    : (feedback.guestName ?? "Guest");
+    : feedback.guestName?.trim() || "Guest reviewer";
   return (
-    <article className="panel min-w-0">
-      <Link href={`/feedback/${feedback.id}`} className="block rounded-lg">
-        <div className="flex items-start justify-between gap-3">
+    <article className="feedback-history-card min-w-0">
+      <Link
+        href={`/feedback/${feedback.id}`}
+        className="feedback-history-card__content"
+        aria-label={`View feedback from ${name}`}
+      >
+        <header className="feedback-history-card__header">
           <div className="flex min-w-0 items-center gap-3">
             <UserAvatar name={name} />
             <div className="min-w-0">
               <h2 className="break-anywhere text-base">{name}</h2>
               <p className="subtle text-xs">
-                {new Date(feedback.createdAt).toLocaleDateString(undefined, {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })}
+                {feedback.reviewerId ? "Registered player" : "Guest reviewer"}
               </p>
             </div>
           </div>
-          <ChevronRight className="shrink-0 text-muted-foreground" size={18} />
-        </div>
-        {average !== null && (
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <RatingStars value={average} />
-            <span className="subtle text-xs">
-              {average.toFixed(1)}/5 · average of {ratings.length}{" "}
-              {ratings.length === 1 ? "category" : "categories"}
+          <ChevronRight size={18} className="shrink-0" aria-hidden="true" />
+        </header>
+        <div className="feedback-history-card__meta">
+          <time dateTime={feedback.createdAt}>
+            {new Date(feedback.createdAt).toLocaleDateString(undefined, {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            })}
+          </time>
+          <span className="feedback-kind-badge">
+            {feedback.matchId ? "Match feedback" : "General feedback"}
+          </span>
+          {feedback.status !== "PUBLISHED" && (
+            <span className="feedback-kind-badge">
+              {feedback.status.toLowerCase()}
             </span>
+          )}
+        </div>
+        <div className="feedback-history-card__overall">
+          <div>
+            <p className="feedback-history-card__eyebrow">
+              {average === null ? "PLAYER NOTES" : "FEEDBACK SCORE"}
+            </p>
+            <p className="feedback-history-card__score">
+              {average === null ? (
+                "Written feedback"
+              ) : (
+                <>
+                  {average.toFixed(2)} <small>/ 5</small>
+                </>
+              )}
+            </p>
           </div>
-        )}
-        {feedback.overallComment && (
-          <p className="break-anywhere mt-4 whitespace-pre-wrap leading-7">
-            {feedback.overallComment}
-          </p>
-        )}
+          {average !== null && <RatingStars value={average} />}
+        </div>
+        <div
+          className="feedback-skill-bars"
+          aria-label="Submitted skill ratings"
+        >
+          {ratings.map((rating) => {
+            const skill = skills.find((s) => s.id === rating.skillId);
+            const label = skill?.name ?? "Rated category";
+            return (
+              <div className="feedback-skill-bar" key={rating.skillId}>
+                <span className="break-anywhere">{label}</span>
+                <span
+                  className="feedback-skill-bar__track"
+                  role="meter"
+                  aria-label={`${label} rating`}
+                  aria-valuemin={1}
+                  aria-valuemax={5}
+                  aria-valuenow={rating.rating}
+                >
+                  <span
+                    style={{
+                      width: `${(rating.rating / 5) * 100}%`,
+                      backgroundColor: feedbackSkillColor(skill),
+                    }}
+                  />
+                </span>
+                <span className="feedback-skill-bar__value">
+                  {rating.rating}/5
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p
+          className={`feedback-history-card__comment break-anywhere ${comment ? "" : "subtle"}`}
+        >
+          {comment ?? "No written comment"}
+        </p>
       </Link>
-      <details className="mt-4">
-        <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold text-primary">
-          Category ratings ({ratings.length})
-        </summary>
-        <CategoryRatingDetails feedback={feedback} skills={skills} />
-      </details>
-      <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
+      <footer className="feedback-history-card__footer">
         {feedback.matchId ? (
           <Link
             href={`/matches/${feedback.matchId}`}
-            className="inline-flex min-h-11 items-center gap-2 text-primary"
+            className="feedback-history-card__match"
           >
-            <CalendarDays size={15} />
-            Match feedback · View match
+            <CalendarDays size={14} aria-hidden="true" />
+            View match
           </Link>
         ) : (
-          <span className="inline-flex min-h-11 items-center">
-            General Feedback
-          </span>
+          <span className="subtle text-xs">General feedback</span>
         )}
-      </div>
+        <Link
+          href={`/feedback/${feedback.id}`}
+          className="feedback-history-card__detail"
+          aria-label={`View full feedback from ${name}`}
+        >
+          View feedback <ChevronRight size={13} aria-hidden="true" />
+        </Link>
+      </footer>
     </article>
   );
 }

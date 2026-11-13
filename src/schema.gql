@@ -322,7 +322,7 @@ type PlayerDirectoryModel {
 type Query {
   averageSkillRating(skillId: ID!): AverageSkillRating
   feedback(id: ID!): FeedbackModel!
-  feedbackCount(userId: ID): FeedbackCount!
+  feedbackCount(sportId: ID, userId: ID): FeedbackCount!
   feedbackInvitation(token: String!): FeedbackInvitationModel!
   feedbackReviewers(recipientId: ID, search: String!, token: String): [MemberModel!]!
   internalRatingAudit(before: DateTime, cursor: String, from: DateTime, limit: Int! = 100, skillId: ID!, userId: ID!): RatingHistoryPage!
@@ -354,7 +354,7 @@ type Query {
   userMatchHistory: [MatchModel!]!
   userMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime): [MatchModel!]!
   userSelfAssessment(sportId: ID!, userId: ID!): SelfAssessmentModel
-  userSkillRatings(userId: ID!): [AverageSkillRating!]!
+  userSkillRatings(sportId: ID, userId: ID!): [AverageSkillRating!]!
   userSportFeedbackSummary: [SportFeedbackSummary!]!
 }
 
