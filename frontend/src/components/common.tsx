@@ -49,7 +49,7 @@ export function ErrorState({
       <h2>Something needs attention</h2>
       <p className="subtle break-anywhere">{error.message}</p>
       {retry && (
-        <Button variant="outline" onClick={retry}>
+        <Button type="button" variant="outline" onClick={retry}>
           Try again
         </Button>
       )}

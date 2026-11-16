@@ -98,9 +98,12 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
     await expect(
       guestPage.getByText(`@${assigned.username}`, { exact: true }),
     ).toBeVisible();
+    await expect(
+      guestPage.getByLabel("Guest name (optional)", { exact: true }),
+    ).toHaveCount(0);
     await guestPage
-      .getByLabel("Your name", { exact: true })
-      .fill("Court observer");
+      .getByRole("button", { name: "Card Review", exact: true })
+      .click();
     const artwork = guestPage.locator(".feedback-art-image");
     await expect(artwork).toBeVisible();
     await expect
@@ -182,6 +185,9 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
     await otherPage
       .getByRole("radiogroup", { name: "Attacking rating" })
       .waitFor();
+    await otherPage
+      .getByRole("button", { name: "Card Review", exact: true })
+      .click();
     for (let i = 0; i < 4; i++)
       await otherPage
         .getByRole("button", { name: "Next", exact: true })
@@ -344,9 +350,17 @@ test("selects an approver inside guest and signed-in feedback forms", async ({
       )
     ).createGuestFeedbackInvite;
     async function chooseAndSubmit(page: import("@playwright/test").Page) {
-      await page.getByLabel(/Assign feedback giver/).fill(assigned.username);
       await page
-        .getByRole("button", { name: assigned.username, exact: true })
+        .getByRole("button", { name: "Card Review", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Registered User", exact: true })
+        .click();
+      await page
+        .getByRole("combobox", { name: "Feedback giver" })
+        .fill(assigned.username);
+      await page
+        .getByRole("option", { name: new RegExp(assigned.username) })
         .click();
       await expect(
         page.getByText(`@${assigned.username}`, { exact: true }),

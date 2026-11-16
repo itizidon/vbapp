@@ -40,6 +40,8 @@ export function FeedbackCard({
   feedback: Feedback;
   skills: Skill[];
 }) {
+  const combined = (feedback.matches?.length ?? 0) > 1;
+  const matchId = feedback.matchId ?? feedback.matches?.[0]?.id;
   const { ratings, average, comment } = feedbackReport(feedback);
   const name = feedback.reviewerId
     ? (feedback.reviewerUsername ?? "Registered player")
@@ -72,7 +74,11 @@ export function FeedbackCard({
             })}
           </time>
           <span className="feedback-kind-badge">
-            {feedback.matchId ? "Match feedback" : "General feedback"}
+            {combined
+              ? `Combined feedback · ${feedback.matches!.length} matches`
+              : matchId
+                ? "Match feedback"
+                : "General feedback"}
           </span>
           {feedback.status !== "PUBLISHED" && (
             <span className="feedback-kind-badge">
@@ -136,9 +142,25 @@ export function FeedbackCard({
         </p>
       </Link>
       <footer className="feedback-history-card__footer">
-        {feedback.matchId ? (
+        {combined ? (
+          <details className="feedback-combined-matches">
+            <summary>View {feedback.matches!.length} matches</summary>
+            {feedback.matches!.map((match) => (
+              <Link
+                key={match.id}
+                href={`/matches/${match.id}`}
+                className="block min-h-11 text-xs"
+              >
+                {match.description ||
+                  (match.playedAt
+                    ? new Date(match.playedAt).toLocaleString()
+                    : "View match")}
+              </Link>
+            ))}
+          </details>
+        ) : matchId ? (
           <Link
-            href={`/matches/${feedback.matchId}`}
+            href={`/matches/${matchId}`}
             className="feedback-history-card__match"
           >
             <CalendarDays size={14} aria-hidden="true" />

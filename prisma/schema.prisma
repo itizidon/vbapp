@@ -83,20 +83,22 @@ model Skill {
 }
 
 model Match {
-  feedbackLinks FeedbackLink[]
-  id            String             @id @default(uuid()) @db.Uuid
-  createdById   String             @db.Uuid
-  sportId       String?            @db.Uuid
-  playedAt      DateTime?
-  description   String?
-  status        MatchStatus        @default(DRAFT)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  createdBy     User               @relation("MatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  sport         Sport?             @relation(fields: [sportId], references: [id], onDelete: SetNull)
-  teams         MatchTeam[]
-  participants  MatchParticipant[]
-  feedback      Feedback[]
+  feedbackRequests FeedbackRequestMatch[]
+  combinedFeedback FeedbackMatch[]
+  feedbackLinks    FeedbackLink[]
+  id               String                 @id @default(uuid()) @db.Uuid
+  createdById      String                 @db.Uuid
+  sportId          String?                @db.Uuid
+  playedAt         DateTime?
+  description      String?
+  status           MatchStatus            @default(DRAFT)
+  createdAt        DateTime               @default(now())
+  updatedAt        DateTime               @updatedAt
+  createdBy        User                   @relation("MatchCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  sport            Sport?                 @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  teams            MatchTeam[]
+  participants     MatchParticipant[]
+  feedback         Feedback[]
 
   @@index([createdById, createdAt])
   @@index([sportId])
@@ -136,6 +138,9 @@ model MatchParticipant {
 }
 
 model Feedback {
+  submissionId                                String?                         @db.Uuid
+  submission                                  FeedbackSubmission?             @relation(fields: [submissionId], references: [id], onDelete: Restrict)
+  associatedMatches                           FeedbackMatch[]
   feedbackLinkId                              String?                         @db.Uuid
   approvalRequired                            Boolean                         @default(false)
   submittedById                               String?                         @db.Uuid
@@ -177,6 +182,7 @@ model Feedback {
 
   @@index([reviewerId, approvalRequired, status, createdAt, id])
   @@index([feedbackLinkId])
+  @@index([submissionId])
   @@index([guestInviteNonce])
   @@index([recipientId, createdAt])
   @@index([sportId, createdAt])
@@ -359,21 +365,64 @@ model InternalRatingContribution {
 }
 
 model FeedbackLink {
-  id                 String     @id @default(uuid()) @db.Uuid
-  recipientId        String     @db.Uuid
-  assignedReviewerId String?    @db.Uuid
-  sportId            String     @db.Uuid
-  matchId            String?    @db.Uuid
-  tokenHash          String     @unique
+  mode               FeedbackReviewMode     @default(INDIVIDUAL_MATCHES)
+  requestMatches     FeedbackRequestMatch[]
+  submissions        FeedbackSubmission[]
+  lastSubmittedAt    DateTime?
+  id                 String                 @id @default(uuid()) @db.Uuid
+  recipientId        String                 @db.Uuid
+  assignedReviewerId String?                @db.Uuid
+  sportId            String                 @db.Uuid
+  matchId            String?                @db.Uuid
+  tokenHash          String                 @unique
   expiresAt          DateTime
   revokedAt          DateTime?
-  createdAt          DateTime   @default(now())
-  recipient          User       @relation("LinkRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
-  assignedReviewer   User?      @relation("LinkReviewer", fields: [assignedReviewerId], references: [id], onDelete: Restrict)
-  sport              Sport      @relation(fields: [sportId], references: [id], onDelete: Restrict)
-  match              Match?     @relation(fields: [matchId], references: [id], onDelete: SetNull)
+  createdAt          DateTime               @default(now())
+  recipient          User                   @relation("LinkRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+  assignedReviewer   User?                  @relation("LinkReviewer", fields: [assignedReviewerId], references: [id], onDelete: Restrict)
+  sport              Sport                  @relation(fields: [sportId], references: [id], onDelete: Restrict)
+  match              Match?                 @relation(fields: [matchId], references: [id], onDelete: SetNull)
   feedback           Feedback[]
 
   @@index([recipientId, createdAt])
   @@index([assignedReviewerId])
+}
+
+enum FeedbackReviewMode {
+  INDIVIDUAL_MATCHES
+  COMBINED_MATCHES
+}
+
+model FeedbackRequestMatch {
+  feedbackLinkId String       @db.Uuid
+  matchId        String       @db.Uuid
+  displayOrder   Int
+  feedbackLink   FeedbackLink @relation(fields: [feedbackLinkId], references: [id], onDelete: Cascade)
+  match          Match        @relation(fields: [matchId], references: [id], onDelete: Restrict)
+
+  @@id([feedbackLinkId, matchId])
+  @@unique([feedbackLinkId, displayOrder])
+  @@index([matchId])
+}
+
+model FeedbackMatch {
+  feedbackId String   @db.Uuid
+  matchId    String   @db.Uuid
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  match      Match    @relation(fields: [matchId], references: [id], onDelete: Restrict)
+
+  @@id([feedbackId, matchId])
+  @@index([matchId])
+}
+
+model FeedbackSubmission {
+  id                 String       @id @default(uuid()) @db.Uuid
+  feedbackLinkId     String       @db.Uuid
+  clientSubmissionId String       @db.Uuid
+  payloadHash        String
+  createdAt          DateTime     @default(now())
+  feedbackLink       FeedbackLink @relation(fields: [feedbackLinkId], references: [id], onDelete: Restrict)
+  feedback           Feedback[]
+
+  @@unique([feedbackLinkId, clientSubmissionId])
 }

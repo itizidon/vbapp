@@ -1,5 +1,4 @@
 import { FeedbackSubmissionForm } from "@/components/feedback-form";
-import { Brand, ThemeToggle } from "@/components/app-shell";
 export const metadata = {
   title: "Leave feedback",
   referrer: "no-referrer",
@@ -16,16 +15,9 @@ export default async function Page({
   const guestOnly = (await searchParams).mode === "device";
   return (
     <div className="min-h-dvh">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-4 py-6">
-        {guestOnly ? (
-          <span className="text-xl font-bold">bvbtips.</span>
-        ) : (
-          <Brand />
-        )}
-        <ThemeToggle />
-      </header>
-      <main className="mx-auto max-w-6xl px-4 pb-12 pt-4">
+      <main className="mx-auto max-w-6xl px-4 pb-12">
         <FeedbackSubmissionForm
+          key={`${token}:${guestOnly ? "device" : "link"}`}
           recipientId=""
           sportId=""
           token={token}

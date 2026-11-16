@@ -43,19 +43,27 @@ export function useFeedback(
   enabled = true,
   kind = "all",
   range: MatchDateRange = EMPTY_DATE_RANGE,
+  matchId?: string,
 ) {
   const dates = feedbackDateVariables(range);
   const catalog = useCatalog();
   const sportIds = new Set(catalog.data?.sports.map((sport) => sport.id));
   return useInfiniteQuery({
-    queryKey: ["feedback", kind, dates.createdFrom, dates.createdBefore],
+    queryKey: [
+      "feedback",
+      kind,
+      dates.createdFrom,
+      dates.createdBefore,
+      matchId,
+    ],
     queryFn: ({ pageParam }) =>
       gql<{ receivedFeedback: Feedback[] }>(
-        `query Received($cursor:String,$matchOnly:Boolean,$createdFrom:DateTime,$createdBefore:DateTime) { receivedFeedback(cursor:$cursor,matchOnly:$matchOnly,createdFrom:$createdFrom,createdBefore:$createdBefore) { ${FEEDBACK_FIELDS} } }`,
+        `query Received($cursor:String,$matchOnly:Boolean,$createdFrom:DateTime,$createdBefore:DateTime,$matchId:ID) { receivedFeedback(cursor:$cursor,matchOnly:$matchOnly,createdFrom:$createdFrom,createdBefore:$createdBefore,matchId:$matchId) { ${FEEDBACK_FIELDS} } }`,
         {
           cursor: pageParam,
           matchOnly: kind === "all" ? null : kind === "match",
           ...dates,
+          matchId,
         },
       ),
     initialPageParam: null as string | null,
@@ -151,16 +159,16 @@ export function useFeedbackDetails(id: string) {
       ),
   });
 }
-export function useSubmittedFeedback(enabled = true) {
+export function useSubmittedFeedback(enabled = true, matchId?: string) {
   const catalog = useCatalog();
   const ids = new Set(catalog.data?.sports.map((s) => s.id));
   return useInfiniteQuery({
-    queryKey: ["submitted-feedback"],
+    queryKey: ["submitted-feedback", matchId],
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) =>
       gql<{ submittedFeedback: Feedback[] }>(
-        `query Submitted($cursor:String){submittedFeedback(cursor:$cursor){${FEEDBACK_FIELDS}}}`,
-        { cursor: pageParam },
+        `query Submitted($cursor:String,$matchId:ID){submittedFeedback(cursor:$cursor,matchId:$matchId){${FEEDBACK_FIELDS}}}`,
+        { cursor: pageParam, matchId },
       ),
     getNextPageParam: (page) => nextPageCursor(page.submittedFeedback),
     enabled,

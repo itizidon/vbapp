@@ -8,11 +8,16 @@ import {
   Mutation,
   Query,
   Resolver,
+  ResolveField,
+  Parent,
 } from "@nestjs/graphql";
+import { FeedbackReviewMode } from "@prisma/client";
+import { SubmitFeedbackRequestInput } from "./request.models";
 import { UseGuards } from "@nestjs/common";
 import { FeedbackService } from "./feedback.service";
 import {
   FeedbackModel,
+  FeedbackMatchReference,
   GuestInvitePayload,
   MemberModel,
 } from "../common/models";
@@ -23,9 +28,31 @@ import {
 } from "../common/inputs";
 import { GqlAuthGuard } from "../common/gql-auth.guard";
 import { AuthUser, CurrentUser } from "../common/current-user.decorator";
-@Resolver()
+@Resolver(() => FeedbackModel)
 export class FeedbackResolver {
   constructor(private s: FeedbackService) {}
+  @ResolveField(() => [FeedbackMatchReference]) matches(@Parent() row: any) {
+    return row.matchId
+      ? [row.match ?? { id: row.matchId }]
+      : (row.associatedMatches ?? []).map((r: any) => r.match);
+  }
+  @UseGuards(OptionalGqlAuthGuard)
+  @Mutation(() => GuestInvitePayload)
+  startGuestReviewSession(
+    @Args("token") token: string,
+    @Args("completedSubmissionId", { type: () => ID })
+    completedSubmissionId: string,
+  ) {
+    return this.s.startGuestReviewSession(token, completedSubmissionId);
+  }
+  @UseGuards(OptionalGqlAuthGuard)
+  @Mutation(() => [FeedbackModel])
+  submitFeedbackRequest(
+    @Args("input") input: SubmitFeedbackRequestInput,
+    @CurrentUser() u?: AuthUser,
+  ) {
+    return this.s.submitRequest(input, u?.id);
+  }
   @UseGuards(OptionalGqlAuthGuard)
   @Query(() => [MemberModel])
   feedbackReviewers(
@@ -65,8 +92,14 @@ export class FeedbackResolver {
     @Args("matchId", { type: () => ID, nullable: true }) m?: string,
     @Args("assignedReviewerId", { type: () => ID, nullable: true })
     reviewer?: string,
+    @Args("matchIds", { type: () => [ID], nullable: true }) matchIds?: string[],
+    @Args("reviewMode", {
+      type: () => FeedbackReviewMode,
+      defaultValue: FeedbackReviewMode.INDIVIDUAL_MATCHES,
+    })
+    mode?: FeedbackReviewMode,
   ) {
-    return this.s.invite(u.id, r, s, m, reviewer);
+    return this.s.invite(u.id, r, s, m, reviewer, matchIds, mode);
   }
   @UseGuards(GqlAuthGuard)
   @Query(() => PendingApprovalsPage)
@@ -128,13 +161,15 @@ export class FeedbackResolver {
     from?: Date,
     @Args("createdBefore", { type: () => GraphQLISODateTime, nullable: true })
     before?: Date,
+    @Args("matchId", { type: () => ID, nullable: true }) matchId?: string,
   ) {
-    return this.s.received(u.id, c, matchOnly, from, before);
+    return this.s.received(u.id, c, matchOnly, from, before, matchId);
   }
   @UseGuards(GqlAuthGuard) @Query(() => [FeedbackModel]) submittedFeedback(
     @CurrentUser() u: AuthUser,
     @Args("cursor", { nullable: true }) c?: string,
+    @Args("matchId", { type: () => ID, nullable: true }) matchId?: string,
   ) {
-    return this.s.submitted(u.id, c);
+    return this.s.submitted(u.id, c, matchId);
   }
 }

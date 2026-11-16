@@ -26,7 +26,11 @@ export function FeedbackList() {
     catalog.error ?? (feedback.isFetchNextPageError ? null : feedback.error);
   const skills = catalog.data?.sports.flatMap((s) => s.skills) ?? [];
   const rows = (feedback.data?.rows ?? []).filter(
-    (f) => filter === "all" || (filter === "match" ? !!f.matchId : !f.matchId),
+    (f) =>
+      filter === "all" ||
+      (filter === "match"
+        ? !!f.matchId || !!f.matches?.length
+        : !f.matchId && !f.matches?.length),
   );
   const filtered = filter !== "all" || !!range.from || !!range.to;
   return (
@@ -214,10 +218,26 @@ export function FeedbackDetails({ id }: { id: string }) {
           </p>
         </div>
         <div>
-          {feedback.matchId ? (
+          {(feedback.matches?.length ?? 0) > 1 ? (
+            <div className="space-y-2">
+              <h3>Combined feedback · {feedback.matches!.length} matches</h3>
+              {feedback.matches!.map((match) => (
+                <Link
+                  className="block text-primary min-h-11"
+                  key={match.id}
+                  href={`/matches/${match.id}`}
+                >
+                  {match.description ||
+                    (match.playedAt
+                      ? new Date(match.playedAt).toLocaleString()
+                      : "View match")}
+                </Link>
+              ))}
+            </div>
+          ) : feedback.matchId || feedback.matches?.[0]?.id ? (
             <Link
               className="inline-flex min-h-11 items-center text-primary"
-              href={`/matches/${feedback.matchId}`}
+              href={`/matches/${feedback.matchId ?? feedback.matches?.[0]?.id}`}
             >
               View associated match →
             </Link>

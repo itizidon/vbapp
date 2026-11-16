@@ -269,8 +269,8 @@ export function MatchDetails({ id }: { id: string }) {
   const detail = useMatch(id);
   const user = useUser();
   const catalog = useCatalog();
-  const received = useFeedback();
-  const submitted = useSubmittedFeedback();
+  const received = useFeedback(true, "all", EMPTY_DATE_RANGE, id);
+  const submitted = useSubmittedFeedback(true, id);
   const client = useQueryClient();
   const join = useMutation({
     mutationFn: () =>
@@ -313,7 +313,10 @@ export function MatchDetails({ id }: { id: string }) {
   const visible = [
     ...new Map(
       [...(received.data?.rows ?? []), ...(submitted.data?.rows ?? [])]
-        .filter((f) => f.matchId === id)
+        .filter(
+          (f) =>
+            f.matchId === id || f.matches?.some((match) => match.id === id),
+        )
         .map((f) => [f.id, f]),
     ).values(),
   ].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -391,7 +394,9 @@ export function MatchDetails({ id }: { id: string }) {
                   </div>
                   {p.userId && p.userId !== me.id && (
                     <Button variant="outline" asChild>
-                      <Link href={`/give-feedback/${p.userId}?match=${id}`}>
+                      <Link
+                        href={`/give-feedback/${p.userId}?${new URLSearchParams({ match: id, returnTo: `/matches/${id}` })}`}
+                      >
                         Give feedback
                       </Link>
                     </Button>

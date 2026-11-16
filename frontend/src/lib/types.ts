@@ -26,6 +26,11 @@ export interface Rating {
   comment?: string | null;
 }
 export interface Feedback {
+  matches?: {
+    id: string;
+    description?: string | null;
+    playedAt?: string | null;
+  }[];
   reviewerUsername?: string | null;
   id: string;
   recipientId: string;

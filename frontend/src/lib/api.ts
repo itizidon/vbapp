@@ -12,6 +12,8 @@ export async function gql<T>(
 ): Promise<T> {
   const response = await fetch("/api/graphql", {
     method: "POST",
+    redirect: "error",
+    cache: "no-store",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, variables }),
   });
@@ -32,5 +34,5 @@ export async function gql<T>(
 }
 export const USER_FIELDS = "id username email createdAt isPublic";
 export const FEEDBACK_FIELDS =
-  "id recipientId matchId sportId reviewerId reviewerUsername guestName overallComment createdAt status analyticsAllowed evidenceAllowed ratings { skillId rating comment }";
+  "id recipientId matchId matches {id description playedAt} sportId reviewerId reviewerUsername guestName overallComment createdAt status analyticsAllowed evidenceAllowed ratings { skillId rating comment }";
 export const CATALOG = `query Catalog { sports { id name slug skills { id name slug sportId active requiredForSelfAssessment description } } }`;

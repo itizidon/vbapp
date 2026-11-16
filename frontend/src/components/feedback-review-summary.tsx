@@ -50,15 +50,15 @@ export function FeedbackReviewSummary({
                   </span>
                   <strong>{rating} / 5</strong>
                 </div>
-                {answer?.comment.trim() && (
-                  <p className="break-anywhere whitespace-pre-wrap">
-                    {answer.comment}
-                  </p>
-                )}
               </>
             ) : (
               <p className="feedback-skipped">
                 {step.skill ? "Skipped" : "Unavailable"}
+              </p>
+            )}
+            {answer?.comment.trim() && !answer.skipped && (
+              <p className="break-anywhere whitespace-pre-wrap">
+                {answer.comment}
               </p>
             )}
           </article>

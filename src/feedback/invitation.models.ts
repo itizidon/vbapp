@@ -5,6 +5,8 @@ import {
   ObjectType,
   GraphQLISODateTime,
 } from "@nestjs/graphql";
+import { FeedbackReviewMode } from "@prisma/client";
+import "./request.models";
 import { SportModel, MemberModel } from "../common/models";
 @ObjectType()
 export class InvitedTeamModel {
@@ -21,6 +23,9 @@ export class InvitedMatchModel {
 }
 @ObjectType()
 export class FeedbackInvitationModel {
+  @Field() guestSession!: boolean;
+  @Field(() => FeedbackReviewMode) reviewMode!: FeedbackReviewMode;
+  @Field(() => [InvitedMatchModel]) matches!: InvitedMatchModel[];
   @Field(() => MemberModel, { nullable: true }) assignedReviewer?: {
     id: string;
     username: string;

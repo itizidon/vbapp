@@ -119,3 +119,7 @@ The complete internal skill rating system and self-assessment history are implem
 ## Assigned feedback approvals
 
 Feedback invitations can optionally designate a registered reviewer. Assigned drafts remain private and Pending until that reviewer approves or rejects them from Account. Approval atomically publishes feedback and integrates with existing internal ratings. See [workflow, GraphQL operations, migration and Railway deployment instructions](docs/feedback-approvals.md).
+
+## Multi-match feedback requests
+
+Feedback links can review selected matches individually or as one combined review. Same-device individual submissions queue every selected match for the assigned giver’s independent approval. See [behavior, compatibility, API, deployment and validation](docs/multi-match-feedback.md). Apply the additive `20261113000000_multi_match_feedback` migration explicitly before deploying the matching backend/frontend; no automatic migration or backfill is added.

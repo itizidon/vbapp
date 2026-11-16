@@ -6,6 +6,11 @@ import { useUser } from "@/lib/hooks";
 import { Button } from "./ui/button";
 import { ErrorState, Pending } from "./common";
 export interface ApprovalCard {
+  matches?: {
+    id: string;
+    description?: string | null;
+    playedAt?: string | null;
+  }[];
   id: string;
   recipientUsername: string;
   status: string;
@@ -39,7 +44,7 @@ export function PendingFeedbackApprovals() {
     enabled: !!user.data,
     queryFn: () =>
       gql<{ myPendingFeedbackApprovals: ApprovalQueue }>(
-        `query PendingApprovals{myPendingFeedbackApprovals{totalCount nextCursor items{id recipientUsername status createdAt overallComment guestName match{id description playedAt} ratings{skillId skillName rating comment}}}}`,
+        `query PendingApprovals{myPendingFeedbackApprovals{totalCount nextCursor items{id recipientUsername status createdAt overallComment guestName matches{id description playedAt} match{id description playedAt} ratings{skillId skillName rating comment}}}}`,
       ),
     refetchOnWindowFocus: "always",
   });
@@ -153,7 +158,24 @@ export function PendingFeedbackApprovals() {
               <span className="text-xs">(submitted name)</span>
             </p>
           )}
-          {card.match && (
+          {!!card.matches?.length && (
+            <div className="rounded-lg bg-muted p-3 text-sm">
+              <p className="font-semibold">
+                {card.matches.length > 1
+                  ? `Combined review · ${card.matches.length} matches`
+                  : "Match feedback"}
+              </p>
+              {card.matches.map((match) => (
+                <p className="break-anywhere" key={match.id}>
+                  {match.description || "Match"} ·{" "}
+                  {match.playedAt
+                    ? new Date(match.playedAt).toLocaleString()
+                    : "Date not recorded"}
+                </p>
+              ))}
+            </div>
+          )}
+          {card.match && !card.matches?.length && (
             <div className="rounded-lg bg-muted p-3 text-sm">
               <p className="break-anywhere font-semibold">
                 {card.match.description || "Match feedback"}

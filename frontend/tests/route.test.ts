@@ -107,3 +107,69 @@ it("protects tokens returned under an aliased authentication operation", async (
   expect((await response.json()).data.session.accessToken).toBeUndefined();
   expect(response.headers.get("set-cookie")).toContain("HttpOnly");
 });
+
+it.each(["login", "register"])(
+  "forwards %s credentials only in the backend JSON body",
+  async (operation) => {
+    vi.stubEnv("GRAPHQL_API_URL", "https://api.example.test/graphql");
+    const upstream = vi.fn().mockResolvedValue({
+      status: 200,
+      json: async () => ({ data: {} }),
+    });
+    vi.stubGlobal("fetch", upstream);
+    const body = {
+      query: `mutation Auth($input:Input!){${operation}(input:$input){accessToken}}`,
+      variables: {
+        input: { login: "dummy-account", password: "dummy-password" },
+      },
+    };
+    const req = request(body);
+    req.cookies.set("courtside_session", "dummy-session");
+    await POST(req);
+    const [url, options] = upstream.mock.calls[0];
+    expect(url).toBe("https://api.example.test/graphql");
+    expect(options).toMatchObject({
+      method: "POST",
+      redirect: "error",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer dummy-session",
+      },
+    });
+    expect(JSON.parse(options.body)).toEqual(body);
+  },
+);
+
+it("removes every token in multiple authentication results and secures the production cookie", async () => {
+  vi.stubEnv("NODE_ENV", "production");
+  const jwt = `header.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 900 })).toString("base64url")}.signature`;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue({
+      status: 200,
+      json: async () => ({
+        data: {
+          first: { accessToken: jwt, user: { id: "u" } },
+          second: { accessToken: jwt, user: { id: "u" } },
+        },
+      }),
+    }),
+  );
+  const response = await POST(
+    request({
+      query: "mutation {first:login{accessToken} second:login{accessToken}}",
+    }),
+  );
+  expect(await response.json()).toEqual({
+    data: {
+      first: { user: { id: "u" } },
+      second: { user: { id: "u" } },
+    },
+  });
+  const cookie = response.headers.get("set-cookie");
+  expect(cookie).toContain("HttpOnly");
+  expect(cookie).toContain("Secure");
+  expect(cookie).toContain("SameSite=lax");
+  expect(response.headers.get("cache-control")).toBe("no-store");
+});

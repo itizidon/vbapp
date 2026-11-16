@@ -9,6 +9,7 @@ import {
 import { ReviewerPicker } from "../src/components/reviewer-picker";
 import { FeedbackSubmissionForm } from "../src/components/feedback-form";
 vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn() }),
   usePathname: () => "/f/opaque-token",
   useSearchParams: () => new URLSearchParams(),
 }));
@@ -265,8 +266,9 @@ it("shows assigned reviewer read-only and submits a pending draft through the in
   );
   await screen.findByText("@DesignatedReviewer");
   expect(
-    screen.getByText(/Only the assigned player can approve/),
+    screen.getByText(/@DesignatedReviewer must sign in and approve/),
   ).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Card Review" }));
   for (let i = 0; i < 2; i++)
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
   fireEvent.click(screen.getByRole("radio", { name: "Passing: 4 out of 5" }));

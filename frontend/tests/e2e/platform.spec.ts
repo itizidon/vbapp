@@ -142,7 +142,7 @@ async function api(
       id: sportId,
       name: "Beach Volleyball",
       slug: "beach-volleyball",
-      skills: [feedbackSkill],
+      skills: state.historySkills ?? [feedbackSkill],
     };
     if (q.includes("FeedbackInvitation")) {
       const claims = JSON.parse(
@@ -586,6 +586,7 @@ async function noOverflow(page: Page) {
   expect(size.scroll).toBeLessThanOrEqual(size.width);
 }
 async function openPassingCard(page: Page) {
+  await page.getByRole("button", { name: "Card Review", exact: true }).click();
   await page
     .getByRole("article", { name: "Attacking feedback card" })
     .waitFor();
@@ -692,7 +693,9 @@ test("request, copy, guest review, confirmation, and recipient feedback", async 
   await reviewer
     .getByRole("textbox", { name: "Written feedback" })
     .fill("Helpful on court.");
-  await reviewer.getByRole("textbox", { name: "Your name" }).fill("Taylor");
+  await reviewer
+    .getByRole("textbox", { name: "Guest name (optional)" })
+    .fill("Taylor");
   await noOverflow(reviewer);
   await reviewer.getByRole("button", { name: "Submit Feedback" }).click();
   await expect(
@@ -730,7 +733,9 @@ test("match-bound guest links preserve match scope without private match reads",
   await openPassingCard(page);
   await page.getByRole("radio", { name: "Passing: 4 out of 5" }).click();
   await reviewPassingFeedback(page);
-  await page.getByRole("textbox", { name: "Your name" }).fill("Taylor");
+  await page
+    .getByRole("textbox", { name: "Guest name (optional)" })
+    .fill("Taylor");
   await page.getByRole("button", { name: "Submit Feedback" }).click();
   await expect(
     page.getByRole("heading", { name: "Thanks for your feedback." }),
@@ -948,7 +953,9 @@ test("login in another tab automatically fills the reviewer account name", async
   const authState = { loggedIn: false };
   await api(page, { guest: true, authState });
   await page.goto(`/f/${token()}`);
-  await expect(page.getByRole("textbox", { name: "Your name" })).toBeEditable();
+  await expect(
+    page.getByRole("textbox", { name: "Guest name (optional)" }),
+  ).toBeEditable();
   const login = await context.newPage();
   await api(login, { authState });
   await login.goto(
@@ -961,19 +968,22 @@ test("login in another tab automatically fills the reviewer account name", async
     .getByLabel("Password", { exact: true })
     .fill("a-valid-test-password");
   await login.getByRole("button", { name: "Sign in", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: "Your name" })).toHaveValue(
-    "Alex",
-  );
+  await expect(page.getByText("@Alex", { exact: true })).toHaveCount(2);
   await expect(
-    page.getByRole("textbox", { name: "Your name" }),
-  ).toHaveAttribute("readonly", "");
+    page.getByRole("button", { name: "Guest", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole("textbox", { name: "Guest name (optional)" }),
+  ).toHaveCount(0);
   await noOverflow(page);
 });
 
 test("a skill comment requires a rating for that skill", async ({ page }) => {
   await api(page, { guest: true });
   await page.goto(`/f/${token()}`);
-  await page.getByRole("textbox", { name: "Your name" }).fill("Taylor");
+  await page
+    .getByRole("textbox", { name: "Guest name (optional)" })
+    .fill("Taylor");
   await openPassingCard(page);
   await page
     .getByRole("textbox", { name: "Add a comment (optional)" })
@@ -1800,6 +1810,7 @@ test("feedback artwork has immutable hashed URLs and supports light and dark the
       requestedImages.push(request.url());
   });
   await page.goto(`/f/${token()}`);
+  await page.getByRole("button", { name: "Card Review", exact: true }).click();
   const image = page.locator(".feedback-art-image");
   await expect
     .poll(() =>
@@ -1815,16 +1826,9 @@ test("feedback artwork has immutable hashed URLs and supports light and dark the
     .boundingBox();
   expect(cardBounds).not.toBeNull();
   expect(sidebarBounds).not.toBeNull();
-  if (info.project.use.viewport!.width >= 1024) {
-    expect(sidebarBounds!.x).toBeGreaterThanOrEqual(
-      cardBounds!.x + cardBounds!.width,
-    );
-    expect(Math.abs(sidebarBounds!.y - cardBounds!.y)).toBeLessThan(2);
-  } else {
-    expect(sidebarBounds!.y).toBeGreaterThanOrEqual(
-      cardBounds!.y + cardBounds!.height,
-    );
-  }
+  expect(sidebarBounds!.y + sidebarBounds!.height).toBeLessThanOrEqual(
+    cardBounds!.y,
+  );
   const source = new URL((await image.getAttribute("src"))!, page.url());
   const hashed = source.searchParams.get("url")!;
   expect(hashed).toMatch(
@@ -1915,4 +1919,90 @@ test("feedback artwork has immutable hashed URLs and supports light and dark the
       path: `/tmp/vbapp-feedback-review-${theme}-${info.project.name}.png`,
     });
   }
+});
+
+test("quick feedback shows five categories, expands descriptions and retains ratings in card mode", async ({
+  page,
+}, info) => {
+  const state = store();
+  state.historySkills = [
+    "Attack",
+    "Defense",
+    "Passing",
+    "Setting",
+    "Serving",
+  ].map((name) => ({
+    id: name === "Passing" ? skillId : crypto.randomUUID(),
+    name,
+    slug: name.toLowerCase(),
+    sportId,
+    active: true,
+    requiredForSelfAssessment: false,
+    description: `${name} description from the backend.`,
+  }));
+  await api(page, { guest: true, state });
+  await page.goto(`/f/${token()}`);
+  const quick = page.getByRole("region", { name: "Quick category ratings" });
+  await expect(quick.getByRole("radiogroup")).toHaveCount(5);
+  await expect(page.locator(".feedback-art-image")).toHaveCount(0);
+  if (page.viewportSize()!.width >= 1024) {
+    const last = await quick
+      .getByRole("radiogroup", { name: "Serving rating" })
+      .boundingBox();
+    expect(last!.y + last!.height).toBeLessThanOrEqual(
+      page.viewportSize()!.height,
+    );
+  }
+  await page.screenshot({
+    path: `/tmp/vbapp-quick-feedback-default-${info.project.name}.png`,
+    fullPage: true,
+  });
+  await expect(
+    page.getByRole("button", { name: "Quick Review", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByText("Passing description from the backend."),
+  ).not.toBeVisible();
+  await quick.getByRole("button", { name: "Passing", exact: true }).click();
+  await expect(
+    page.getByText("Passing description from the backend."),
+  ).toBeVisible();
+  await page.getByRole("radio", { name: "Passing: 4 out of 5" }).click();
+  await page.getByLabel("Passing comment").fill("Consistent first touch.");
+  const identity = await page
+    .getByRole("complementary", { name: "Feedback user information" })
+    .boundingBox();
+  const ratings = await quick.boundingBox();
+  expect(identity!.y + identity!.height).toBeLessThanOrEqual(ratings!.y);
+  await noOverflow(page);
+  await page.screenshot({
+    path: `/tmp/vbapp-quick-feedback-${info.project.name}.png`,
+    fullPage: true,
+  });
+  await openPassingCard(page);
+  await expect(
+    page.getByRole("radio", { name: "Passing: 4 out of 5" }),
+  ).toBeChecked();
+  await expect(page.getByLabel("Add a comment")).toHaveValue(
+    "Consistent first touch.",
+  );
+  await page.getByRole("button", { name: "Quick Review", exact: true }).click();
+  await expect(
+    page.getByRole("radio", { name: "Passing: 4 out of 5" }),
+  ).toBeChecked();
+  await page
+    .getByRole("button", { name: "Review & Submit", exact: true })
+    .click();
+  await expect(
+    page.getByRole("article", { name: "Passing summary" }),
+  ).toContainText("Consistent first touch.");
+  await page
+    .getByRole("button", { name: "Submit Feedback", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Thanks for your feedback." }),
+  ).toBeVisible();
+  expect(state.submissions[0].ratings).toEqual([
+    { skillId, rating: 4, comment: "Consistent first touch." },
+  ]);
 });

@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,6 +16,13 @@ import type { z } from "zod";
 import { Brand, ThemeToggle } from "./app-shell";
 import { Button } from "./ui/button";
 import { RatingStars, Pending, ErrorState } from "./common";
+// Server-rendered auth controls stay locked until the client handler is ready.
+const subscribeReady = () => () => {};
+const clientReady = () => true;
+const serverReady = () => false;
+function useAuthReady() {
+  return useSyncExternalStore(subscribeReady, clientReady, serverReady);
+}
 function AuthFrame({
   signup,
   children,
@@ -71,6 +78,11 @@ function AuthFrame({
               : "Sign in to see what’s moving your game forward."}
           </p>
           {children}
+          <noscript>
+            <p className="error mt-4">
+              Enable JavaScript to sign in or create an account safely.
+            </p>
+          </noscript>
           <p className="subtle mt-7 text-center text-sm">
             {signup ? "Already part of the team? " : "New around here? "}
             <Link
@@ -86,6 +98,7 @@ function AuthFrame({
   );
 }
 export function LoginForm({ returnTo = "/matches" }: { returnTo?: string }) {
+  const ready = useAuthReady();
   const router = useRouter();
   const client = useQueryClient();
   const form = useForm<z.infer<typeof loginSchema>>({
@@ -108,7 +121,13 @@ export function LoginForm({ returnTo = "/matches" }: { returnTo?: string }) {
   return (
     <AuthFrame signup={false} returnTo={returnTo}>
       <form
-        onSubmit={form.handleSubmit((input) => mutation.mutate(input))}
+        method="post"
+        action="/api/auth/form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (ready)
+            void form.handleSubmit((input) => mutation.mutate(input))(event);
+        }}
         className="space-y-5"
         noValidate
       >
@@ -142,7 +161,7 @@ export function LoginForm({ returnTo = "/matches" }: { returnTo?: string }) {
             {mutation.error.message}
           </p>
         )}
-        <Button className="w-full" disabled={mutation.isPending}>
+        <Button className="w-full" disabled={!ready || mutation.isPending}>
           {mutation.isPending ? (
             <Pending label="Signing in…" />
           ) : (
@@ -161,6 +180,7 @@ export function LoginForm({ returnTo = "/matches" }: { returnTo?: string }) {
 }
 const signupFormSchema = signupSchema.omit({ sportId: true });
 export function SignupForm({ returnTo = "/matches" }: { returnTo?: string }) {
+  const ready = useAuthReady();
   const router = useRouter();
   const client = useQueryClient();
   const catalog = useCatalog();
@@ -220,7 +240,12 @@ export function SignupForm({ returnTo = "/matches" }: { returnTo?: string }) {
   return (
     <AuthFrame signup returnTo={returnTo}>
       <form
-        onSubmit={form.handleSubmit(submit)}
+        method="post"
+        action="/api/auth/form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (ready) void form.handleSubmit(submit)(event);
+        }}
         className="space-y-5"
         noValidate
       >
@@ -336,7 +361,11 @@ export function SignupForm({ returnTo = "/matches" }: { returnTo?: string }) {
         <Button
           className="w-full"
           disabled={
-            mutation.isPending || catalog.isPending || !!catalog.error || !sport
+            !ready ||
+            mutation.isPending ||
+            catalog.isPending ||
+            !!catalog.error ||
+            !sport
           }
         >
           {mutation.isPending ? (

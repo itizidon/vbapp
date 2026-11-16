@@ -103,10 +103,19 @@ type FeedbackCount {
 type FeedbackInvitationModel {
   approvalRequired: Boolean!
   assignedReviewer: MemberModel
+  guestSession: Boolean!
   match: InvitedMatchModel
+  matches: [InvitedMatchModel!]!
   recipientId: ID!
   recipientUsername: String!
+  reviewMode: FeedbackReviewMode!
   sport: SportModel!
+}
+
+type FeedbackMatchReference {
+  description: String
+  id: ID!
+  playedAt: DateTime
 }
 
 type FeedbackModel {
@@ -117,6 +126,7 @@ type FeedbackModel {
   guestName: String
   id: ID!
   matchId: ID
+  matches: [FeedbackMatchReference!]
   overallComment: String
   ratings: [FeedbackRatingModel!]
   recipientId: ID!
@@ -136,6 +146,11 @@ type FeedbackRatingModel {
   comment: String
   rating: Int!
   skillId: ID!
+}
+
+enum FeedbackReviewMode {
+  COMBINED_MATCHES
+  INDIVIDUAL_MATCHES
 }
 
 enum FeedbackStatus {
@@ -223,6 +238,14 @@ type MatchParticipantModel {
   userId: ID
 }
 
+input MatchReviewInput {
+  analyticsAllowed: Boolean
+  evidenceAllowed: Boolean
+  matchId: ID
+  overallComment: String
+  ratings: [RatingInput!]!
+}
+
 enum MatchStatus {
   CANCELLED
   COMPLETED
@@ -249,7 +272,7 @@ type Mutation {
   addMatchParticipant(input: AddParticipantInput!): MatchParticipantModel!
   approveFeedback(feedbackId: ID!): FeedbackModel!
   assignParticipantToTeam(participantId: ID!, teamId: ID): MatchParticipantModel!
-  createGuestFeedbackInvite(assignedReviewerId: ID, matchId: ID, recipientId: ID!, sportId: ID!): GuestInvitePayload!
+  createGuestFeedbackInvite(assignedReviewerId: ID, matchId: ID, matchIds: [ID!], recipientId: ID!, reviewMode: FeedbackReviewMode! = INDIVIDUAL_MATCHES, sportId: ID!): GuestInvitePayload!
   createMatch(input: CreateMatchInput): MatchModel!
   createMatchTeam(input: CreateTeamInput!): MatchTeamModel!
   createSelfAssessment(input: CreateSelfAssessmentInput!): SelfAssessmentModel!
@@ -262,7 +285,9 @@ type Mutation {
   removeMatchParticipant(id: ID!): MatchParticipantModel!
   removeMatchTeam(id: ID!): MatchTeamModel!
   revokeFeedbackLink(linkId: ID!): Boolean!
+  startGuestReviewSession(completedSubmissionId: ID!, token: String!): GuestInvitePayload!
   submitFeedback(input: SubmitFeedbackInput!): FeedbackModel!
+  submitFeedbackRequest(input: SubmitFeedbackRequestInput!): [FeedbackModel!]!
   submitGuestFeedback(input: SubmitGuestFeedbackInput!): FeedbackModel!
   updateAccountVisibility(isPublic: Boolean!): UserModel!
   updateFeedback(input: UpdateFeedbackInput!): FeedbackModel!
@@ -282,6 +307,7 @@ type PendingApprovalModel {
   id: ID!
   match: ApprovalMatchModel
   matchId: ID
+  matches: [FeedbackMatchReference!]
   overallComment: String
   ratings: [ApprovalRatingModel!]!
   recipientId: ID!
@@ -341,7 +367,7 @@ type Query {
   playerMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime, userId: ID!): [MatchModel!]!
   playerProfile(id: ID!): PlayerDirectoryModel!
   playerSuggestions(search: String!): [PlayerDirectoryModel!]!
-  receivedFeedback(createdBefore: DateTime, createdFrom: DateTime, cursor: String, matchOnly: Boolean): [FeedbackModel!]!
+  receivedFeedback(createdBefore: DateTime, createdFrom: DateTime, cursor: String, matchId: ID, matchOnly: Boolean): [FeedbackModel!]!
   searchPlayers(cursor: String, search: String! = ""): [PlayerDirectoryModel!]!
   selfAssessmentHistory(before: DateTime, cursor: String, from: DateTime, limit: Int! = 100, skillId: ID!, userId: ID!): RatingHistoryPage!
   selfVsPeerRatings(sportId: ID!): [SelfVsPeerRating!]!
@@ -350,7 +376,7 @@ type Query {
   skills(sportId: ID!): [SkillModel!]!
   sport(id: ID!): SportModel
   sports: [SportModel!]!
-  submittedFeedback(cursor: String): [FeedbackModel!]!
+  submittedFeedback(cursor: String, matchId: ID): [FeedbackModel!]!
   userMatchHistory: [MatchModel!]!
   userMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime): [MatchModel!]!
   userSelfAssessment(sportId: ID!, userId: ID!): SelfAssessmentModel
@@ -478,6 +504,15 @@ input SubmitFeedbackInput {
   ratings: [RatingInput!]!
   recipientId: ID!
   sportId: ID!
+}
+
+input SubmitFeedbackRequestInput {
+  asGuest: Boolean
+  assignedReviewerId: ID
+  guestName: String
+  reviews: [MatchReviewInput!]!
+  submissionId: ID!
+  token: String!
 }
 
 input SubmitGuestFeedbackInput {

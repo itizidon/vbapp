@@ -2,7 +2,7 @@
 import { ReviewerPicker } from "./reviewer-picker";
 import { QRCodeSVG } from "qrcode.react";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
 import {
   Copy,
@@ -23,7 +23,10 @@ import {
   DialogTitle,
   DialogDescription,
 } from "./ui/dialog";
-import { MatchSelector } from "./match-selector";
+import {
+  FeedbackMatchPicker,
+  type FeedbackReviewMode,
+} from "./feedback-match-picker";
 import { ErrorState, Pending } from "./common";
 export function FeedbackLinkShare({
   url,
@@ -110,9 +113,21 @@ export function FeedbackRequestDialog({
   label?: string;
 }) {
   const router = useRouter();
+  const sourcePath = usePathname();
+  function reviewContext() {
+    return new URLSearchParams({
+      mode: "device",
+      returnTo: sourcePath + window.location.search,
+    }).toString();
+  }
   const [open, setOpen] = useState(false);
   const [reviewer, setReviewer] = useState<Member | null>(null);
-  const [matchId, setMatchId] = useState(initialMatch?.id ?? "");
+  const [matchIds, setMatchIds] = useState<string[]>(
+    initialMatch ? [initialMatch.id] : [],
+  );
+  const [matchRequest, setMatchRequest] = useState(!!initialMatch);
+  const [reviewMode, setReviewMode] =
+    useState<FeedbackReviewMode>("INDIVIDUAL_MATCHES");
   const [invite, setInvite] = useState<{
     url: string;
     expiresAt: string;
@@ -136,22 +151,27 @@ export function FeedbackRequestDialog({
           "Beach Volleyball is unavailable. Try again after the catalog loads.",
         );
       if (
-        matchId &&
-        !available.some(
-          (m) =>
-            m.id === matchId &&
-            m.participants?.some((p) => p.userId === user.data!.me.id),
-        )
+        matchRequest &&
+        (!matchIds.length ||
+          matchIds.some(
+            (id) =>
+              !available.some(
+                (m) =>
+                  m.id === id &&
+                  m.participants?.some((p) => p.userId === user.data!.me.id),
+              ),
+          ))
       )
-        throw new Error("You must be a participant in the selected match.");
+        throw new Error("Select at least one match you participated in.");
       return gql<{
         createGuestFeedbackInvite: { token: string; expiresAt: string };
       }>(
-        `mutation Invite($recipientId:ID!,$sportId:ID!,$matchId:ID,$assignedReviewerId:ID){createGuestFeedbackInvite(recipientId:$recipientId,sportId:$sportId,matchId:$matchId,assignedReviewerId:$assignedReviewerId){token expiresAt}}`,
+        `mutation Invite($recipientId:ID!,$sportId:ID!,$matchIds:[ID!],$reviewMode:FeedbackReviewMode!,$assignedReviewerId:ID){createGuestFeedbackInvite(recipientId:$recipientId,sportId:$sportId,matchIds:$matchIds,reviewMode:$reviewMode,assignedReviewerId:$assignedReviewerId){token expiresAt}}`,
         {
           recipientId: user.data.me.id,
           sportId: sport.id,
-          matchId: matchId || null,
+          matchIds: matchRequest ? matchIds : [],
+          reviewMode,
           assignedReviewerId: reviewer?.id ?? null,
         },
       );
@@ -160,7 +180,7 @@ export function FeedbackRequestDialog({
       const path = `/f/${encodeURIComponent(value.token)}`;
       if (mode === "device") {
         setOpen(false);
-        router.push(`${path}?mode=device`);
+        router.push(`${path}?${reviewContext()}`);
       } else {
         setInvite({
           url: `${window.location.origin}${path}`,
@@ -176,7 +196,9 @@ export function FeedbackRequestDialog({
           setOpen(true);
           setInvite(null);
           setReviewer(null);
-          setMatchId(initialMatch?.id ?? "");
+          setMatchIds(initialMatch ? [initialMatch.id] : []);
+          setMatchRequest(!!initialMatch);
+          setReviewMode("INDIVIDUAL_MATCHES");
           create.reset();
         }}
       >
@@ -184,7 +206,7 @@ export function FeedbackRequestDialog({
         {label}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-2xl">
           <DialogTitle className="pr-9 text-xl font-bold">
             Request feedback
           </DialogTitle>
@@ -199,7 +221,9 @@ export function FeedbackRequestDialog({
                 variant="outline"
                 className="w-full"
                 onClick={() =>
-                  router.push(`${new URL(invite.url).pathname}?mode=device`)
+                  router.push(
+                    `${new URL(invite.url).pathname}?${reviewContext()}`,
+                  )
                 }
               >
                 <Smartphone size={16} />
@@ -214,16 +238,77 @@ export function FeedbackRequestDialog({
                 onChange={setReviewer}
                 disabled={create.isPending}
               />
-              <MatchSelector
-                matches={available}
-                value={matchId}
-                onChange={setMatchId}
-                locked={!!initialMatch}
-                scopedMatchId={initialMatch?.id}
-                hasMore={!initialMatch && matches.hasNextPage}
-                loadingMore={matches.isFetchingNextPage}
-                onLoadMore={() => matches.fetchNextPage()}
-              />
+              <div
+                role="group"
+                aria-label="Feedback context"
+                className="flex flex-wrap gap-2"
+              >
+                <Button
+                  variant="outline"
+                  aria-pressed={!matchRequest}
+                  onClick={() => setMatchRequest(false)}
+                >
+                  General feedback
+                </Button>
+                <Button
+                  variant="outline"
+                  aria-pressed={matchRequest}
+                  onClick={() => setMatchRequest(true)}
+                >
+                  Selected matches
+                </Button>
+              </div>
+              {matchRequest && (
+                <>
+                  <FeedbackMatchPicker
+                    matches={available}
+                    selected={matchIds}
+                    onChange={setMatchIds}
+                    hasMore={matches.hasNextPage}
+                    loadingMore={matches.isFetchingNextPage}
+                    onLoadMore={() => {
+                      void matches.fetchNextPage();
+                    }}
+                  />
+                  <div
+                    role="group"
+                    aria-label="Match review mode"
+                    className="feedback-request-modes"
+                  >
+                    <Button
+                      variant="outline"
+                      aria-pressed={reviewMode === "INDIVIDUAL_MATCHES"}
+                      onClick={() => setReviewMode("INDIVIDUAL_MATCHES")}
+                    >
+                      Review each match separately
+                    </Button>
+                    <Button
+                      variant="outline"
+                      aria-pressed={reviewMode === "COMBINED_MATCHES"}
+                      onClick={() => setReviewMode("COMBINED_MATCHES")}
+                    >
+                      One review for all matches
+                    </Button>
+                  </div>
+                  <p className="subtle text-sm">
+                    {reviewMode === "INDIVIDUAL_MATCHES"
+                      ? "Your reviewer will rate each selected match individually. Each match receives its own feedback."
+                      : "Your reviewer will provide one overall review covering all selected matches."}
+                  </p>
+                  <p className="text-sm">
+                    {matchIds.length} selected ·{" "}
+                    {reviewMode === "INDIVIDUAL_MATCHES"
+                      ? matchIds.length * 5
+                      : 5}{" "}
+                    skill steps
+                  </p>
+                  {!matchIds.length && (
+                    <p role="status" className="subtle">
+                      Select at least one match.
+                    </p>
+                  )}
+                </>
+              )}
               {!initialMatch && matches.isPending && (
                 <p className="subtle text-xs">
                   Loading your matches. You can still request general feedback.
@@ -253,7 +338,11 @@ export function FeedbackRequestDialog({
               )}
               <Button
                 className="w-full"
-                disabled={!sport || create.isPending}
+                disabled={
+                  !sport ||
+                  create.isPending ||
+                  (matchRequest && !matchIds.length)
+                }
                 onClick={() => create.mutate("share")}
               >
                 {create.isPending && create.variables === "share" ? (
@@ -268,7 +357,11 @@ export function FeedbackRequestDialog({
               <Button
                 variant="outline"
                 className="w-full"
-                disabled={!sport || create.isPending}
+                disabled={
+                  !sport ||
+                  create.isPending ||
+                  (matchRequest && !matchIds.length)
+                }
                 onClick={() => create.mutate("device")}
               >
                 {create.isPending && create.variables === "device" ? (

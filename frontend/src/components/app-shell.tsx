@@ -26,11 +26,12 @@ const tabs = [
   { href: "/analytics", label: "Analytics", Icon: TrendingUp },
   { href: "/account", label: "Account", Icon: UserRound },
 ];
-export function Brand() {
+export function Brand({ href = "/" }: { href?: string }) {
   return (
     <Link
-      href="/"
-      className="flex shrink-0 items-center gap-2 text-lg font-bold tracking-tight"
+      href={href}
+      aria-label="BVBTips home"
+      className="flex shrink-0 cursor-pointer items-center gap-2 rounded-lg text-lg font-bold tracking-tight transition-opacity hover:opacity-80 focus-visible:outline-2 focus-visible:outline-primary"
     >
       <span className="grid size-9 place-items-center rounded-xl bg-primary text-white">
         <Activity size={23} />

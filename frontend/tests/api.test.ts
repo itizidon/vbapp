@@ -11,6 +11,28 @@ it("passes variables to the same-origin server route", async () => {
   expect(await gql("query Me {me{id}}", {})).toEqual({ me: { id: "u" } });
   expect(fetch.mock.calls[0][0]).toBe("/api/graphql");
 });
+it("sends login credentials in a noncached JSON POST without following redirects", async () => {
+  const fetch = vi.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    json: async () => ({ data: { login: { user: { id: "u" } } } }),
+  });
+  vi.stubGlobal("fetch", fetch);
+  const input = { login: "dummy-account", password: "dummy-password" };
+  await gql(
+    "mutation Login($input:LoginInput!){login(input:$input){user{id}}}",
+    { input },
+  );
+  const [url, options] = fetch.mock.calls[0];
+  expect(url).toBe("/api/graphql");
+  expect(options).toMatchObject({
+    method: "POST",
+    redirect: "error",
+    cache: "no-store",
+    headers: { "Content-Type": "application/json" },
+  });
+  expect(JSON.parse(options.body).variables).toEqual({ input });
+});
 it("surfaces GraphQL errors even with HTTP 200", async () => {
   vi.stubGlobal(
     "fetch",

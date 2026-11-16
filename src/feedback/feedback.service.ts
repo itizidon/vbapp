@@ -10,7 +10,7 @@ import {
 } from "@nestjs/common";
 import { dateRangeBounds } from "../common/date-range";
 import { JwtService } from "@nestjs/jwt";
-import { Prisma, FeedbackStatus } from "@prisma/client";
+import { Prisma, FeedbackStatus, FeedbackReviewMode } from "@prisma/client";
 import { randomBytes, createHash } from "crypto";
 import { PrismaService } from "../prisma/prisma.service";
 import {
@@ -18,7 +18,10 @@ import {
   SubmitGuestFeedbackInput,
   UpdateFeedbackInput,
 } from "../common/inputs";
+import { SubmitFeedbackRequestInput } from "./request.models";
 type Invite = {
+  matchIds?: string[];
+  reviewMode?: FeedbackReviewMode;
   kind: "guest-feedback";
   nonce: string;
   recipientId: string;
@@ -26,6 +29,7 @@ type Invite = {
   matchId?: string;
   linkId?: string;
   assignedReviewerId?: string;
+  guestSession?: boolean;
 };
 @Injectable()
 export class FeedbackService {
@@ -40,6 +44,8 @@ export class FeedbackService {
     sportId: string,
     matchId?: string,
     assignedReviewerId?: string,
+    matchIds?: string[],
+    reviewMode: FeedbackReviewMode = FeedbackReviewMode.INDIVIDUAL_MATCHES,
   ) {
     if (actor !== recipientId)
       throw new ForbiddenException(
@@ -48,6 +54,26 @@ export class FeedbackService {
     if (!(await this.db.sport.findUnique({ where: { id: sportId } })))
       throw new NotFoundException("Sport not found");
     await this.validateMatch(recipientId, sportId, matchId);
+    if (!Object.values(FeedbackReviewMode).includes(reviewMode))
+      throw new BadRequestException("Invalid feedback mode");
+    if (matchIds) {
+      if (
+        matchIds.length > 20 ||
+        new Set(matchIds).size !== matchIds.length ||
+        matchIds.some((id) => !isUUID(id))
+      )
+        throw new BadRequestException("Select at most 20 distinct matches");
+      if (matchId && (matchIds.length !== 1 || matchIds[0] !== matchId))
+        throw new BadRequestException("Conflicting match selection");
+      await this.validateRequestMatches(
+        this.db,
+        recipientId,
+        sportId,
+        matchIds,
+      );
+      matchId = matchIds.length === 1 ? matchIds[0] : undefined;
+    }
+
     if (assignedReviewerId) {
       if (!isUUID(assignedReviewerId) || assignedReviewerId === recipientId)
         throw new BadRequestException(
@@ -69,6 +95,17 @@ export class FeedbackService {
         sportId,
         matchId,
         assignedReviewerId,
+        mode: reviewMode,
+        ...(matchIds?.length
+          ? {
+              requestMatches: {
+                create: matchIds.map((id, displayOrder) => ({
+                  matchId: id,
+                  displayOrder,
+                })),
+              },
+            }
+          : {}),
         tokenHash: this.tokenHash(token),
         expiresAt,
       },
@@ -100,6 +137,7 @@ export class FeedbackService {
     const invitation = token ? await this.verifyInvitation(token) : null;
     if (!invitation && !actor)
       throw new UnauthorizedException("Sign in or open a feedback invitation");
+    if (invitation?.guestSession) return [];
     const recipient = invitation?.recipientId ?? recipientId;
     if (!recipient || !isUUID(recipient))
       throw new BadRequestException("A valid recipient is required");
@@ -131,11 +169,14 @@ export class FeedbackService {
       if (/^[a-f0-9]{64}$/.test(token)) {
         const link = await tx.feedbackLink.findUnique({
           where: { tokenHash: this.tokenHash(token) },
+          include: { requestMatches: { orderBy: { displayOrder: "asc" } } },
         });
         if (!link || link.revokedAt || link.expiresAt.getTime() <= Date.now())
           throw new Error();
         return {
           kind: "guest-feedback",
+          matchIds: link.requestMatches?.map((row) => row.matchId) ?? [],
+          reviewMode: link.mode,
           nonce: link.id,
           linkId: link.id,
           recipientId: link.recipientId,
@@ -145,9 +186,55 @@ export class FeedbackService {
           exp: Math.floor(link.expiresAt.getTime() / 1000),
         };
       }
-      const payload = await this.jwt.verifyAsync<Invite & { exp: number }>(
-        token,
-      );
+      const claims = await this.jwt.verifyAsync<{
+        kind: string;
+        linkId?: string;
+        sourceSubmissionId?: string;
+        exp: number;
+      }>(token);
+      if (claims.kind === "guest-feedback-followup") {
+        if (
+          !isUUID(claims.linkId) ||
+          !isUUID(claims.sourceSubmissionId) ||
+          !Number.isInteger(claims.exp)
+        )
+          throw new Error();
+        const link = await tx.feedbackLink.findUnique({
+          where: { id: claims.linkId },
+          include: { requestMatches: { orderBy: { displayOrder: "asc" } } },
+        });
+        const source = await tx.feedbackSubmission.findFirst({
+          where: {
+            id: claims.sourceSubmissionId,
+            feedbackLinkId: claims.linkId,
+            feedback: { some: {} },
+          },
+          select: { id: true },
+        });
+        if (
+          !link ||
+          !source ||
+          link.revokedAt ||
+          !link.requestMatches.length ||
+          link.expiresAt.getTime() <= Date.now() ||
+          claims.exp * 1000 > link.expiresAt.getTime() ||
+          claims.exp * 1000 <= Date.now()
+        )
+          throw new Error();
+        return {
+          kind: "guest-feedback",
+          guestSession: true,
+          nonce: source.id,
+          linkId: link.id,
+          recipientId: link.recipientId,
+          sportId: link.sportId,
+          matchId: link.matchId ?? undefined,
+          matchIds: link.requestMatches.map((row) => row.matchId),
+          reviewMode: link.mode,
+          exp: claims.exp,
+        };
+      }
+      const payload = claims as Invite & { exp: number };
       if (
         payload.kind !== "guest-feedback" ||
         !isUUID(payload.nonce) ||
@@ -235,7 +322,17 @@ export class FeedbackService {
         unassignedPlayers: source.participants.map(name),
       };
     }
+    const requestMatches = payload.matchIds?.length
+      ? await this.requestMatchPreviews(
+          payload.recipientId,
+          payload.sportId,
+          payload.matchIds,
+        )
+      : [];
     return {
+      guestSession: !!payload.guestSession,
+      reviewMode: payload.reviewMode ?? FeedbackReviewMode.INDIVIDUAL_MATCHES,
+      matches: requestMatches,
       recipientId: payload.recipientId,
       recipientUsername: recipient.username,
       assignedReviewer: payload.assignedReviewerId
@@ -275,14 +372,17 @@ export class FeedbackService {
       expiresAt?: Date;
       linkToken?: string;
       submittedById?: string;
+      batch?: boolean;
+      submissionId?: string;
     },
+    transaction?: Prisma.TransactionClient,
   ) {
     if (identity.reviewerId === input.recipientId && !input.assignedReviewerId)
       throw new BadRequestException("Self-feedback is not allowed");
     const skillIds = input.ratings.map((r) => r.skillId);
     if (new Set(skillIds).size !== skillIds.length)
       throw new BadRequestException("Duplicate skill rating");
-    return ratingTransaction(this.db, async (tx) => {
+    const work = async (tx: Prisma.TransactionClient) => {
       const invitation = identity.linkToken
         ? await this.verifyInvitation(identity.linkToken, tx)
         : null;
@@ -290,9 +390,15 @@ export class FeedbackService {
         invitation &&
         (invitation.recipientId !== input.recipientId ||
           invitation.sportId !== input.sportId ||
-          (invitation.matchId ?? null) !== (input.matchId ?? null))
+          (identity.batch
+            ? invitation.reviewMode === FeedbackReviewMode.INDIVIDUAL_MATCHES
+              ? !invitation.matchIds?.includes(input.matchId ?? "")
+              : !!input.matchId
+            : (invitation.matchId ?? null) !== (input.matchId ?? null)))
       )
         throw new UnauthorizedException("Invitation does not match submission");
+      if (invitation?.matchIds?.length && !identity.batch)
+        throw new BadRequestException("Submit all request reviews together");
       if (
         invitation?.assignedReviewerId &&
         input.assignedReviewerId &&
@@ -381,6 +487,7 @@ export class FeedbackService {
       }
       const feedback = await tx.feedback.create({
         data: {
+          submissionId: identity.submissionId,
           recipientId: input.recipientId,
           sportId: input.sportId,
           matchId: input.matchId,
@@ -431,13 +538,294 @@ export class FeedbackService {
             capturedAt,
           })),
         });
-      if (!approvalRequired) await this.internal.syncFeedback(tx, feedback.id);
+      if (!approvalRequired && !identity.batch)
+        await this.internal.syncFeedback(tx, feedback.id);
       return tx.feedback.findUniqueOrThrow({
         where: { id: feedback.id },
-        include: { ratings: true, reviewerSkillSnapshots: true },
+        include: {
+          ratings: true,
+          reviewerSkillSnapshots: true,
+          associatedMatches: {
+            include: {
+              match: {
+                select: { id: true, description: true, playedAt: true },
+              },
+            },
+          },
+        },
+      });
+    };
+    return transaction ? work(transaction) : ratingTransaction(this.db, work);
+  }
+  private async validateRequestMatches(
+    tx: Prisma.TransactionClient | PrismaService,
+    recipientId: string,
+    sportId: string,
+    ids: string[],
+  ) {
+    if (!ids.length) return;
+    const rows = await tx.match.findMany({
+      where: {
+        id: { in: ids },
+        sportId,
+        participants: { some: { userId: recipientId } },
+      },
+      select: { id: true },
+    });
+    if (rows.length !== ids.length)
+      throw new BadRequestException(
+        "Every selected match must belong to this sport and include the recipient",
+      );
+  }
+  private async requestMatchPreviews(
+    recipientId: string,
+    sportId: string,
+    ids: string[],
+  ) {
+    const rows = await this.db.match.findMany({
+      where: {
+        id: { in: ids },
+        sportId,
+        participants: { some: { userId: recipientId } },
+      },
+      include: {
+        teams: {
+          orderBy: { teamNumber: "asc" },
+          include: {
+            participants: { include: { user: { select: { username: true } } } },
+          },
+        },
+        participants: {
+          where: { teamId: null },
+          include: { user: { select: { username: true } } },
+        },
+      },
+    });
+    if (rows.length !== ids.length)
+      throw new BadRequestException(
+        "A requested match is no longer available to this recipient",
+      );
+    const name = (p: {
+      guestName: string | null;
+      user: { username: string } | null;
+    }) => p.user?.username ?? p.guestName ?? "Player";
+    return ids.map((id) => {
+      const row = rows.find((r) => r.id === id)!;
+      return {
+        id: row.id,
+        playedAt: row.playedAt,
+        teams: row.teams.map((t) => ({
+          teamNumber: t.teamNumber,
+          score: t.score,
+          players: t.participants.map(name),
+        })),
+        unassignedPlayers: row.participants.map(name),
+      };
+    });
+  }
+  async startGuestReviewSession(token: string, completedSubmissionId: string) {
+    const invitation = await this.verifyInvitation(token);
+    if (
+      !invitation.linkId ||
+      !invitation.matchIds?.length ||
+      !isUUID(completedSubmissionId)
+    )
+      throw new UnauthorizedException("A completed match review is required");
+    const source = await this.db.feedbackSubmission.findUnique({
+      where: {
+        feedbackLinkId_clientSubmissionId: {
+          feedbackLinkId: invitation.linkId,
+          clientSubmissionId: completedSubmissionId,
+        },
+      },
+      select: {
+        id: true,
+        createdAt: true,
+        feedback: { select: { id: true } },
+      },
+    });
+    if (!source?.feedback.length)
+      throw new UnauthorizedException("A completed match review is required");
+    // A completed receipt only authorizes a handoff from its own review session.
+    // Root reviews use the link nonce; follow-ups use their parent receipt ID.
+    const scoped = await this.db.feedback.count({
+      where: { submissionId: source.id, guestInviteNonce: invitation.nonce },
+    });
+    if (scoped !== source.feedback.length)
+      throw new UnauthorizedException(
+        "This receipt belongs to another review session",
+      );
+    const issuedAt = Math.floor(source.createdAt.getTime() / 1000);
+    const followup = await this.jwt.signAsync(
+      {
+        kind: "guest-feedback-followup",
+        linkId: invitation.linkId,
+        sourceSubmissionId: source.id,
+        iat: issuedAt,
+      },
+      // Override the login-token TTL while preserving a deterministic handoff.
+      { expiresIn: invitation.exp - issuedAt, noTimestamp: false },
+    );
+    return { token: followup, expiresAt: new Date(invitation.exp * 1000) };
+  }
+
+  async submitRequest(
+    input: SubmitFeedbackRequestInput,
+    submittedById?: string,
+  ) {
+    return ratingTransaction(this.db, async (tx) => {
+      const invitation = await this.verifyInvitation(input.token, tx);
+      const ids = invitation.matchIds ?? [];
+      if (!invitation.linkId || !ids.length)
+        throw new BadRequestException(
+          "Use the original submission flow for this invitation",
+        );
+      if (
+        !isUUID(input.submissionId) ||
+        !Array.isArray(input.reviews) ||
+        input.reviews.length > 20
+      )
+        throw new BadRequestException("Invalid request submission");
+      const individual =
+        invitation.reviewMode === FeedbackReviewMode.INDIVIDUAL_MATCHES;
+      if (
+        individual
+          ? input.reviews.length !== ids.length ||
+            new Set(input.reviews.map((r) => r.matchId)).size !== ids.length ||
+            input.reviews.some((r) => !ids.includes(r.matchId ?? ""))
+          : input.reviews.length !== 1 || !!input.reviews[0].matchId
+      )
+        throw new BadRequestException(
+          "Reviews must exactly match the authorized request",
+        );
+      for (const review of input.reviews) {
+        if (
+          !review.ratings?.length ||
+          review.ratings.length > 20 ||
+          review.ratings.some(
+            (r) =>
+              !isUUID(r.skillId) ||
+              !Number.isInteger(r.rating) ||
+              r.rating < 1 ||
+              r.rating > 5 ||
+              (r.comment?.length ?? 0) > 5000,
+          ) ||
+          (review.overallComment?.length ?? 0) > 5000
+        )
+          throw new BadRequestException("Invalid skill ratings or comments");
+      }
+      if (
+        invitation.guestSession &&
+        (input.asGuest !== true || input.assignedReviewerId)
+      )
+        throw new ForbiddenException(
+          "This session is for an unverified guest review only",
+        );
+      const assigned =
+        invitation.assignedReviewerId ?? input.assignedReviewerId;
+      if (input.asGuest === false && !submittedById)
+        throw new UnauthorizedException(
+          "Sign in to submit as a registered reviewer",
+        );
+      const reviewerId =
+        !assigned && input.asGuest === false ? submittedById : undefined;
+      const canonical = {
+        ...input,
+        reviews: [...input.reviews].sort((a, b) =>
+          (a.matchId ?? "").localeCompare(b.matchId ?? ""),
+        ),
+        submittedById,
+      };
+      const payloadHash = createHash("sha256")
+        .update(JSON.stringify(canonical))
+        .digest("hex");
+      const previous = await tx.feedbackSubmission.findUnique({
+        where: {
+          feedbackLinkId_clientSubmissionId: {
+            feedbackLinkId: invitation.linkId,
+            clientSubmissionId: input.submissionId,
+          },
+        },
+        include: {
+          feedback: {
+            include: {
+              ratings: true,
+              associatedMatches: { include: { match: true } },
+            },
+          },
+        },
+      });
+      if (previous) {
+        if (previous.payloadHash !== payloadHash)
+          throw new BadRequestException(
+            "Submission ID was already used for different feedback",
+          );
+        return previous.feedback;
+      }
+      await this.validateRequestMatches(
+        tx,
+        invitation.recipientId,
+        invitation.sportId,
+        ids,
+      );
+      const batch = await tx.feedbackSubmission.create({
+        data: {
+          feedbackLinkId: invitation.linkId,
+          clientSubmissionId: input.submissionId,
+          payloadHash,
+        },
+      });
+      const created = [];
+      for (const id of individual ? ids : [null]) {
+        const review = individual
+          ? input.reviews.find((r) => r.matchId === id)!
+          : input.reviews[0];
+        const record = await this.create(
+          {
+            ...review,
+            matchId: id ?? undefined,
+            recipientId: invitation.recipientId,
+            sportId: invitation.sportId,
+            assignedReviewerId: input.assignedReviewerId,
+          },
+          {
+            linkToken: input.token,
+            submittedById,
+            reviewerId,
+            guestName: reviewerId
+              ? undefined
+              : input.guestName?.trim() || "Guest reviewer",
+            nonce: invitation.nonce,
+            expiresAt: new Date(invitation.exp * 1000),
+            batch: true,
+            submissionId: batch.id,
+          },
+          tx,
+        );
+        if (!individual)
+          await tx.feedbackMatch.createMany({
+            data: ids.map((matchId) => ({ feedbackId: record.id, matchId })),
+          });
+        created.push(record);
+      }
+      for (const record of created)
+        if (record.status === "PUBLISHED")
+          await this.internal.syncFeedback(tx, record.id);
+      await tx.feedbackLink.update({
+        where: { id: invitation.linkId },
+        data: { lastSubmittedAt: new Date() },
+      });
+      return tx.feedback.findMany({
+        where: { submissionId: batch.id },
+        include: {
+          ratings: true,
+          associatedMatches: { include: { match: true } },
+        },
+        orderBy: { createdAt: "asc" },
       });
     });
   }
+
   private async validateMatch(
     recipientId: string,
     sportId: string,
@@ -484,6 +872,13 @@ export class FeedbackService {
               match: {
                 select: { id: true, playedAt: true, description: true },
               },
+              associatedMatches: {
+                include: {
+                  match: {
+                    select: { id: true, description: true, playedAt: true },
+                  },
+                },
+              },
               ratings: { include: { skill: { select: { name: true } } } },
             },
           }),
@@ -494,6 +889,9 @@ export class FeedbackService {
     const items = rows.slice(0, 10).map((row) => ({
       ...row,
       recipientUsername: row.recipient.username,
+      matches: row.match
+        ? [row.match]
+        : row.associatedMatches.map((r) => r.match),
       ratings: row.ratings.map((r) => ({ ...r, skillName: r.skill.name })),
     }));
     return {
@@ -508,7 +906,19 @@ export class FeedbackService {
     return ratingTransaction(this.db, async (tx) => {
       const feedback = await tx.feedback.findUnique({
         where: { id },
-        include: { feedbackLink: true },
+        include: {
+          feedbackLink: { include: { requestMatches: true } },
+          ratings: true,
+          reviewerSkillSnapshots: true,
+          match: { select: { id: true, description: true, playedAt: true } },
+          associatedMatches: {
+            include: {
+              match: {
+                select: { id: true, description: true, playedAt: true },
+              },
+            },
+          },
+        },
       });
       if (!feedback) throw new NotFoundException("Feedback not found");
       const link = feedback.feedbackLink;
@@ -522,7 +932,21 @@ export class FeedbackService {
             link.assignedReviewerId !== actor) ||
             link.recipientId !== feedback.recipientId ||
             link.sportId !== feedback.sportId ||
-            link.matchId !== feedback.matchId))
+            (link.requestMatches?.length
+              ? link.mode === "INDIVIDUAL_MATCHES"
+                ? !link.requestMatches.some(
+                    (row) => row.matchId === feedback.matchId,
+                  ) || feedback.associatedMatches.length > 0
+                : feedback.matchId !== null ||
+                  link.requestMatches.length !==
+                    feedback.associatedMatches.length ||
+                  feedback.associatedMatches.some(
+                    (row) =>
+                      !link.requestMatches.some(
+                        (scope) => scope.matchId === row.matchId,
+                      ),
+                  )
+              : link.matchId !== feedback.matchId)))
       )
         throw new BadRequestException(
           "Feedback has no matching reviewer assignment",
@@ -573,7 +997,17 @@ export class FeedbackService {
       if (approve) await this.internal.syncFeedback(tx, id);
       return tx.feedback.findUniqueOrThrow({
         where: { id },
-        include: { ratings: true, reviewerSkillSnapshots: true },
+        include: {
+          ratings: true,
+          reviewerSkillSnapshots: true,
+          associatedMatches: {
+            include: {
+              match: {
+                select: { id: true, description: true, playedAt: true },
+              },
+            },
+          },
+        },
       });
     });
   }
@@ -649,7 +1083,17 @@ export class FeedbackService {
       await this.internal.syncFeedback(tx, id);
       return tx.feedback.findUniqueOrThrow({
         where: { id },
-        include: { ratings: true, reviewerSkillSnapshots: true },
+        include: {
+          ratings: true,
+          reviewerSkillSnapshots: true,
+          associatedMatches: {
+            include: {
+              match: {
+                select: { id: true, description: true, playedAt: true },
+              },
+            },
+          },
+        },
       });
     });
   }
@@ -670,7 +1114,17 @@ export class FeedbackService {
       await this.internal.syncFeedback(tx, id);
       return tx.feedback.findUniqueOrThrow({
         where: { id },
-        include: { ratings: true, reviewerSkillSnapshots: true },
+        include: {
+          ratings: true,
+          reviewerSkillSnapshots: true,
+          associatedMatches: {
+            include: {
+              match: {
+                select: { id: true, description: true, playedAt: true },
+              },
+            },
+          },
+        },
       });
     });
   }
@@ -680,6 +1134,12 @@ export class FeedbackService {
       include: {
         ratings: true,
         reviewerSkillSnapshots: true,
+        match: { select: { id: true, description: true, playedAt: true } },
+        associatedMatches: {
+          include: {
+            match: { select: { id: true, description: true, playedAt: true } },
+          },
+        },
         reviewer: { select: { username: true } },
       },
     });
@@ -700,6 +1160,7 @@ export class FeedbackService {
     matchOnly?: boolean,
     createdFrom?: Date,
     createdBefore?: Date,
+    matchId?: string,
   ) {
     const bounds = dateRangeBounds(createdFrom, createdBefore);
     return this.list(
@@ -707,16 +1168,46 @@ export class FeedbackService {
         recipientId: actor,
         OR: [{ approvalRequired: false }, { status: "PUBLISHED" }],
         ...(bounds ? { createdAt: bounds } : {}),
-        ...(matchOnly == null
-          ? {}
-          : { matchId: matchOnly ? { not: null } : null }),
+        AND: [
+          ...(matchId
+            ? [
+                {
+                  OR: [
+                    { matchId },
+                    { associatedMatches: { some: { matchId } } },
+                  ],
+                },
+              ]
+            : []),
+          ...(matchOnly == null
+            ? []
+            : [
+                matchOnly
+                  ? {
+                      OR: [
+                        { matchId: { not: null } },
+                        { associatedMatches: { some: {} } },
+                      ],
+                    }
+                  : { matchId: null, associatedMatches: { none: {} } },
+              ]),
+        ],
       },
       actor,
       cursor,
     );
   }
-  submitted(actor: string, cursor?: string) {
-    return this.list({ reviewerId: actor }, actor, cursor);
+  submitted(actor: string, cursor?: string, matchId?: string) {
+    return this.list(
+      {
+        reviewerId: actor,
+        ...(matchId
+          ? { OR: [{ matchId }, { associatedMatches: { some: { matchId } } }] }
+          : {}),
+      },
+      actor,
+      cursor,
+    );
   }
   private async list(
     where: Prisma.FeedbackWhereInput,
@@ -728,6 +1219,12 @@ export class FeedbackService {
       include: {
         ratings: true,
         reviewerSkillSnapshots: true,
+        match: { select: { id: true, description: true, playedAt: true } },
+        associatedMatches: {
+          include: {
+            match: { select: { id: true, description: true, playedAt: true } },
+          },
+        },
         reviewer: { select: { username: true } },
       },
       take: 11,

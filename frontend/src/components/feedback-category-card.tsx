@@ -13,6 +13,7 @@ export function FeedbackCategoryCard({
   onPrevious,
   onNext,
   onSkip,
+  nextLabel,
   error,
 }: {
   step: FeedbackStep;
@@ -22,6 +23,7 @@ export function FeedbackCategoryCard({
   onPrevious: () => void;
   onNext: () => void;
   onSkip: () => void;
+  nextLabel?: string;
   error: string;
 }) {
   const id = useId();
@@ -112,7 +114,7 @@ export function FeedbackCategoryCard({
             Skip
           </Button>
           <Button type="button" className="feedback-primary" onClick={onNext}>
-            {index === 4 ? "Review Feedback" : "Next"}
+            {index === 4 ? (nextLabel ?? "Review Feedback") : "Next"}
             <ArrowRight size={17} />
           </Button>
         </div>
