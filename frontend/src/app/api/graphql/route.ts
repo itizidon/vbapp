@@ -40,7 +40,9 @@ export async function POST(req: NextRequest) {
           variables: body.variables ?? {},
         }),
         cache: "no-store",
-        signal: AbortSignal.timeout(15000),
+        signal: AbortSignal.timeout(
+          /\baskAiCoach\b/.test(body.query) ? 75000 : 15000,
+        ),
       },
     );
     const result = await upstream.json();

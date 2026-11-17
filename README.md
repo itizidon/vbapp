@@ -123,3 +123,13 @@ Feedback invitations can optionally designate a registered reviewer. Assigned dr
 ## Multi-match feedback requests
 
 Feedback links can review selected matches individually or as one combined review. Same-device individual submissions queue every selected match for the assigned giver’s independent approval. See [behavior, compatibility, API, deployment and validation](docs/multi-match-feedback.md). Apply the additive `20261113000000_multi_match_feedback` migration explicitly before deploying the matching backend/frontend; no automatic migration or backfill is added.
+
+## Optional feedback observation processing
+
+Private asynchronous extraction, pgvector observation embeddings, retryable jobs, and profile invalidation are available through a separate worker. See [setup, eligibility, and maintenance](docs/feedback-processing.md). The new migration requires a pgvector-capable PostgreSQL server; provider processing remains disabled unless explicitly configured.
+
+## Deterministic feedback analytical profiles
+
+Step 2 extends the existing cache with consent-gated SQL statistics, trends, reviewer diversity, weakness scoring, and authenticated GraphQL queries. See [rules, rebuild commands, and API examples](docs/player-feedback-analysis.md). Profile rebuilding makes no LLM calls.
+
+Historical AI feedback processing: [preview, backfill and readiness commands](docs/feedback-backfill.md).

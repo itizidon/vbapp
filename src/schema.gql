@@ -14,6 +14,11 @@ input AddParticipantInput {
   userId: ID!
 }
 
+type AnalysisAverage {
+  average: Float
+  count: Int!
+}
+
 type AnalyticsDashboard {
   before: DateTime!
   categories: [SkillModel!]!
@@ -38,6 +43,13 @@ type ApprovalRatingModel {
   skillName: String!
 }
 
+input AskAiCoachInput {
+  clientRequestId: ID!
+  conversationId: ID
+  question: String!
+  sportId: ID!
+}
+
 input AssessmentRatingInput {
   rating: Int!
   skillId: ID!
@@ -52,6 +64,48 @@ type AverageSkillRating {
   average: Float!
   count: Int!
   skillId: ID!
+}
+
+type CoachAnswerModel {
+  evidence: [CoachEvidenceModel!]!
+  generalSuggestions: [String!]!
+  insufficientEvidence: Boolean!
+  message: String!
+  recommendedDrillIds: [String!]!
+  status: String!
+}
+
+type CoachConversationModel {
+  id: ID!
+  title: String!
+  updatedAt: String!
+}
+
+type CoachEvidenceModel {
+  claim: String!
+  factId: String!
+  feedbackIds: [ID!]!
+  metricKey: String
+  supportingReviewCount: Int!
+}
+
+type CoachMessageModel {
+  conversationId: ID!
+  id: ID!
+  inputTokens: Int!
+  model: String
+  outputTokens: Int!
+  promptVersion: String!
+  question: String!
+  response: CoachAnswerModel!
+  sourceAsOf: String
+  startedAt: String!
+  status: String!
+}
+
+type CoachMessagePage {
+  messages: [CoachMessageModel!]!
+  nextCursor: ID
 }
 
 input CreateMatchInput {
@@ -96,8 +150,47 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+type FeedbackAnalysisProfile {
+  algorithmVersion: Int!
+  asOf: String!
+  awaiting: Int!
+  calculatedAt: String!
+  distinctVerifiedReviewers: Int!
+  evidenceExplanation: String!
+  evidenceStatus: FeedbackEvidenceStatus!
+  expiresAt: String!
+  failed: Int!
+  feedback: Int!
+  guestFeedbackCount: Int!
+  latestEligibleFeedbackAt: String
+  moderated: Int!
+  playerId: ID!
+  skills: [FeedbackSkillAnalysis!]!
+  sportId: ID!
+  state: String!
+  themes: [FeedbackThemeAnalysis!]!
+  totalEligibleFeedbackCount: Int!
+  weaknesses: [FeedbackWeakness!]!
+  writtenFeedbackCount: Int!
+}
+
+type FeedbackAnalysisResult {
+  lastErrorCode: String
+  profile: FeedbackAnalysisProfile
+  rebuildQueued: Boolean!
+  state: String!
+}
+
 type FeedbackCount {
   count: Int!
+}
+
+enum FeedbackEvidenceStatus {
+  INSUFFICIENT_DATA
+  LIMITED_REVIEWER_DIVERSITY
+  NO_DATA
+  PARTIAL_ANALYSIS
+  SUFFICIENT
 }
 
 type FeedbackInvitationModel {
@@ -148,9 +241,43 @@ type FeedbackRatingModel {
   skillId: ID!
 }
 
+enum FeedbackRatingTrend {
+  DECLINING
+  IMPROVING
+  INSUFFICIENT_DATA
+  MIXED
+  STABLE
+}
+
 enum FeedbackReviewMode {
   COMBINED_MATCHES
   INDIVIDUAL_MATCHES
+}
+
+type FeedbackSkillAnalysis {
+  evidenceStatus: FeedbackEvidenceStatus!
+  explanation: String!
+  internalRating: Float
+  last30Days: AnalysisAverage!
+  last90Days: AnalysisAverage!
+  lastFiveComparison: RatingComparison!
+  latestRatingAt: String
+  name: String!
+  ninetyDayComparison: RatingComparison!
+  peer: AnalysisAverage!
+  previous90Days: AnalysisAverage!
+  selfAssessment: Float
+  selfMinusPeer: Float
+  skillId: ID!
+  slug: String!
+  trend: FeedbackRatingTrend!
+}
+
+type FeedbackSkillAnalysisResult {
+  lastErrorCode: String
+  rebuildQueued: Boolean!
+  skills: [FeedbackSkillAnalysis!]!
+  state: String!
 }
 
 enum FeedbackStatus {
@@ -159,6 +286,74 @@ enum FeedbackStatus {
   PENDING
   PUBLISHED
   REJECTED
+}
+
+enum FeedbackTechniqueTrend {
+  INSUFFICIENT_DATA
+  LIKELY_IMPROVING
+  MIXED
+  POSSIBLY_DECLINING
+  POSSIBLY_IMPROVING
+  STABLE
+}
+
+type FeedbackThemeAnalysis {
+  denominatorKind: String!
+  distinctNegativeReviewers: Int!
+  distinctVerifiedReviewers: Int!
+  evidenceStatus: FeedbackEvidenceStatus!
+  explanation: String!
+  feedbackCount: Int!
+  firstObservedAt: String
+  guestFeedbackCount: Int!
+  improvement: FeedbackTechniqueTrend!
+  lastNegativeAt: String
+  lastObservedAt: String
+  name: String!
+  negativeFeedbackCount: Int!
+  negativeMentionRate: Float
+  neutralFeedbackCount: Int!
+  positiveFeedbackCount: Int!
+  previous: ThemePeriod!
+  rawObservationCount: Int!
+  recent: ThemePeriod!
+  relevantFeedbackCount: Int!
+  skillIds: [ID!]!
+  themeId: ID!
+  totalEligibleFeedbackCount: Int!
+  verifiedReviewerCoverage: Int!
+}
+
+type FeedbackThemeAnalysisResult {
+  lastErrorCode: String
+  rebuildQueued: Boolean!
+  state: String!
+  themes: [FeedbackThemeAnalysis!]!
+}
+
+type FeedbackWeakness {
+  components: [WeaknessComponent!]!
+  distinctVerifiedReviewers: Int!
+  evidenceFactor: Float!
+  evidenceStatus: FeedbackEvidenceStatus!
+  explanation: String!
+  negativeMentionRate: Float!
+  priorityScore: Float!
+  relevantFeedbackCount: Int!
+  relevantRatingAverage: Float
+  relevantRatingCount: Int!
+  skillId: ID
+  supportingFeedbackCount: Int!
+  themeId: ID!
+}
+
+type FeedbackWeaknessResult {
+  evidenceExplanation: String
+  evidenceStatus: FeedbackEvidenceStatus
+  lastErrorCode: String
+  rebuildQueued: Boolean!
+  state: String!
+  weaknesses: [FeedbackWeakness!]!
 }
 
 type GuestInvitePayload {
@@ -271,6 +466,7 @@ type Mutation {
   addGuestMatchParticipant(input: AddGuestParticipantInput!): MatchParticipantModel!
   addMatchParticipant(input: AddParticipantInput!): MatchParticipantModel!
   approveFeedback(feedbackId: ID!): FeedbackModel!
+  askAiCoach(input: AskAiCoachInput!): CoachMessageModel!
   assignParticipantToTeam(participantId: ID!, teamId: ID): MatchParticipantModel!
   createGuestFeedbackInvite(assignedReviewerId: ID, matchId: ID, matchIds: [ID!], recipientId: ID!, reviewMode: FeedbackReviewMode! = INDIVIDUAL_MATCHES, sportId: ID!): GuestInvitePayload!
   createMatch(input: CreateMatchInput): MatchModel!
@@ -359,11 +555,17 @@ type Query {
   matchResults(matchId: ID!): MatchModel
   me: UserModel!
   members(search: String!): [MemberModel!]!
+  myAiCoachConversations(sportId: ID!): [CoachConversationModel!]!
+  myAiCoachMessages(conversationId: ID!, cursor: ID): CoachMessagePage!
   myAnalytics(before: DateTime, from: DateTime, timeZone: String! = "UTC"): AnalyticsDashboard!
   myCategoryFeedback(before: DateTime, from: DateTime, skillId: ID!): [IndividualCategoryFeedback!]!
+  myFeedbackAnalysisProfile(sportId: ID!): FeedbackAnalysisResult!
   myPendingFeedbackApprovals(cursor: ID): PendingApprovalsPage!
   myPerformanceSummary: PerformanceSummary!
   mySelfAssessments: [SelfAssessmentModel!]!
+  mySkillAnalysis(sportId: ID!): FeedbackSkillAnalysisResult!
+  myThemeTrends(sportId: ID!): FeedbackThemeAnalysisResult!
+  myTopWeaknesses(sportId: ID!): FeedbackWeaknessResult!
   playerMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime, userId: ID!): [MatchModel!]!
   playerProfile(id: ID!): PlayerDirectoryModel!
   playerSuggestions(search: String!): [PlayerDirectoryModel!]!
@@ -382,6 +584,14 @@ type Query {
   userSelfAssessment(sportId: ID!, userId: ID!): SelfAssessmentModel
   userSkillRatings(sportId: ID, userId: ID!): [AverageSkillRating!]!
   userSportFeedbackSummary: [SportFeedbackSummary!]!
+}
+
+type RatingComparison {
+  delta: Float
+  explanation: String!
+  previous: AnalysisAverage!
+  recent: AnalysisAverage!
+  trend: FeedbackRatingTrend!
 }
 
 type RatingHistoryPage {
@@ -528,6 +738,18 @@ input SubmitGuestFeedbackInput {
   token: String!
 }
 
+type ThemePeriod {
+  distinctNegativeReviewers: Int!
+  distinctVerifiedReviewers: Int!
+  feedbackCount: Int!
+  negativeFeedbackCount: Int!
+  negativeMentionRate: Float
+  neutralFeedbackCount: Int!
+  positiveFeedbackCount: Int!
+  positiveMentionRate: Float
+  relevantFeedbackCount: Int!
+}
+
 input UpdateFeedbackInput {
   analyticsAllowed: Boolean
   evidenceAllowed: Boolean
@@ -568,4 +790,10 @@ type UserModel {
   isPublic: Boolean!
   updatedAt: DateTime!
   username: String!
+}
+
+type WeaknessComponent {
+  effectiveWeight: Float!
+  name: String!
+  value: Float
 }

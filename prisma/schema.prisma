@@ -46,6 +46,10 @@ model User {
   preparedFeedback  Feedback[]                   @relation("FeedbackSubmitter")
   approvedFeedback  Feedback[]                   @relation("FeedbackApprover")
   rejectedFeedback  Feedback[]                   @relation("FeedbackRejector")
+  feedbackAnalysisProfiles PlayerFeedbackAnalysisProfile[]
+  aiCoachConversations AiCoachConversation[]
+  aiCoachTurns AiCoachTurn[]
+  aiCoachUsage AiCoachUsage[]
 }
 
 model Sport {
@@ -59,6 +63,8 @@ model Sport {
   matches         Match[]
   feedback        Feedback[]
   selfAssessments SelfAssessment[]
+  feedbackAnalysisProfiles PlayerFeedbackAnalysisProfile[]
+  aiCoachConversations AiCoachConversation[]
 }
 
 model Skill {
@@ -80,6 +86,7 @@ model Skill {
 
   @@unique([sportId, slug])
   @@index([sportId, active])
+  feedbackObservations FeedbackObservation[]
 }
 
 model Match {
@@ -189,6 +196,7 @@ model Feedback {
   @@index([reviewerId])
   @@index([matchId])
   @@index([reviewerOverallLevelAtSubmission, sportId])
+  analysisJob FeedbackAnalysisJob?
 }
 
 model FeedbackRating {
@@ -425,4 +433,194 @@ model FeedbackSubmission {
   feedback           Feedback[]
 
   @@unique([feedbackLinkId, clientSubmissionId])
+}
+
+// Derived, private analysis. Existing Feedback/FeedbackRating remain authoritative.
+model FeedbackTheme {
+  id           String                @id
+  name         String
+  skillSlugs   String[]
+  active       Boolean               @default(true)
+  version      Int                   @default(1)
+  observations FeedbackObservation[]
+}
+
+model FeedbackAnalysisJob {
+  feedbackId    String                  @id @db.Uuid
+  generation    Int                     @default(1)
+  status        String                  @default("PENDING")
+  attempts      Int                     @default(0)
+  runAfter      DateTime                @default(now())
+  leaseToken    String?                 @db.Uuid
+  leaseUntil    DateTime?
+  sourceHash    String?
+  provider      String?
+  modelVersion  String?
+  promptVersion String?
+  moderation    String                  @default("UNASSESSED")
+  errorCode     String?
+  processedAt   DateTime?
+  updatedAt     DateTime                @updatedAt
+  feedback      Feedback                @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  observations  FeedbackObservation[]
+  runs          FeedbackExtractionRun[]
+
+  @@index([status, runAfter])
+}
+
+model FeedbackExtractionRun {
+  id            String              @id @default(uuid()) @db.Uuid
+  feedbackId    String              @db.Uuid
+  generation    Int
+  status        String              @default("STARTED")
+  provider      String
+  modelVersion  String
+  promptVersion String
+  sourceHash    String?
+  apiAttempts   Int                 @default(0)
+  inputTokens   Int                 @default(0)
+  outputTokens  Int                 @default(0)
+  moderation    String?
+  unknownThemes String[]            @default([])
+  errorCode     String?
+  startedAt     DateTime            @default(now())
+  finishedAt    DateTime?
+  job           FeedbackAnalysisJob @relation(fields: [feedbackId], references: [feedbackId], onDelete: Cascade)
+
+  @@index([feedbackId, startedAt])
+}
+
+model FeedbackObservation {
+  id                String                         @id @default(uuid()) @db.Uuid
+  feedbackId        String                         @db.Uuid
+  generation        Int
+  sourceKey         String
+  skillId           String?                        @db.Uuid
+  themeId           String
+  sentiment         String
+  evidence          String
+  fingerprint       String
+  sourceHash        String
+  provider          String
+  modelVersion      String
+  promptVersion     String
+  feedbackCreatedAt DateTime
+  createdAt         DateTime                       @default(now())
+  job               FeedbackAnalysisJob            @relation(fields: [feedbackId], references: [feedbackId], onDelete: Cascade)
+  skill             Skill?                         @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  theme             FeedbackTheme                  @relation(fields: [themeId], references: [id], onDelete: Restrict)
+  embeddingJobs     FeedbackEmbeddingJob[]
+  embeddings        FeedbackObservationEmbedding[]
+
+  @@unique([feedbackId, generation, fingerprint])
+  @@index([feedbackId, themeId])
+}
+
+model FeedbackEmbeddingJob {
+  observationId   String              @db.Uuid
+  provider        String
+  model           String
+  modelVersion    String
+  dimensions      Int
+  templateVersion String
+  sourceHash      String
+  status          String              @default("PENDING")
+  attempts        Int                 @default(0)
+  runAfter        DateTime            @default(now())
+  leaseToken      String?             @db.Uuid
+  leaseUntil      DateTime?
+  errorCode       String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  observation     FeedbackObservation @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  @@id([observationId, provider, model, modelVersion, dimensions, templateVersion])
+  @@index([status, runAfter])
+}
+
+model FeedbackObservationEmbedding {
+  observationId   String                @db.Uuid
+  provider        String
+  model           String
+  modelVersion    String
+  dimensions      Int
+  templateVersion String
+  sourceHash      String
+  vector          Unsupported("vector")
+  createdAt       DateTime              @default(now())
+  observation     FeedbackObservation   @relation(fields: [observationId], references: [id], onDelete: Cascade)
+
+  @@id([observationId, provider, model, modelVersion, dimensions, templateVersion])
+}
+
+model PlayerFeedbackAnalysisProfile {
+  userId           String    @db.Uuid
+  sportId          String    @db.Uuid
+  algorithmVersion Int       @default(0)
+  expiresAt        DateTime?
+  rebuildError     String?
+  rebuildErrorAt   DateTime?
+  rebuildAttemptAt DateTime?
+  rebuildRetryAt   DateTime?
+  revision         Int       @default(1)
+  builtRevision    Int       @default(0)
+  stale            Boolean   @default(true)
+  data             Json      @default("{}")
+  builtAt          DateTime?
+  invalidatedAt    DateTime  @default(now())
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sport            Sport     @relation(fields: [sportId], references: [id], onDelete: Cascade)
+
+  @@id([userId, sportId])
+}
+
+model AiCoachConversation {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  sportId String @db.Uuid
+  title String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  expiresAt DateTime
+  user User @relation(fields:[userId], references:[id], onDelete:Cascade)
+  sport Sport @relation(fields:[sportId], references:[id], onDelete:Restrict)
+  turns AiCoachTurn[]
+  @@unique([userId,id])
+  @@index([userId,updatedAt,id])
+  @@index([expiresAt])
+}
+model AiCoachTurn {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  conversationId String @db.Uuid
+  clientRequestId String @db.Uuid
+  requestHash String
+  question String
+  status String @default("PENDING")
+  response Json?
+  sourceRevision Int?
+  sourceAsOf String?
+  model String?
+  promptVersion String
+  inputTokens Int @default(0)
+  outputTokens Int @default(0)
+  durationMs Int @default(0)
+  toolTrace Json @default("[]")
+  errorCode String?
+  startedAt DateTime @default(now())
+  completedAt DateTime?
+  conversation AiCoachConversation @relation(fields:[userId,conversationId],references:[userId,id],onDelete:Cascade)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@unique([userId,clientRequestId])
+  @@index([conversationId,startedAt,id])
+  @@index([userId,startedAt])
+}
+model AiCoachUsage {
+  userId String @db.Uuid
+  day DateTime @db.Date
+  requests Int @default(0)
+  reservedTokens Int @default(0)
+  spentTokens Int @default(0)
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  @@id([userId,day])
 }

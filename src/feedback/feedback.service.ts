@@ -748,6 +748,7 @@ export class FeedbackService {
         },
         include: {
           feedback: {
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             include: {
               ratings: true,
               associatedMatches: { include: { match: true } },
@@ -821,7 +822,7 @@ export class FeedbackService {
           ratings: true,
           associatedMatches: { include: { match: true } },
         },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       });
     });
   }

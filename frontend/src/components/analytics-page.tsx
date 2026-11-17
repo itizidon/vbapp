@@ -1,4 +1,5 @@
 "use client";
+import { AiCoach } from "./ai-coach";
 import { PerformanceProfile } from "./performance-profile";
 import { useState } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
@@ -75,6 +76,7 @@ export function AnalyticsPage() {
   return (
     <>
       <PerformanceProfile onSkillSelect={setSelected} />
+      <AiCoach />
       <section className="panel min-w-0 space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2>Performance over time</h2>

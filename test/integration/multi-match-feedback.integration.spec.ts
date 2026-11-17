@@ -204,7 +204,7 @@ const url = process.env.TEST_DATABASE_URL;
         expect(
           await db.feedback.findMany({
             where: { id: { in: original.map((r) => r.id) } },
-            orderBy: { createdAt: "asc" },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             include: {
               ratings: true,
               associatedMatches: { include: { match: true } },

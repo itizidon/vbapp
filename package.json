@@ -18,7 +18,15 @@
     "prisma:seed": "tsx --env-file=.env prisma/seed.ts",
     "prisma:seed:deploy": "node dist/prisma/seed.js",
     "ratings:backfill": "node dist/prisma/backfill-internal-ratings.js",
-    "db:deploy": "pnpm prisma:deploy && pnpm prisma:seed:deploy"
+    "db:deploy": "pnpm prisma:deploy && pnpm prisma:seed:deploy",
+    "feedback:process": "node dist/src/feedback-processing/cli.js",
+    "feedback:watch": "node --env-file=.env dist/src/feedback-processing/cli.js watch 10 --execute",
+    "coach:prune": "node dist/prisma/prune-ai-coach.js",
+    "feedback:preview": "node dist/src/feedback-processing/cli.js enqueue --all --dry-run",
+    "feedback:backfill": "node dist/src/feedback-processing/cli.js enqueue --all",
+    "feedback:work": "node dist/src/feedback-processing/cli.js work --all",
+    "feedback:ready": "node dist/src/feedback-processing/cli.js status --ready",
+    "feedback:profiles": "node dist/src/feedback-processing/cli.js profiles-all"
   },
   "dependencies": {
     "@apollo/server": "^5.1.0",
@@ -39,8 +47,10 @@
     "graphql-depth-limit": "^1.1.0",
     "graphql-query-complexity": "^0.12.0",
     "helmet": "^8.1.0",
+    "openai": "^7.57.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",
@@ -54,5 +64,13 @@
     "tsx": "^4.20.6",
     "typescript": "^5.9.3"
   },
-  "pnpm": { "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "argon2", "esbuild"] }
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "argon2",
+      "esbuild"
+    ]
+  }
 }
