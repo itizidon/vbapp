@@ -326,6 +326,10 @@ it("submits real skill IDs and separate comments in a single final GraphQL mutat
   fireEvent.change(screen.getByLabelText("Written feedback (optional)"), {
     target: { value: "Great game" },
   });
+  const consent=screen.getByRole("checkbox",{name:/Allow private performance analytics/});
+  expect(consent).not.toBeChecked();
+  expect(screen.getByRole("link",{name:/Privacy notice and withdrawal/})).toHaveAttribute("href","/privacy");
+  fireEvent.click(consent);
   fireEvent.click(screen.getByRole("button", { name: "Submit Feedback" }));
   await screen.findByRole("heading", { name: "Thanks for your feedback." });
   expect(calls(fetcher)[0].variables.input).toMatchObject({

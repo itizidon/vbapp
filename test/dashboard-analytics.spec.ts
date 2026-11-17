@@ -1,3 +1,4 @@
+import { privateAnalyticsWhere } from "../src/feedback/private-eligibility";
 import { BadRequestException } from '@nestjs/common';
 import { DashboardService, summarizeDays } from '../src/analytics/dashboard.service';
 const game=(score:number|null,opponent:number|null,date='2026-11-08T15:00:00Z')=>({playedAt:new Date(date),teams:[{id:'mine',score},{id:'other',score:opponent}],participants:[{teamId:'mine'}]});
@@ -39,10 +40,10 @@ it('rejects invalid time zones and dates before querying',async()=>{
 it('returns individual received ratings separately with the same timestamp bounds',async()=>{
  const skillId='11111111-1111-4111-8111-111111111111';
  const before=new Date(Date.now()-1000),from=new Date(before.getTime()-86400000),submittedAt=new Date(from.getTime()+1000);
- const db:any={feedbackRating:{findMany:jest.fn().mockResolvedValue([{rating:2,feedback:{id:'first',createdAt:submittedAt}},{rating:4,feedback:{id:'second',createdAt:submittedAt}}])}};
+ const db:any={feedback:{fields:{reviewerId:'reviewer-field'}},feedbackRating:{findMany:jest.fn().mockResolvedValue([{rating:2,feedback:{id:'first',createdAt:submittedAt}},{rating:4,feedback:{id:'second',createdAt:submittedAt}}])}};
  const rows=await new DashboardService(db).categoryFeedback('owner',skillId,from,before);
  expect(rows).toEqual([{id:'first',submittedAt,rating:2},{id:'second',submittedAt,rating:4}]);
- expect(db.feedbackRating.findMany).toHaveBeenCalledWith({where:{skillId,skill:{active:true,sport:{slug:'beach-volleyball'}},feedback:{recipientId:'owner',status:'PUBLISHED',sport:{slug:'beach-volleyball'},createdAt:{gte:from,lt:before}}},select:{rating:true,feedback:{select:{id:true,createdAt:true}}},orderBy:[{feedback:{createdAt:'asc'}},{feedbackId:'asc'}]});
+ expect(db.feedbackRating.findMany).toHaveBeenCalledWith({where:{skillId,skill:{active:true,sport:{slug:'beach-volleyball'}},feedback:{...privateAnalyticsWhere(db,'owner'),sport:{slug:'beach-volleyball'},createdAt:{gte:from,lt:before}}},select:{rating:true,feedback:{select:{id:true,createdAt:true}}},orderBy:[{feedback:{createdAt:'asc'}},{feedbackId:'asc'}]});
 });
 it('validates individual-feedback category and dates before reading ratings',async()=>{
  const db:any={feedbackRating:{findMany:jest.fn()}};

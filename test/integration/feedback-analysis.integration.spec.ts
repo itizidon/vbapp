@@ -90,7 +90,8 @@ const url = process.env.TEST_DATABASE_URL;
         reviewerId: options.guest ? null : (options.reviewer ?? reviewers[0]),
         guestName: options.guest ? "Same guest name" : null,
         status: "PUBLISHED",
-        analyticsAllowed: true,
+        privateAnalyticsAllowed: true, privateCoachingAllowed: true, privacyNoticeVersion: "feedback-privacy-v1", privateAnalyticsConsentAt: new Date(), privateCoachingConsentAt: new Date(),
+      analyticsAllowed: true,
         evidenceAllowed: true,
         createdAt: day(options.days ?? 1),
         overallComment:
@@ -236,8 +237,8 @@ const url = process.env.TEST_DATABASE_URL;
     { status: "HIDDEN" },
     { status: "DELETED" },
     { status: "REJECTED" },
-    { analyticsAllowed: false },
-    { evidenceAllowed: false },
+    { privateAnalyticsAllowed: false },
+    { privateCoachingAllowed: false },
   ])(
     "excludes ineligible feedback %j from every aggregate",
     async (overrides) => {
@@ -446,7 +447,7 @@ const url = process.env.TEST_DATABASE_URL;
     await build();
     await db.feedback.update({
       where: { id: f.id },
-      data: { analyticsAllowed: false },
+      data: { privateAnalyticsAllowed: false },
     });
     expect(await readOwnAnalysisProfile(db, userId, sportId)).toEqual({
       state: "STALE",

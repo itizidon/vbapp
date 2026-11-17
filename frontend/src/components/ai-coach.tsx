@@ -264,8 +264,8 @@ export function CoachChat({
               <div className="ai-coach__notice">
                 <strong>No eligible feedback yet</strong>
                 <p>
-                  Your coach needs published feedback with both analytics and
-                  supporting-evidence consent. Any required reviewer approval
+                  Your coach needs published feedback with permission for private
+                  analytics and AI coaching. Any required reviewer approval
                   must also be complete.
                 </p>
                 <Link href="/feedback">Request feedback</Link>
@@ -388,7 +388,7 @@ export function CoachChat({
               )}
               {send.isPending && (
                 <div className="ai-coach__pending" role="status">
-                  <p>{request.current?.question}</p>
+                  <p>{send.variables?.question}</p>
                   <span>
                     <LoaderCircle className="animate-spin" size={18} /> Checking
                     your feedback…

@@ -1,3 +1,4 @@
+import { FeedbackPrivacyService, privacyGrant, privacyEvents } from "./privacy";
 import { isUUID } from "class-validator";
 import { InternalRatingsService } from "../internal-ratings/internal-ratings.service";
 import { ratingTransaction } from "../internal-ratings/transaction";
@@ -37,6 +38,7 @@ export class FeedbackService {
     private db: PrismaService,
     private jwt: JwtService,
     private internal: InternalRatingsService = new InternalRatingsService(db),
+    private privacy: FeedbackPrivacyService = new FeedbackPrivacyService(db,jwt),
   ) {}
   async invite(
     actor: string,
@@ -354,13 +356,13 @@ export class FeedbackService {
       (payload.matchId ?? null) !== (input.matchId ?? null)
     )
       throw new UnauthorizedException("Invitation does not match submission");
-    return this.create(input, {
+    return this.privacy.guestReceipt(await this.create(input, {
       linkToken: input.token,
       submittedById,
       guestName: input.guestName?.trim() || "Guest reviewer",
       nonce: payload.nonce,
       expiresAt: new Date(payload.exp * 1000),
-    });
+    }));
   }
 
   private async create(
@@ -492,6 +494,7 @@ export class FeedbackService {
           sportId: input.sportId,
           matchId: input.matchId,
           overallComment: input.overallComment,
+          ...privacyGrant(input, !approvalRequired),
           analyticsAllowed: input.analyticsAllowed ?? false,
           evidenceAllowed: input.evidenceAllowed ?? false,
           reviewerId: assignedReviewerId ?? identity.reviewerId,
@@ -513,6 +516,7 @@ export class FeedbackService {
             : {}),
         },
       });
+      await privacyEvents(tx, feedback, !approvalRequired ? identity.reviewerId ?? null : null, approvalRequired ? "UNAUTHORIZED_DRAFT" : identity.reviewerId ? "REGISTERED_REVIEWER" : "GUEST");
       await tx.feedbackRating.createMany({
         data: await Promise.all(
           input.ratings.map(async (r) => ({
@@ -673,7 +677,7 @@ export class FeedbackService {
     input: SubmitFeedbackRequestInput,
     submittedById?: string,
   ) {
-    return ratingTransaction(this.db, async (tx) => {
+    const rows = await ratingTransaction(this.db, async (tx) => {
       const invitation = await this.verifyInvitation(input.token, tx);
       const ids = invitation.matchIds ?? [];
       if (!invitation.linkId || !ids.length)
@@ -825,6 +829,7 @@ export class FeedbackService {
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       });
     });
+    return Promise.all(rows.map(row=>this.privacy.guestReceipt(row)));
   }
 
   private async validateMatch(

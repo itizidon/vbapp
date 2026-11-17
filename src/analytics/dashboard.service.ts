@@ -1,3 +1,4 @@
+import { privateAnalyticsWhere } from "../feedback/private-eligibility";
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { isUUID } from "class-validator";
 import { Prisma } from "@prisma/client";
@@ -173,8 +174,7 @@ export class DashboardService {
         skillId,
         skill: { active: true, sport: { slug: "beach-volleyball" } },
         feedback: {
-          recipientId: actor,
-          status: "PUBLISHED",
+          ...privateAnalyticsWhere(this.db,actor),
           sport: { slug: "beach-volleyball" },
           createdAt: { ...(from ? { gte: from } : {}), lt: end },
         },
@@ -223,7 +223,7 @@ export class DashboardService {
       this.db.$queryRaw<RatingDay[]>(Prisma.sql`
         SELECT to_char(timezone(${timeZone}, f."createdAt"), 'YYYY-MM-DD') AS date,
           r."skillId", avg(r.rating)::float8 AS average, count(*) AS count
-        FROM "FeedbackRating" r JOIN "Feedback" f ON f.id = r."feedbackId"
+        FROM "FeedbackRating" r JOIN "PrivateAnalyticsEligibleFeedback" f ON f.id = r."feedbackId"
         JOIN "Skill" s ON s.id = r."skillId" JOIN "Sport" sport ON sport.id = s."sportId"
         WHERE f."recipientId" = ${actor}::uuid AND f.status = 'PUBLISHED' AND sport.slug = 'beach-volleyball' AND s.active = true
           AND f."sportId" = s."sportId" AND f."createdAt" < ${end}

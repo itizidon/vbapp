@@ -221,6 +221,14 @@ type FeedbackModel {
   matchId: ID
   matches: [FeedbackMatchReference!]
   overallComment: String
+  privacyNoticeVersion: String
+  privacyWithdrawalToken: String
+  privateAnalyticsAllowed: Boolean!
+  privateAnalyticsConsentAt: DateTime
+  privateCoachingAllowed: Boolean!
+  privateCoachingConsentAt: DateTime
+  publicAnalyticsAllowed: Boolean!
+  publicConsentAt: DateTime
   ratings: [FeedbackRatingModel!]
   recipientId: ID!
   rejectedAt: DateTime
@@ -233,6 +241,14 @@ type FeedbackModel {
   sportId: ID!
   status: FeedbackStatus!
   updatedAt: DateTime!
+}
+
+input FeedbackPrivacyInput {
+  feedbackId: ID!
+  privacyNoticeVersion: String
+  privateAnalyticsAllowed: Boolean
+  privateCoachingAllowed: Boolean
+  publicAnalyticsAllowed: Boolean
 }
 
 type FeedbackRatingModel {
@@ -438,6 +454,10 @@ input MatchReviewInput {
   evidenceAllowed: Boolean
   matchId: ID
   overallComment: String
+  privacyNoticeVersion: String
+  privateAnalyticsAllowed: Boolean
+  privateCoachingAllowed: Boolean
+  publicAnalyticsAllowed: Boolean
   ratings: [RatingInput!]!
 }
 
@@ -487,11 +507,14 @@ type Mutation {
   submitGuestFeedback(input: SubmitGuestFeedbackInput!): FeedbackModel!
   updateAccountVisibility(isPublic: Boolean!): UserModel!
   updateFeedback(input: UpdateFeedbackInput!): FeedbackModel!
+  updateFeedbackPrivacy(input: FeedbackPrivacyInput!): FeedbackModel!
   updateMatch(input: UpdateMatchInput!): MatchModel!
   updateMatchTeam(input: UpdateTeamInput!): MatchTeamModel!
+  updatePrivateCoachingPreference(enabled: Boolean!): UserModel!
   updateSelfAssessment(input: UpdateSelfAssessmentInput!): SelfAssessmentModel!
   updateSelfAssessmentRatings(input: UpdateSelfAssessmentRatingsInput!): SelfAssessmentModel!
   updateTeamScore(score: Int, teamId: ID!): MatchTeamModel!
+  withdrawGuestFeedbackPrivacy(token: String!): Boolean!
 }
 
 type PendingApprovalModel {
@@ -505,6 +528,14 @@ type PendingApprovalModel {
   matchId: ID
   matches: [FeedbackMatchReference!]
   overallComment: String
+  privacyNoticeVersion: String
+  privacyWithdrawalToken: String
+  privateAnalyticsAllowed: Boolean!
+  privateAnalyticsConsentAt: DateTime
+  privateCoachingAllowed: Boolean!
+  privateCoachingConsentAt: DateTime
+  publicAnalyticsAllowed: Boolean!
+  publicConsentAt: DateTime
   ratings: [ApprovalRatingModel!]!
   recipientId: ID!
   recipientUsername: String!
@@ -711,6 +742,10 @@ input SubmitFeedbackInput {
   evidenceAllowed: Boolean
   matchId: ID
   overallComment: String
+  privacyNoticeVersion: String
+  privateAnalyticsAllowed: Boolean
+  privateCoachingAllowed: Boolean
+  publicAnalyticsAllowed: Boolean
   ratings: [RatingInput!]!
   recipientId: ID!
   sportId: ID!
@@ -732,6 +767,10 @@ input SubmitGuestFeedbackInput {
   guestName: String
   matchId: ID
   overallComment: String
+  privacyNoticeVersion: String
+  privateAnalyticsAllowed: Boolean
+  privateCoachingAllowed: Boolean
+  publicAnalyticsAllowed: Boolean
   ratings: [RatingInput!]!
   recipientId: ID!
   sportId: ID!
@@ -784,6 +823,7 @@ input UpdateTeamInput {
 }
 
 type UserModel {
+  aiCoachingEnabled: Boolean!
   createdAt: DateTime!
   email: String!
   id: ID!

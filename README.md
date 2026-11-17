@@ -133,3 +133,5 @@ Private asynchronous extraction, pgvector observation embeddings, retryable jobs
 Step 2 extends the existing cache with consent-gated SQL statistics, trends, reviewer diversity, weakness scoring, and authenticated GraphQL queries. See [rules, rebuild commands, and API examples](docs/player-feedback-analysis.md). Profile rebuilding makes no LLM calls.
 
 Historical AI feedback processing: [preview, backfill and readiness commands](docs/feedback-backfill.md).
+
+Feedback privacy purposes, policy routes, migration and rollout: [privacy operations](docs/feedback-privacy.md).

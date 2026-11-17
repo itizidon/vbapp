@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { FeedbackPermissionControls } from "./feedback-privacy-controls";
 import { EMPTY_DATE_RANGE } from "@/lib/match-date-range";
 import { MatchDateFilter } from "./match-date-filter";
 import { InfiniteResults } from "./infinite-results";
@@ -56,8 +57,8 @@ export function FeedbackList() {
         </header>
         <FeedbackSummaryStats />
         <p className="subtle mb-5 text-xs">
-          All-time published feedback · Active skill ratings · Filters below
-          apply to the history.
+          All-time published feedback count · Skill averages use private
+          analytics permissions · Filters below apply to the history.
         </p>
         <div className="matches-history__filters feedback-history__filters">
           <div
@@ -257,10 +258,20 @@ export function FeedbackDetails({ id }: { id: string }) {
           skills={catalog.data!.sports.flatMap((s) => s.skills)}
         />
         <p className="subtle text-xs">
-          Analytics sharing:{" "}
-          {feedback.analyticsAllowed ? "allowed" : "not allowed"} · Supporting
-          evidence: {feedback.evidenceAllowed ? "allowed" : "not allowed"}
+          Private analytics:{" "}
+          {feedback.privateAnalyticsAllowed ? "allowed" : "not allowed"} ·
+          Private AI coaching:{" "}
+          {feedback.privateCoachingAllowed ? "allowed" : "not allowed"} · Public
+          aggregates:{" "}
+          {feedback.publicAnalyticsAllowed ? "allowed" : "not allowed"}
         </p>
+        {user.data?.me.id === feedback.reviewerId && (
+          <FeedbackPermissionControls
+            key={feedback.id}
+            feedback={feedback}
+            showPublic
+          />
+        )}
       </article>
     </>
   );

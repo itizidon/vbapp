@@ -1,4 +1,5 @@
 "use client";
+import { FeedbackPermissionControls } from "./feedback-privacy-controls";
 import { useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { gql } from "@/lib/api";
@@ -12,6 +13,9 @@ export interface ApprovalCard {
     playedAt?: string | null;
   }[];
   id: string;
+  privateAnalyticsAllowed?: boolean;
+  privateCoachingAllowed?: boolean;
+  publicAnalyticsAllowed?: boolean;
   recipientUsername: string;
   status: string;
   createdAt: string;
@@ -44,7 +48,7 @@ export function PendingFeedbackApprovals() {
     enabled: !!user.data,
     queryFn: () =>
       gql<{ myPendingFeedbackApprovals: ApprovalQueue }>(
-        `query PendingApprovals{myPendingFeedbackApprovals{totalCount nextCursor items{id recipientUsername status createdAt overallComment guestName matches{id description playedAt} match{id description playedAt} ratings{skillId skillName rating comment}}}}`,
+        `query PendingApprovals{myPendingFeedbackApprovals{totalCount nextCursor items{id privateAnalyticsAllowed privateCoachingAllowed publicAnalyticsAllowed recipientUsername status createdAt overallComment guestName matches{id description playedAt} match{id description playedAt} ratings{skillId skillName rating comment}}}}`,
       ),
     refetchOnWindowFocus: "always",
   });
@@ -208,6 +212,7 @@ export function PendingFeedbackApprovals() {
               </div>
             ))}
           </div>
+          <FeedbackPermissionControls key={card.id} feedback={card} />
           {decide.error && (
             <p role="alert" className="error text-sm">
               {decide.error.message}

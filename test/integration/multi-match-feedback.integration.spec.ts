@@ -307,15 +307,9 @@ const url = process.env.TEST_DATABASE_URL;
           )
         ).count,
       ).toBe(2);
-      expect(
-        (
-          await analytics.userSkillRatings(
-            { id: f.recipient.id } as any,
-            f.recipient.id,
-            f.sport.id,
-          )
-        )[0].count,
-      ).toBe(2);
+      // Original scores remain stored; this legacy fixture has no new private-processing permission.
+      expect(await analytics.userSkillRatings({id:f.recipient.id} as any,f.recipient.id,f.sport.id)).toEqual([]);
+      expect(await db.feedbackRating.count({where:{feedbackId:{in:records.map(r=>r.id)},skillId:records[0].ratings[0].skillId}})).toBe(2);
       expect(
         await db.playerInternalRatingEvent.count({
           where: {

@@ -38,7 +38,7 @@ export function FeedbackSummaryStats() {
     {
       label: "Average feedback rating",
       value: ready && average !== null ? average.toFixed(2) : "—",
-      note: "Published ratings · out of 5",
+      note: "Private analytics permitted · out of 5",
       Icon: Star,
     },
     {

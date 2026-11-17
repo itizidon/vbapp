@@ -48,9 +48,8 @@ describe("API-aligned validation", () => {
       feedbackSchema.parse({
         guestName: "",
         overallComment: "",
-        analyticsAllowed: false,
-        evidenceAllowed: false,
+        privateProcessingAllowed: false,
       }),
-    ).toMatchObject({ analyticsAllowed: false, evidenceAllowed: false });
+    ).toMatchObject({ privateProcessingAllowed: false });
   });
 });

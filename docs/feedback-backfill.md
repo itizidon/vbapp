@@ -1,3 +1,5 @@
+> Privacy-purpose update: see [feedback privacy model and rollout](feedback-privacy.md). New private analytics/coaching permissions replace the legacy combined flags for eligibility; historical flags are not migrated into consent.
+
 # Historical feedback backfill
 
 This extends the existing `feedback:process` CLI and Step 1 worker. It does not introduce another extraction pipeline. Nothing backfills at startup. Queueing and profile rebuilding are SQL-only; `work --execute` and `watch --execute` explicitly permit paid provider calls.

@@ -24,6 +24,7 @@ const url = process.env.TEST_DATABASE_URL;
     let extract: jest.Mock, embed: jest.Mock;
     const eligible = {
       status: "PUBLISHED" as const,
+      privateAnalyticsAllowed: true, privateCoachingAllowed: true, privacyNoticeVersion: "feedback-privacy-v1", privateAnalyticsConsentAt: new Date(), privateCoachingConsentAt: new Date(),
       analyticsAllowed: true,
       evidenceAllowed: true,
     };
@@ -170,8 +171,8 @@ const url = process.env.TEST_DATABASE_URL;
       { status: "HIDDEN" },
       { status: "DELETED" },
       { status: "REJECTED" },
-      { analyticsAllowed: false },
-      { evidenceAllowed: false },
+      { privateAnalyticsAllowed: false },
+      { privateCoachingAllowed: false },
       { approvalRequired: true },
     ])("does not process ineligible feedback %j", async (override) => {
       const f = await feedback(override as Partial<Feedback>);
@@ -189,7 +190,7 @@ const url = process.env.TEST_DATABASE_URL;
       await rebuildOneProfile(db, userId, sportId);
       await db.feedback.update({
         where: { id: f.id },
-        data: { analyticsAllowed: false },
+        data: { privateAnalyticsAllowed: false },
       });
       expect(await observations()).toHaveLength(0);
       expect(await db.feedbackObservationEmbedding.count()).toBe(0);
@@ -334,7 +335,7 @@ const url = process.env.TEST_DATABASE_URL;
       embed.mockImplementationOnce(async () => {
         await db.feedback.update({
           where: { id: f.id },
-          data: { evidenceAllowed: false },
+          data: { privateCoachingAllowed: false },
         });
         return [0.1, 0.2, 0.3];
       });

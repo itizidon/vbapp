@@ -89,7 +89,7 @@ export const safeMessages: Record<string, string> = {
   PROFILE_PENDING:
     "Your analytical profile is being prepared. Please try again shortly.",
   NO_FEEDBACK:
-    "There is no eligible feedback to analyze yet. Request feedback and allow analytics to start building your coaching profile.",
+    "There is no eligible feedback to analyze yet. A reviewer can enable private analytics and AI coaching in Feedback privacy; any required approval must also be complete.",
   LIMIT_REACHED:
     "This question reached the coach’s processing limit. Try a shorter, more specific volleyball question.",
   TIMEOUT: "The coach took too long to respond. Please try again.",

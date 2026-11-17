@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -339,6 +340,14 @@ export class AiCoachService {
           " characters.",
       );
     input = { ...input, question: input.question.trim() };
+    const owner = await this.db.user.findUnique({
+      where: { id: actorId },
+      select: { aiCoachingEnabled: true },
+    });
+    if (!owner?.aiCoachingEnabled)
+      throw new ForbiddenException(
+        "Private AI coaching is disabled in your account privacy settings",
+      );
     const sport = await this.db.sport.findFirst({
       where: {
         id: input.sportId,

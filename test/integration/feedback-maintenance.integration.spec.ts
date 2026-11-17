@@ -64,7 +64,8 @@ const url = process.env.TEST_DATABASE_URL;
         submittedById: player,
         sportId: sport,
         status: "PUBLISHED",
-        analyticsAllowed: true,
+        privateAnalyticsAllowed: true, privateCoachingAllowed: true, privacyNoticeVersion: "feedback-privacy-v1", privateAnalyticsConsentAt: new Date(), privateCoachingConsentAt: new Date(),
+      analyticsAllowed: true,
         evidenceAllowed: true,
         overallComment: "Stable platform helps",
         ratings: {
@@ -155,8 +156,8 @@ const url = process.env.TEST_DATABASE_URL;
     expect(embed).toHaveBeenCalledTimes(1);
   });
   it("excludes consent, approval, publication and moderation failures; counts numeric-only without AI", async () => {
-    await feedback({ analyticsAllowed: false });
-    await feedback({ evidenceAllowed: false });
+    await feedback({ privateAnalyticsAllowed: false });
+    await feedback({ privateCoachingAllowed: false });
     await feedback({ status: "HIDDEN" });
     await feedback({ reviewerId: other, approvalRequired: true });
     const blocked = await feedback();

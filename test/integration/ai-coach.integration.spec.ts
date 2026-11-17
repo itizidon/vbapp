@@ -70,7 +70,8 @@ const url = process.env.TEST_DATABASE_URL;
           reviewerId: opts.guest ? null : reviewers[observations.length % 2],
           guestName: opts.guest ? "Same name" : null,
           status: opts.status ?? "PUBLISHED",
-          analyticsAllowed: true,
+          privateAnalyticsAllowed: true, privateCoachingAllowed: true, privacyNoticeVersion: "feedback-privacy-v1", privateAnalyticsConsentAt: new Date(), privateCoachingConsentAt: new Date(),
+      analyticsAllowed: true,
           evidenceAllowed: true,
           overallComment: comment,
           createdAt: new Date(Date.now() - 1000),
@@ -271,7 +272,7 @@ const url = process.env.TEST_DATABASE_URL;
       const a = await service.ask(actor, input());
       await db.feedback.update({
         where: { id: observations.find((o) => o.owner === actor)!.feedbackId },
-        data: { analyticsAllowed: false },
+        data: { privateAnalyticsAllowed: false },
       });
       const history = await service.messages(actor, a.conversationId);
       expect(history.messages[0].response).toMatchObject({

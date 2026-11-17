@@ -159,7 +159,7 @@ export async function inventory(
     const ids: { id: string }[] = await db.$queryRaw<
       { id: string }[]
     >(Prisma.sql`SELECT f.id FROM "AnalysisEligibleFeedback" f
-      WHERE ${scope(o, before)} AND (${cursor}::uuid IS NULL OR f.id>${cursor}::uuid) ORDER BY f.id LIMIT ${o.batchSize}`);
+      WHERE ${scope(o, before)} AND EXISTS (SELECT 1 FROM "Feedback" af WHERE af.id=f.id AND feedback_analysis_eligible(af)) AND (${cursor}::uuid IS NULL OR f.id>${cursor}::uuid) ORDER BY f.id LIMIT ${o.batchSize}`);
     if (!ids.length) break;
     const rows = await db.feedback.findMany({
       where: { id: { in: ids.map((r) => r.id) } },
@@ -229,8 +229,24 @@ export async function inventory(
   counts.missingEmbeddingJobs = embeddings.missing;
   counts.pendingEmbeddingOperations = embeddings.pending;
   counts.failedEmbeddings = embeddings.failed + embeddings.incomplete;
+  const [privacyReport] = await db.$queryRaw<
+    {
+      total: number;
+      awaitingApproval: number;
+      withoutNewPrivatePermission: number;
+      legacyBothTrue: number;
+      publicOptIns: number;
+    }[]
+  >(Prisma.sql`
+    SELECT count(*)::int AS total,
+     count(*) FILTER(WHERE f."approvalRequired" AND f."approvedAt" IS NULL)::int AS "awaitingApproval",
+     count(*) FILTER(WHERE NOT f."privateAnalyticsAllowed" OR NOT f."privateCoachingAllowed" OR f."privacyNoticeVersion" IS DISTINCT FROM 'feedback-privacy-v1')::int AS "withoutNewPrivatePermission",
+     count(*) FILTER(WHERE f."analyticsAllowed" AND f."evidenceAllowed")::int AS "legacyBothTrue",
+     count(*) FILTER(WHERE f."publicAnalyticsAllowed")::int AS "publicOptIns"
+    FROM "Feedback" f WHERE ${scope(o, before)}`);
   return {
     counts,
+    privacyReport,
     estimatedOperations: {
       llmRequests: {
         minimum: counts.needsExtraction,
@@ -257,7 +273,7 @@ export async function enqueueHistorical(
     const ids: { id: string }[] = await db.$queryRaw<
       { id: string }[]
     >(Prisma.sql`SELECT f.id FROM "AnalysisEligibleFeedback" f
-      WHERE ${scope(o, before)} AND (${cursor}::uuid IS NULL OR f.id>${cursor}::uuid) ORDER BY f.id LIMIT ${o.batchSize}`);
+      WHERE ${scope(o, before)} AND EXISTS (SELECT 1 FROM "Feedback" af WHERE af.id=f.id AND feedback_analysis_eligible(af)) AND (${cursor}::uuid IS NULL OR f.id>${cursor}::uuid) ORDER BY f.id LIMIT ${o.batchSize}`);
     if (!ids.length) break;
     for (const { id } of ids)
       await db.$transaction(async (tx) => {

@@ -15,6 +15,23 @@ import { RatingInput } from "../common/inputs";
 registerEnumType(FeedbackReviewMode, { name: "FeedbackReviewMode" });
 @InputType()
 export class MatchReviewInput {
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  privateAnalyticsAllowed?: boolean;
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  privateCoachingAllowed?: boolean;
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  publicAnalyticsAllowed?: boolean;
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  privacyNoticeVersion?: string;
   @Field(() => ID, { nullable: true }) @IsOptional() @IsUUID() matchId?: string;
   @Field(() => [RatingInput])
   @ArrayMinSize(1)

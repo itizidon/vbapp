@@ -69,8 +69,8 @@ const dateBefore = (asOf: Date, days: number) =>
 function eligible(userId: string, sportId: string, asOf: Date) {
   return Prisma.sql`
  eligible AS (SELECT * FROM "AnalysisEligibleFeedback" WHERE "recipientId"=${userId}::uuid AND "sportId"=${sportId}::uuid AND "createdAt"<=${asOf}),
- written AS (SELECT f.* FROM eligible f WHERE NULLIF(btrim(f."overallComment"),'') IS NOT NULL OR EXISTS
-  (SELECT 1 FROM "FeedbackRating" r WHERE r."feedbackId"=f.id AND NULLIF(btrim(r.comment),'') IS NOT NULL))`;
+ written AS (SELECT f.* FROM eligible f WHERE EXISTS (SELECT 1 FROM "Feedback" src WHERE src.id=f.id AND feedback_analysis_eligible(src)) AND (NULLIF(btrim(f."overallComment"),'') IS NOT NULL OR EXISTS
+  (SELECT 1 FROM "FeedbackRating" r WHERE r."feedbackId"=f.id AND NULLIF(btrim(r.comment),'') IS NOT NULL)))`;
 }
 export async function summaryQuery(
   db: Db,

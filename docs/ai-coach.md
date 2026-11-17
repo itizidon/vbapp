@@ -1,3 +1,5 @@
+> Privacy-purpose update: see [feedback privacy model and rollout](feedback-privacy.md). New private analytics/coaching permissions replace the legacy combined flags for eligibility; historical flags are not migrated into consent.
+
 # Private AI Coach
 
 AI Coach appears in Analytics. It uses the authenticated player's Step 2 SQL profile and, when useful, bounded Step 1 observation search. It does not calculate averages, trends or weakness scores in the LLM. The model selects validated server-generated facts and optional general practice suggestions. The server verifies fact IDs, supporting counts and authorized feedback citations, then renders the answer. General suggestions appear separately; no drill library or drill IDs are fabricated.

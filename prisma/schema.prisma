@@ -28,6 +28,7 @@ model User {
   username          String                       @unique @db.Citext
   email             String                       @unique @db.Citext
   isPublic          Boolean                      @default(false)
+  aiCoachingEnabled Boolean                      @default(true)
   passwordHash      String
   age               Int
   heightCm          Int
@@ -170,6 +171,15 @@ model Feedback {
   guestInviteNonce                            String?                         @db.Uuid
   guestInviteExpiresAt                        DateTime?
   status                                      FeedbackStatus                  @default(PUBLISHED)
+  privateAnalyticsAllowed Boolean @default(false)
+  privateCoachingAllowed Boolean @default(false)
+  publicAnalyticsAllowed Boolean @default(false)
+  privacyNoticeVersion String?
+  privateAnalyticsConsentAt DateTime?
+  privateCoachingConsentAt DateTime?
+  publicConsentAt DateTime?
+  publicConsentVersion String?
+  privacyEvents FeedbackPrivacyEvent[]
   analyticsAllowed                            Boolean                         @default(false)
   evidenceAllowed                             Boolean                         @default(false)
   reviewerOverallLevelAtSubmission            String?
@@ -623,4 +633,17 @@ model AiCoachUsage {
   spentTokens Int @default(0)
   user User @relation(fields:[userId],references:[id],onDelete:Cascade)
   @@id([userId,day])
+}
+
+model FeedbackPrivacyEvent {
+  id String @id @default(uuid()) @db.Uuid
+  feedbackId String @db.Uuid
+  purpose String
+  allowed Boolean
+  noticeVersion String
+  occurredAt DateTime @default(now())
+  actorId String? @db.Uuid
+  actorRole String
+  feedback Feedback @relation(fields:[feedbackId], references:[id], onDelete:Cascade)
+  @@index([feedbackId, occurredAt])
 }

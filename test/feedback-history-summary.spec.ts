@@ -1,3 +1,4 @@
+import { privateAnalyticsWhere } from "../src/feedback/private-eligibility";
 import { AnalyticsResolver } from "../src/analytics/analytics.resolver";
 it("counts published submissions for the authenticated player and requested sport, independently of ratings", async () => {
   const db: any = { feedback: { count: jest.fn().mockResolvedValue(23) } };
@@ -15,6 +16,7 @@ it("counts published submissions for the authenticated player and requested spor
 });
 it("aggregates published active-skill ratings without loading or paginating individual reviews", async () => {
   const db: any = {
+    feedback: { fields: { reviewerId: "reviewer-field" } },
     feedbackRating: {
       groupBy: jest
         .fn()
@@ -31,7 +33,7 @@ it("aggregates published active-skill ratings without loading or paginating indi
     by: ["skillId"],
     where: {
       skill: { sportId: "beach", active: true },
-      feedback: { recipientId: "me", status: "PUBLISHED", sportId: "beach" },
+      feedback: { ...privateAnalyticsWhere(db, "me"), sportId: "beach" },
     },
     _avg: { rating: true },
     _count: true,

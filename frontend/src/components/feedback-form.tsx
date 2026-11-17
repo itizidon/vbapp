@@ -36,6 +36,7 @@ import { FeedbackNavigation } from "./feedback-navigation";
 import { FeedbackQuickRatings } from "./feedback-quick-ratings";
 import { FeedbackCategoryCard } from "./feedback-category-card";
 import { FeedbackReviewerHeader } from "./feedback-reviewer-header";
+import { FeedbackPrivacyNotice, PRIVACY_NOTICE_VERSION, GuestPrivacyReceipts } from "./feedback-privacy";
 import { FeedbackReviewSummary } from "./feedback-review-summary";
 export function CategoryRatingInput({
   name,
@@ -242,8 +243,7 @@ function FeedbackSubmissionFields({
     defaultValues: {
       guestName: "",
       overallComment: "",
-      analyticsAllowed: false,
-      evidenceAllowed: false,
+      privateProcessingAllowed: false,
     },
   });
   const sport = catalog.data?.sport;
@@ -283,8 +283,9 @@ function FeedbackSubmissionFields({
         ratings: feedbackRatings(steps, answerSets[key] ?? {}),
         overallComment:
           key === answerKey ? values.overallComment : (matchNotes[key] ?? ""),
-        analyticsAllowed: values.analyticsAllowed,
-        evidenceAllowed: values.evidenceAllowed,
+        privateAnalyticsAllowed: !approvalRequired && values.privateProcessingAllowed,
+        privateCoachingAllowed: !approvalRequired && values.privateProcessingAllowed,
+        privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
       };
     });
   }
@@ -402,9 +403,12 @@ function FeedbackSubmissionFields({
         throw new Error(
           "Choose a match you can access, or select General Feedback.",
         );
-      const { guestName, ...rest } = values;
+      const { guestName, privateProcessingAllowed, ...rest } = values;
       const input = {
         ...rest,
+        privateAnalyticsAllowed: !approvalRequired && privateProcessingAllowed,
+        privateCoachingAllowed: !approvalRequired && privateProcessingAllowed,
+        privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
         recipientId: catalog.data?.recipientId ?? recipientId,
         sportId: sport.id,
         matchId: effectiveMatchId || null,
@@ -439,13 +443,13 @@ function FeedbackSubmissionFields({
         // create another batch, even if the form was edited after the error.
         requestSubmission.current ??= crypto.randomUUID();
         return gql(
-          `mutation SubmitFeedbackRequest($input:SubmitFeedbackRequestInput!){submitFeedbackRequest(input:$input){id}}`,
+          `mutation SubmitFeedbackRequest($input:SubmitFeedbackRequestInput!){submitFeedbackRequest(input:$input){id privacyWithdrawalToken}}`,
           { input: { ...request, submissionId: requestSubmission.current } },
         );
       }
       return gql(
         guest || (token && approvalRequired)
-          ? `mutation GuestFeedback($input:SubmitGuestFeedbackInput!){submitGuestFeedback(input:$input){id}}`
+          ? `mutation GuestFeedback($input:SubmitGuestFeedbackInput!){submitGuestFeedback(input:$input){id privacyWithdrawalToken}}`
           : `mutation SubmitFeedback($input:SubmitFeedbackInput!){submitFeedback(input:$input){id}}`,
         { input },
       );
@@ -465,8 +469,7 @@ function FeedbackSubmissionFields({
     !!(
       draftValues.guestName?.trim() ||
       draftValues.overallComment?.trim() ||
-      draftValues.analyticsAllowed ||
-      draftValues.evidenceAllowed ||
+      draftValues.privateProcessingAllowed ||
       selectedReviewer ||
       selected !== (scopedMatchId ?? initialMatchId ?? "") ||
       Object.values(matchNotes).some((note) => note.trim()) ||
@@ -580,6 +583,7 @@ function FeedbackSubmissionFields({
           <Check size={27} />
         </span>
         <h1>Thanks for your feedback.</h1>
+        <GuestPrivacyReceipts result={mutation.data} />
         {individualRequest && requestMatches.length > 1 && (
           <p className="mt-4">
             {requestMatches.length} match reviews submitted.
@@ -1069,28 +1073,12 @@ function FeedbackSubmissionFields({
                         {form.formState.errors.overallComment.message}
                       </p>
                     )}
-                    <details className="feedback-sharing">
-                      <summary>Privacy & sharing</summary>
-                      <div className="space-y-4 pt-3">
-                        <label className="flex items-start gap-3 font-normal">
-                          <input
-                            type="checkbox"
-                            {...form.register("analyticsAllowed")}
-                          />
-                          <span>Allow public aggregate analytics.</span>
-                        </label>
-                        <label className="flex items-start gap-3 font-normal">
-                          <input
-                            type="checkbox"
-                            {...form.register("evidenceAllowed")}
-                          />
-                          <span>
-                            Allow this feedback as supporting evidence for
-                            future insights.
-                          </span>
-                        </label>
-                      </div>
-                    </details>
+                    <FeedbackPrivacyNotice assigned={approvalRequired}>
+                      {!approvalRequired && <label className="flex items-start gap-3 text-sm font-normal">
+                        <input type="checkbox" {...form.register("privateProcessingAllowed")} />
+                        <span>Allow private performance analytics and AI coaching, including processing by OpenAI. Optional; feedback can be submitted without this.</span>
+                      </label>}
+                    </FeedbackPrivacyNotice>
                     {!valuesToSend.length && (
                       <p role="status" className="feedback-inline-error">
                         Rate at least one category before submitting feedback.

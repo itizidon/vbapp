@@ -1,3 +1,5 @@
+> Privacy-purpose update: see [feedback privacy model and rollout](feedback-privacy.md). New private analytics/coaching permissions replace the legacy combined flags for eligibility; historical flags are not migrated into consent.
+
 # Write-time feedback analysis
 
 This backend-only pipeline extracts observations from written feedback. Original feedback, 1–5 ratings, reviewer identities, match links, approval, and internal numerical rating calculations remain authoritative. It adds no frontend or public analysis endpoint.

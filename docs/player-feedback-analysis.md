@@ -1,3 +1,5 @@
+> Privacy-purpose update: see [feedback privacy model and rollout](feedback-privacy.md). New private analytics/coaching permissions replace the legacy combined flags for eligibility; historical flags are not migrated into consent.
+
 # Deterministic player feedback profiles (Step 2)
 
 Step 2 extends Step 1's `PlayerFeedbackAnalysisProfile`, source eligibility, observation view, invalidation functions, and worker commands. It makes no model, extraction, embedding, or internal-rating algorithm changes. Aggregation uses three scoped PostgreSQL queries per rebuild, then deterministic TypeScript classification/scoring. No LLM or embedding API is called.

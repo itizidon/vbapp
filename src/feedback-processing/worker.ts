@@ -67,7 +67,7 @@ export class FeedbackProcessingWorker {
       "leaseToken"=${token}::uuid,"leaseUntil"=CURRENT_TIMESTAMP+interval '5 minutes',"updatedAt"=CURRENT_TIMESTAMP
       WHERE j."feedbackId"=(SELECT q."feedbackId" FROM "FeedbackAnalysisJob" q
         JOIN "AnalysisEligibleFeedback" f ON f.id=q."feedbackId"
-        WHERE ${this.scopeSql("f")} AND ((q.status='PENDING' AND q."runAfter"<=CURRENT_TIMESTAMP)
+        WHERE ${this.scopeSql("f")} AND EXISTS (SELECT 1 FROM "Feedback" af WHERE af.id=f.id AND feedback_analysis_eligible(af)) AND ((q.status='PENDING' AND q."runAfter"<=CURRENT_TIMESTAMP)
            OR (q.status='PROCESSING' AND q."leaseUntil"<CURRENT_TIMESTAMP))
         ORDER BY q."runAfter" FOR UPDATE OF q SKIP LOCKED LIMIT 1) RETURNING j.*`;
     if (!job) return false;

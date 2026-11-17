@@ -1,4 +1,5 @@
 "use client";
+import { AccountProcessingPrivacy } from "./feedback-privacy-controls";
 import { PendingFeedbackApprovals } from "./pending-feedback-approvals";
 import { useUser } from "@/lib/hooks";
 import { UserAvatar, ErrorState, LoadingSkeleton } from "./common";
@@ -55,10 +56,11 @@ export function AccountPage() {
           <h2>Privacy</h2>
           <p className="subtle text-sm">
             Feedback details are visible to its recipient and registered
-            reviewer. Each reviewer chooses whether to allow aggregate analytics
-            or future supporting evidence when submitting.
+            reviewer. Private analytics and AI coaching permissions are separate from
+            optional public aggregate sharing.
           </p>
           <AccountVisibilitySwitch me={me} />
+          <AccountProcessingPrivacy />
         </section>
       </div>
       <PendingFeedbackApprovals />

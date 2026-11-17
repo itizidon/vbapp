@@ -15,8 +15,7 @@ export const signupSchema = z.object({
 export const feedbackSchema = z.object({
   overallComment: z.string().max(5000),
   guestName: z.string().max(100),
-  analyticsAllowed: z.boolean(),
-  evidenceAllowed: z.boolean(),
+  privateProcessingAllowed: z.boolean(),
 });
 export function validateRatings(
   ratings: { skillId: string; rating: number }[],

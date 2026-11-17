@@ -1,1 +1,2 @@
-import {Module} from '@nestjs/common';import {AuthModule} from '../auth/auth.module';import {FeedbackService} from './feedback.service';import {FeedbackResolver} from './feedback.resolver';@Module({imports:[AuthModule],providers:[FeedbackService,FeedbackResolver],exports:[FeedbackService]})export class FeedbackModule{}
+import { FeedbackPrivacyService, FeedbackPrivacyResolver } from "./privacy";
+import {Module} from '@nestjs/common';import {AuthModule} from '../auth/auth.module';import {FeedbackService} from './feedback.service';import {FeedbackResolver} from './feedback.resolver';@Module({imports:[AuthModule],providers:[FeedbackService,FeedbackResolver,FeedbackPrivacyService,FeedbackPrivacyResolver],exports:[FeedbackService]})export class FeedbackModule{}

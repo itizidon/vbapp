@@ -1,4 +1,5 @@
 export interface User {
+  aiCoachingEnabled?: boolean;
   isPublic: boolean;
   id: string;
   username: string;
@@ -42,6 +43,9 @@ export interface Feedback {
   createdAt: string;
   status: "PUBLISHED" | "PENDING" | "HIDDEN" | "DELETED" | "REJECTED";
   ratings: Rating[] | null;
+  privateAnalyticsAllowed?: boolean;
+  privateCoachingAllowed?: boolean;
+  publicAnalyticsAllowed?: boolean;
   analyticsAllowed: boolean;
   evidenceAllowed: boolean;
 }
