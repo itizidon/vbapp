@@ -114,7 +114,7 @@ export function AnalyticsChart({
             }
             formatter={(value) => [
               typeof value === "number"
-                ? `${value.toFixed(winRate ? 1 : 2)}${winRate ? "%" : " / 5"}`
+                ? `${value.toFixed(winRate || individual ? 1 : 2)}${winRate ? "%" : " / 5"}`
                 : "No data",
               name,
             ]}

@@ -3,7 +3,7 @@ import Image from "next/image";
 import { useId } from "react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import type { FeedbackStep, SkillFeedbackAnswer } from "@/lib/feedback-steps";
-import { FeedbackStarRating } from "./feedback-star-rating";
+import { FeedbackRatingSlider } from "./feedback-rating-slider";
 import { Button } from "./ui/button";
 export function FeedbackCategoryCard({
   step,
@@ -57,9 +57,10 @@ export function FeedbackCategoryCard({
                 {step.skill.description}
               </p>
             )}
-            <FeedbackStarRating
-              label={step.title}
+            <FeedbackRatingSlider
+              skillName={step.title}
               value={answer?.rating ?? null}
+              skipped={answer?.skipped ?? false}
               onChange={(rating) => onChange({ rating, skipped: false })}
               descriptionId={
                 step.skill.description ? `${id}-description` : undefined

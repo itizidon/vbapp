@@ -1,3 +1,4 @@
+import { setPeerRating } from "./rating-helpers";
 import { test, expect, type Page } from "@playwright/test";
 
 async function fixture(page: Page, locked = false) {
@@ -66,7 +67,7 @@ test("unified feedback details switch giver types without losing the review and 
     infoPanel.getByText("@Recipient", { exact: true }),
   ).toBeVisible();
   await page.getByLabel("Guest name").fill("Guest draft name");
-  await page.getByRole("radio", { name: "Attacking: 5 out of 5" }).click();
+  await setPeerRating(page, "Attacking", 5);
   await page.getByRole("button", { name: "Attacking", exact: true }).click();
   await page.getByLabel("Attacking comment").fill("Keep my review");
   await page
@@ -89,8 +90,8 @@ test("unified feedback details switch giver types without losing the review and 
   await page.getByRole("button", { name: "Guest", exact: true }).click();
   await expect(page.getByLabel("Guest name")).toHaveValue("Guest draft name");
   await expect(
-    page.getByRole("radio", { name: "Attacking: 5 out of 5" }),
-  ).toBeChecked();
+    page.getByRole("slider", { name: "Attacking rating", exact: true }),
+  ).toHaveValue("5");
   await page
     .getByRole("button", { name: "Registered User", exact: true })
     .click();
@@ -147,7 +148,7 @@ test("preassigned feedback giver stays locked and approval is explained once", a
       { exact: true },
     ),
   ).toHaveCount(1);
-  await page.getByRole("radio", { name: "Passing: 4 out of 5" }).click();
+  await setPeerRating(page, "Passing", 4);
   await page
     .getByRole("button", { name: "Review & Submit", exact: true })
     .click();

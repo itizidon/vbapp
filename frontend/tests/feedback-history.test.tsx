@@ -99,3 +99,24 @@ it("weights complete backend aggregates by sample count instead of averaging ave
   expect(result.top).toMatchObject({ name: "Setting", average: 5, count: 1 });
   expect(feedbackSummary([], skills)).toEqual({ average: null, top: null });
 });
+it("keeps exact decimal scores and calculates the average before formatting", () => {
+  render(
+    <FeedbackCard
+      feedback={{
+        ...feedback,
+        ratings: [
+          { skillId: "Passing", rating: 3.5 },
+          { skillId: "Setting", rating: 4.7 },
+        ],
+      }}
+      skills={skills}
+    />,
+  );
+  expect(screen.getByText("4.10")).toBeVisible();
+  expect(screen.getByText("3.5 / 5")).toBeVisible();
+  expect(screen.getByText("4.7 / 5")).toBeVisible();
+  expect(screen.getByRole("meter", { name: "Setting rating" })).toHaveAttribute(
+    "aria-valuenow",
+    "4.7",
+  );
+});

@@ -14,8 +14,8 @@ it("makes each category explanation available to rating controls", () => {
     />,
   );
   expect(
-    screen.getByRole("group", { name: "Passing" }),
-  ).toHaveAccessibleDescription("Control the first touch.");
+    screen.getByRole("slider", { name: "Passing rating" }),
+  ).toHaveAccessibleDescription(/Control the first touch\./);
 });
 it("formats the date input in local time, not UTC", () => {
   expect(localDateTimeValue(new Date(2026, 10, 8, 13, 5, 49))).toBe(

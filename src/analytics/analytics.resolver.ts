@@ -51,7 +51,7 @@ export class AnalyticsResolver {
     });
     return rows.map((r) => ({
       skillId: r.skillId,
-      average: r._avg.rating ?? 0,
+      average: r._avg.rating==null?0:Number(r._avg.rating),
       count: r._count,
     }));
   }
@@ -100,7 +100,7 @@ export class AnalyticsResolver {
     return a.ratings.map((r) => ({
       skillId: r.skillId,
       selfRating: r.rating,
-      peerAverage: p.get(r.skillId)?._avg.rating,
+      peerAverage: p.get(r.skillId)?._avg.rating==null?null:Number(p.get(r.skillId)!._avg.rating),
       peerCount: p.get(r.skillId)?._count ?? 0,
     }));
   }

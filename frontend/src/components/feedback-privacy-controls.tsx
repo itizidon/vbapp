@@ -56,6 +56,7 @@ export function FeedbackPermissionControls({
         "submitted-feedback",
         "feedback-details",
         "pending-feedback-approvals",
+        "approvals",
         "coach-profile",
         "coach-messages",
         "coach-conversations",

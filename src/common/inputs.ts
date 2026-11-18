@@ -1,9 +1,10 @@
-import { Field, ID, InputType, Int, GraphQLISODateTime, PartialType, OmitType } from '@nestjs/graphql';
+import { IsFeedbackRating } from "./feedback-rating";
+import { Field, ID, InputType, Int, Float, GraphQLISODateTime, PartialType, OmitType } from '@nestjs/graphql';
 import { FeedbackStatus, MatchStatus } from '@prisma/client';
 import { IsBoolean, ArrayMinSize, ArrayMaxSize, ArrayUnique, IsEmail, IsInt, IsOptional, IsString, IsUUID, Length, Max, Min, MinLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
-@InputType() export class RatingInput { @Field(()=>ID) @IsUUID() skillId!:string; @Field(()=>Int) @IsInt() @Min(1) @Max(5) rating!:number; @Field({nullable:true}) @IsOptional() @IsString() @Length(0,5000) comment?:string; }
+@InputType() export class RatingInput { @Field(()=>ID) @IsUUID() skillId!:string; @Field(()=>Float) @IsFeedbackRating() rating!:number; @Field({nullable:true}) @IsOptional() @IsString() @Length(0,5000) comment?:string; }
 @InputType() export class AssessmentRatingInput { @Field(()=>ID) @IsUUID() skillId!:string; @Field(()=>Int) @IsInt() @Min(1) @Max(5) rating!:number; }
 @InputType() export class RegisterInput { @Field() @Length(3,40) username!:string; @Field() @IsEmail() email!:string; @Field() @MinLength(12) password!:string; @Field(()=>Int) @IsInt() @Min(13) @Max(120) age!:number; @Field(()=>Int) @IsInt() @Min(50) @Max(300) heightCm!:number; @Field(()=>ID) @IsUUID() sportId!:string; @Field() @IsString() overallLevel!:string; @Field(()=>[AssessmentRatingInput]) @ArrayMinSize(1) @ValidateNested({each:true}) @Type(()=>AssessmentRatingInput) ratings!:AssessmentRatingInput[]; }
 @InputType() export class LoginInput { @Field() @IsString() login!:string; @Field() @IsString() password!:string; }

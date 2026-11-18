@@ -1,6 +1,7 @@
+import { setPeerRating } from "./rating-helpers";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-test("assigned invitation stays pending until reviewer approves or rejects on Account", async ({
+test("assigned invitation stays pending until reviewer approves or rejects on Approvals", async ({
   browser,
   baseURL,
 }, info) => {
@@ -128,9 +129,7 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
       await guestPage
         .getByRole("button", { name: "Next", exact: true })
         .click();
-    await guestPage
-      .getByRole("radio", { name: "Passing: 5 out of 5", exact: true })
-      .click();
+    await setPeerRating(guestPage, "Passing", 5);
     for (let i = 2; i < 5; i++)
       await guestPage
         .getByRole("button", { name: /^(Next|Review Feedback)$/ })
@@ -182,9 +181,7 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
     ).toBeTruthy();
     const otherPage = await other.newPage();
     await otherPage.goto(link);
-    await otherPage
-      .getByRole("radiogroup", { name: "Attacking rating" })
-      .waitFor();
+    await otherPage.getByRole("slider", { name: "Attacking rating" }).waitFor();
     await otherPage
       .getByRole("button", { name: "Card Review", exact: true })
       .click();
@@ -192,9 +189,7 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
       await otherPage
         .getByRole("button", { name: "Next", exact: true })
         .click();
-    await otherPage
-      .getByRole("radio", { name: "Serving: 3 out of 5", exact: true })
-      .click();
+    await setPeerRating(otherPage, "Serving", 3);
     await otherPage
       .getByRole("button", { name: "Review Feedback", exact: true })
       .click();
@@ -206,16 +201,20 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
       .click();
     await expect(otherPage.getByText(/Your draft is awaiting/)).toBeVisible();
     const reviewPage = await reviewer.newPage();
-    await reviewPage.goto("/account");
+    await reviewPage.goto("/approvals");
     const queue = reviewPage.getByRole("region", {
-      name: "Pending Feedback Approvals",
+      name: "Feedback approvals",
       exact: true,
     });
-    await expect(queue.getByText("2 pending", { exact: true })).toBeVisible();
+    await expect(
+      queue.getByText("2 pending reviews · Newest first", { exact: true }),
+    ).toBeVisible();
+    const firstCard = queue.locator(`#approval-${first}`);
+    await firstCard.locator("summary").click();
     await expect(
       queue.getByText("First draft prepared by guest", { exact: true }),
     ).toBeVisible();
-    await expect(queue.locator("article")).toHaveCount(1);
+    await expect(queue.locator("article")).toHaveCount(2);
     expect(
       await reviewPage.evaluate(
         () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -224,13 +223,18 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
     await queue.screenshot({
       path: `/tmp/vbapp-feedback-approvals-${info.project.name}.png`,
     });
-    await queue
-      .getByRole("button", { name: "Approve Feedback", exact: true })
-      .click();
+    await queue.getByRole("checkbox", { name: /I’ve reviewed every/ }).check();
+    await queue.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(
+      queue.getByText("1 pending review · Newest first", { exact: true }),
+    ).toBeVisible();
+    await queue.locator("article summary").click();
     await expect(
       queue.getByText("Second draft prepared while signed in", { exact: true }),
     ).toBeVisible();
-    await expect(queue.getByText("1 pending", { exact: true })).toBeVisible();
+    await expect(
+      queue.getByText("1 pending review · Newest first", { exact: true }),
+    ).toBeVisible();
     const published = (
       await gql(
         owner.request,
@@ -259,8 +263,11 @@ test("assigned invitation stays pending until reviewer approves or rejects on Ac
         .currentRating,
     ).toBeGreaterThan(3);
     await queue.getByRole("button", { name: "Reject", exact: true }).click();
+    await queue
+      .getByRole("button", { name: "Confirm rejection", exact: true })
+      .click();
     await expect(
-      queue.getByText("You're all caught up!", { exact: true }),
+      queue.getByText("You’re all caught up!", { exact: true }),
     ).toBeVisible();
     expect(
       (await gql(owner.request, "query{receivedFeedback{id}}"))
@@ -365,9 +372,7 @@ test("selects an approver inside guest and signed-in feedback forms", async ({
       await expect(
         page.getByText(`@${assigned.username}`, { exact: true }),
       ).toBeVisible();
-      await page
-        .getByRole("radio", { name: "Attacking: 4 out of 5", exact: true })
-        .click();
+      await setPeerRating(page, "Attacking", 4);
       for (let i = 0; i < 5; i++)
         await page
           .getByRole("button", { name: /^(Next|Review Feedback)$/ })
@@ -385,17 +390,19 @@ test("selects an approver inside guest and signed-in feedback forms", async ({
         .receivedFeedback,
     ).toHaveLength(0);
     const reviewPage = await reviewer.newPage();
-    await reviewPage.goto("/account");
+    await reviewPage.goto("/approvals");
     const queue = reviewPage.getByRole("region", {
-      name: "Pending Feedback Approvals",
+      name: "Feedback approvals",
       exact: true,
     });
-    await expect(queue.getByText("1 pending", { exact: true })).toBeVisible();
-    await queue
-      .getByRole("button", { name: "Approve Feedback", exact: true })
-      .click();
     await expect(
-      queue.getByText("You're all caught up!", { exact: true }),
+      queue.getByText("1 pending review · Newest first", { exact: true }),
+    ).toBeVisible();
+    await queue.locator("article summary").click();
+    await queue.getByRole("checkbox", { name: /I’ve reviewed every/ }).check();
+    await queue.getByRole("button", { name: "Approve", exact: true }).click();
+    await expect(
+      queue.getByText("You’re all caught up!", { exact: true }),
     ).toBeVisible();
     const published = (
       await gql(
@@ -412,10 +419,16 @@ test("selects an approver inside guest and signed-in feedback forms", async ({
     await ownerPage.goto(`/give-feedback/${recipient.id}`);
     await chooseAndSubmit(ownerPage);
     await reviewPage.reload();
-    await expect(queue.getByText("1 pending", { exact: true })).toBeVisible();
-    await queue.getByRole("button", { name: "Reject", exact: true }).click();
+    await queue.locator("article summary").click();
     await expect(
-      queue.getByText("You're all caught up!", { exact: true }),
+      queue.getByText("1 pending review · Newest first", { exact: true }),
+    ).toBeVisible();
+    await queue.getByRole("button", { name: "Reject", exact: true }).click();
+    await queue
+      .getByRole("button", { name: "Confirm rejection", exact: true })
+      .click();
+    await expect(
+      queue.getByText("You’re all caught up!", { exact: true }),
     ).toBeVisible();
     expect(
       (await gql(owner.request, "query{receivedFeedback{id}}"))

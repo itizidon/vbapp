@@ -36,9 +36,19 @@ type ApprovalMatchModel {
   playedAt: DateTime
 }
 
+type ApprovalPreviewModel {
+  createdAt: DateTime!
+  id: ID!
+  match: ApprovalMatchModel
+  matchCount: Int!
+  ratedSkillCount: Int!
+  recipientUsername: String!
+  status: FeedbackStatus!
+}
+
 type ApprovalRatingModel {
   comment: String
-  rating: Int!
+  rating: Float!
   skillId: ID!
   skillName: String!
 }
@@ -253,7 +263,7 @@ input FeedbackPrivacyInput {
 
 type FeedbackRatingModel {
   comment: String
-  rating: Int!
+  rating: Float!
   skillId: ID!
 }
 
@@ -380,7 +390,7 @@ type GuestInvitePayload {
 
 type IndividualCategoryFeedback {
   id: ID!
-  rating: Int!
+  rating: Float!
   submittedAt: DateTime!
 }
 
@@ -591,8 +601,11 @@ type Query {
   myAnalytics(before: DateTime, from: DateTime, timeZone: String! = "UTC"): AnalyticsDashboard!
   myCategoryFeedback(before: DateTime, from: DateTime, skillId: ID!): [IndividualCategoryFeedback!]!
   myFeedbackAnalysisProfile(sportId: ID!): FeedbackAnalysisResult!
+  myFeedbackApprovals(cursor: ID, status: FeedbackStatus! = PENDING): PendingApprovalsPage!
+  myPendingApprovalCount: Int!
   myPendingFeedbackApprovals(cursor: ID): PendingApprovalsPage!
   myPerformanceSummary: PerformanceSummary!
+  myRecentPendingApprovals: [ApprovalPreviewModel!]!
   mySelfAssessments: [SelfAssessmentModel!]!
   mySkillAnalysis(sportId: ID!): FeedbackSkillAnalysisResult!
   myThemeTrends(sportId: ID!): FeedbackThemeAnalysisResult!
@@ -647,7 +660,7 @@ type RatingHistoryPoint {
 
 input RatingInput {
   comment: String
-  rating: Int!
+  rating: Float!
   skillId: ID!
 }
 

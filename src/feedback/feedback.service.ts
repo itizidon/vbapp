@@ -1,3 +1,4 @@
+import { isFeedbackRating, ensureDecimalFeedbackStorage } from "../common/feedback-rating";
 import { FeedbackPrivacyService, privacyGrant, privacyEvents } from "./privacy";
 import { isUUID } from "class-validator";
 import { InternalRatingsService } from "../internal-ratings/internal-ratings.service";
@@ -38,7 +39,10 @@ export class FeedbackService {
     private db: PrismaService,
     private jwt: JwtService,
     private internal: InternalRatingsService = new InternalRatingsService(db),
-    private privacy: FeedbackPrivacyService = new FeedbackPrivacyService(db,jwt),
+    private privacy: FeedbackPrivacyService = new FeedbackPrivacyService(
+      db,
+      jwt,
+    ),
   ) {}
   async invite(
     actor: string,
@@ -356,13 +360,15 @@ export class FeedbackService {
       (payload.matchId ?? null) !== (input.matchId ?? null)
     )
       throw new UnauthorizedException("Invitation does not match submission");
-    return this.privacy.guestReceipt(await this.create(input, {
-      linkToken: input.token,
-      submittedById,
-      guestName: input.guestName?.trim() || "Guest reviewer",
-      nonce: payload.nonce,
-      expiresAt: new Date(payload.exp * 1000),
-    }));
+    return this.privacy.guestReceipt(
+      await this.create(input, {
+        linkToken: input.token,
+        submittedById,
+        guestName: input.guestName?.trim() || "Guest reviewer",
+        nonce: payload.nonce,
+        expiresAt: new Date(payload.exp * 1000),
+      }),
+    );
   }
 
   private async create(
@@ -381,10 +387,12 @@ export class FeedbackService {
   ) {
     if (identity.reviewerId === input.recipientId && !input.assignedReviewerId)
       throw new BadRequestException("Self-feedback is not allowed");
+    if(input.ratings.some(r=>!isFeedbackRating(r.rating))) throw new BadRequestException("Ratings must be from 1.0 to 5.0 in increments of 0.1");
     const skillIds = input.ratings.map((r) => r.skillId);
     if (new Set(skillIds).size !== skillIds.length)
       throw new BadRequestException("Duplicate skill rating");
     const work = async (tx: Prisma.TransactionClient) => {
+      await ensureDecimalFeedbackStorage(tx,input.ratings);
       const invitation = identity.linkToken
         ? await this.verifyInvitation(identity.linkToken, tx)
         : null;
@@ -516,7 +524,16 @@ export class FeedbackService {
             : {}),
         },
       });
-      await privacyEvents(tx, feedback, !approvalRequired ? identity.reviewerId ?? null : null, approvalRequired ? "UNAUTHORIZED_DRAFT" : identity.reviewerId ? "REGISTERED_REVIEWER" : "GUEST");
+      await privacyEvents(
+        tx,
+        feedback,
+        !approvalRequired ? (identity.reviewerId ?? null) : null,
+        approvalRequired
+          ? "UNAUTHORIZED_DRAFT"
+          : identity.reviewerId
+            ? "REGISTERED_REVIEWER"
+            : "GUEST",
+      );
       await tx.feedbackRating.createMany({
         data: await Promise.all(
           input.ratings.map(async (r) => ({
@@ -709,9 +726,7 @@ export class FeedbackService {
           review.ratings.some(
             (r) =>
               !isUUID(r.skillId) ||
-              !Number.isInteger(r.rating) ||
-              r.rating < 1 ||
-              r.rating > 5 ||
+              !isFeedbackRating(r.rating) ||
               (r.comment?.length ?? 0) > 5000,
           ) ||
           (review.overallComment?.length ?? 0) > 5000
@@ -829,7 +844,7 @@ export class FeedbackService {
         orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       });
     });
-    return Promise.all(rows.map(row=>this.privacy.guestReceipt(row)));
+    return Promise.all(rows.map((row) => this.privacy.guestReceipt(row)));
   }
 
   private async validateMatch(
@@ -858,6 +873,146 @@ export class FeedbackService {
     if (!match.participants.length)
       throw new BadRequestException("Recipient is not a match participant");
   }
+  pendingApprovalCount(actor: string) {
+    return this.db.feedback.count({
+      where: { reviewerId: actor, approvalRequired: true, status: "PENDING" },
+    });
+  }
+  recentPendingApprovals(actor: string) {
+    return this.db.feedback
+      .findMany({
+        where: { reviewerId: actor, approvalRequired: true, status: "PENDING" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 3,
+        select: {
+          id: true,
+          status: true,
+          createdAt: true,
+          recipient: { select: { username: true } },
+          match: { select: { id: true, playedAt: true, description: true } },
+          associatedMatches: {
+            orderBy: [{ match: { playedAt: "desc" } }, { matchId: "desc" }],
+            take: 1,
+            select: {
+              match: {
+                select: { id: true, playedAt: true, description: true },
+              },
+            },
+          },
+          _count: { select: { ratings: true, associatedMatches: true } },
+        },
+      })
+      .then((rows) =>
+        rows.map((row) => ({
+          id: row.id,
+          status: row.status,
+          createdAt: row.createdAt,
+          recipientUsername: row.recipient.username,
+          ratedSkillCount: row._count.ratings,
+          matchCount: row.match ? 1 : row._count.associatedMatches,
+          match: row.match ?? row.associatedMatches[0]?.match ?? null,
+        })),
+      );
+  }
+  async approvals(
+    actor: string,
+    status: FeedbackStatus = FeedbackStatus.PENDING,
+    cursor?: string,
+  ) {
+    if (
+      ![
+        FeedbackStatus.PENDING,
+        FeedbackStatus.PUBLISHED,
+        FeedbackStatus.REJECTED,
+      ].some((value) => value === status)
+    )
+      throw new BadRequestException(
+        "Choose Pending, Approved or Rejected approvals",
+      );
+    if (cursor && !isUUID(cursor))
+      throw new BadRequestException("Invalid approval cursor");
+    const where: Prisma.FeedbackWhereInput = {
+      reviewerId: actor,
+      approvalRequired: true,
+      status,
+      ...(status === FeedbackStatus.PUBLISHED
+        ? { approvedById: actor, approvedAt: { not: null } }
+        : {}),
+      ...(status === FeedbackStatus.REJECTED
+        ? { rejectedById: actor, rejectedAt: { not: null } }
+        : {}),
+    };
+    return this.db.$transaction(
+      async (tx) => {
+        const anchor = cursor
+          ? await tx.feedback.findFirst({
+              where: { ...where, id: cursor },
+              select: { id: true, createdAt: true },
+            })
+          : null;
+        if (cursor && !anchor)
+          throw new BadRequestException(
+            "This approval page changed. Refresh the list",
+          );
+        const [totalCount, rows] = await Promise.all([
+          tx.feedback.count({ where }),
+          tx.feedback.findMany({
+            where: {
+              ...where,
+              ...(anchor
+                ? {
+                    OR: [
+                      { createdAt: { lt: anchor.createdAt } },
+                      { createdAt: anchor.createdAt, id: { lt: anchor.id } },
+                    ],
+                  }
+                : {}),
+            },
+            take: 11,
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+            include: {
+              recipient: { select: { username: true } },
+              match: {
+                select: { id: true, playedAt: true, description: true },
+              },
+              associatedMatches: {
+                orderBy: { matchId: "asc" },
+                include: {
+                  match: {
+                    select: { id: true, playedAt: true, description: true },
+                  },
+                },
+              },
+              ratings: {
+                orderBy: { skillId: "asc" },
+                include: { skill: { select: { name: true } } },
+              },
+            },
+          }),
+        ]);
+        const items = rows
+          .slice(0, 10)
+          .map((row) => ({
+            ...row,
+            recipientUsername: row.recipient.username,
+            matches: row.match
+              ? [row.match]
+              : row.associatedMatches.map((r) => r.match),
+            ratings: row.ratings.map((r) => ({
+              ...r,
+              skillName: r.skill.name,
+            })),
+          }));
+        return {
+          totalCount,
+          items,
+          nextCursor: rows.length > 10 ? items[items.length - 1].id : null,
+        };
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+    );
+  }
+
   async pendingApprovals(actor: string, cursor?: string) {
     const where: Prisma.FeedbackWhereInput = {
       reviewerId: actor,
@@ -1018,7 +1173,9 @@ export class FeedbackService {
     });
   }
   async update(actor: string, input: UpdateFeedbackInput) {
+    if(input.ratings?.some(r=>!isFeedbackRating(r.rating))) throw new BadRequestException("Ratings must be from 1.0 to 5.0 in increments of 0.1");
     return ratingTransaction(this.db, async (tx) => {
+      if(input.ratings) await ensureDecimalFeedbackStorage(tx,input.ratings);
       const old = await tx.feedback.findUnique({
         where: { id: input.id },
         include: { ratings: true },

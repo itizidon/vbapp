@@ -34,7 +34,7 @@ describe("API-aligned validation", () => {
   it("uses the real 1–5 scale and rejects duplicate skills", () => {
     expect(validateRatings([])).toBe(false);
     expect(validateRatings([{ skillId: "a", rating: 6 }])).toBe(false);
-    expect(validateRatings([{ skillId: "a", rating: 1.5 }])).toBe(false);
+    expect(validateRatings([{ skillId: "a", rating: 1.55 }])).toBe(false);
     expect(
       validateRatings([
         { skillId: "a", rating: 3 },

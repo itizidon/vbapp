@@ -6,7 +6,7 @@ import type {
   FeedbackStep,
   SkillFeedbackAnswer,
 } from "@/lib/feedback-steps";
-import { FeedbackStarRating } from "./feedback-star-rating";
+import { FeedbackRatingSlider } from "./feedback-rating-slider";
 
 export function FeedbackQuickRatings({
   steps,
@@ -32,27 +32,33 @@ export function FeedbackQuickRatings({
         const panelId = `${id}-${step.key}`;
         return (
           <div className="feedback-quick-row" key={step.key}>
-            <button
-              type="button"
-              className="feedback-quick-toggle"
-              aria-expanded={open}
-              aria-controls={panelId}
-              onClick={() =>
-                setExpanded((previous) => ({ ...previous, [step.key]: !open }))
+            <FeedbackRatingSlider
+              heading={
+                <button
+                  type="button"
+                  className="feedback-quick-toggle"
+                  aria-expanded={open}
+                  aria-controls={panelId}
+                  onClick={() =>
+                    setExpanded((previous) => ({
+                      ...previous,
+                      [step.key]: !open,
+                    }))
+                  }
+                >
+                  {step.title}
+                  <span className="feedback-quick-indicators">
+                    {answer?.comment.trim() && (
+                      <MessageSquare size={14} aria-label="Comment added" />
+                    )}
+                    <ChevronDown size={15} aria-hidden="true" />
+                  </span>
+                </button>
               }
-            >
-              {step.title}
-              <span className="feedback-quick-indicators">
-                {answer?.comment.trim() && (
-                  <MessageSquare size={14} aria-label="Comment added" />
-                )}
-                <ChevronDown size={15} aria-hidden="true" />
-              </span>
-            </button>
-            <FeedbackStarRating
-              label={step.title}
+              skillName={step.title}
               disabled={!step.skill}
               value={answer?.rating ?? null}
+              skipped={answer?.skipped ?? false}
               onChange={(rating) => {
                 if (step.skill)
                   onChange(step.skill.id, { rating, skipped: false });

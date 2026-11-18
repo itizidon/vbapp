@@ -1,3 +1,4 @@
+import { isFeedbackRating, feedbackNumber } from "../common/feedback-rating";
 import { Prisma } from "@prisma/client";
 const D = Prisma.Decimal;
 export const ALGORITHM_VERSION = 1;
@@ -68,11 +69,11 @@ export class RatingAlgorithm {
   }
   apply(
     previous: Prisma.Decimal,
-    submitted: number,
+    submitted: number | Prisma.Decimal,
     finalRate: Prisma.Decimal,
   ) {
-    if (!Number.isInteger(submitted) || submitted < 1 || submitted > 5)
-      throw new Error("Rating must be an integer from 1 to 5");
+    if (!isFeedbackRating(feedbackNumber(submitted)))
+      throw new Error("Rating must be from 1.0 to 5.0 in increments of 0.1");
     const next = roundRating(
       D.max(
         1,

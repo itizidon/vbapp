@@ -1,6 +1,7 @@
 "use client";
 import { AccountProcessingPrivacy } from "./feedback-privacy-controls";
-import { PendingFeedbackApprovals } from "./pending-feedback-approvals";
+import Link from "next/link";
+import { usePendingApprovalCount } from "@/lib/approvals";
 import { useUser } from "@/lib/hooks";
 import { UserAvatar, ErrorState, LoadingSkeleton } from "./common";
 import { FeedbackRequestDialog } from "./feedback-request-dialog";
@@ -9,6 +10,7 @@ import { AccountMenu } from "./app-shell";
 import { PageHeader } from "./page-header";
 export function AccountPage() {
   const user = useUser();
+  const approvals = usePendingApprovalCount(user.data?.me.id);
   if (user.isPending) return <LoadingSkeleton />;
   const error = user.error;
   if (error)
@@ -56,14 +58,23 @@ export function AccountPage() {
           <h2>Privacy</h2>
           <p className="subtle text-sm">
             Feedback details are visible to its recipient and registered
-            reviewer. Private analytics and AI coaching permissions are separate from
-            optional public aggregate sharing.
+            reviewer. Private analytics and AI coaching permissions are separate
+            from optional public aggregate sharing.
           </p>
           <AccountVisibilitySwitch me={me} />
           <AccountProcessingPrivacy />
         </section>
       </div>
-      <PendingFeedbackApprovals />
+      <section className="panel mt-5 space-y-3">
+        <h2>Feedback approvals</h2>
+        <p>
+          Pending feedback approvals:{" "}
+          {approvals.data?.myPendingApprovalCount ?? "—"}
+        </p>
+        <Link className="underline" href="/approvals">
+          Manage approvals
+        </Link>
+      </section>
     </>
   );
 }

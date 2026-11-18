@@ -3,6 +3,7 @@ import {
   GraphQLISODateTime,
   ID,
   Int,
+  Float,
   ObjectType,
 } from "@nestjs/graphql";
 import { SkillModel } from "../common/models";
@@ -36,7 +37,7 @@ export class AnalyticsDashboard {
 export class IndividualCategoryFeedback {
   @Field(() => ID) id!: string;
   @Field(() => GraphQLISODateTime) submittedAt!: Date;
-  @Field(() => Int) rating!: number;
+  @Field(() => Float) rating!: number;
 }
 
 @ObjectType()

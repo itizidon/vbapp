@@ -53,7 +53,7 @@ describe("internal rating algorithm V1", () => {
     expect(a.apply(decimal(5), 5, decimal(1)).next.toString()).toBe("5");
     expect(a.apply(decimal(1), 1, decimal(1)).next.toString()).toBe("1");
     expect(() => a.apply(decimal(3), 6, decimal(0.2))).toThrow();
-    expect(() => a.apply(decimal(3), 2.5, decimal(0.2))).toThrow();
+    expect(() => a.apply(decimal(3), 2.55, decimal(0.2))).toThrow();
   });
   it("uses minimum weight for missing skill ratings and rejects invalid configuration", () => {
     expect(a.influence(null, 0.1).rawWeight.toString()).toBe("1");

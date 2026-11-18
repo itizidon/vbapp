@@ -25,7 +25,7 @@ export function feedbackReturnDestination(
   const publicPage = /^\/(?:players(?:\/[^/]+)?\/?)?$/.test(url.pathname);
   const privatePage =
     /^\/(?:matches|feedback)(?:\/[^/]+)?\/?$/.test(url.pathname) ||
-    /^\/(?:account|analytics)\/?$/.test(url.pathname);
+    /^\/(?:account|analytics|approvals)\/?$/.test(url.pathname);
   return publicPage || (authenticated && privatePage)
     ? `${url.pathname}${url.search}${url.hash}`
     : fallback;

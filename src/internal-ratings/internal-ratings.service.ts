@@ -129,7 +129,7 @@ export class InternalRatingsService {
       if (existing) {
         if (
           existing.published === published &&
-          (!submitted || existing.submittedRating === submitted.rating)
+          (!submitted || existing.submittedRating.equals(submitted.rating))
         )
           continue;
         await tx.internalRatingContribution.update({
@@ -509,7 +509,7 @@ export class InternalRatingsService {
                   : own.rating
                 : null,
               internalRating: internal?.toNumber() ?? null,
-              averageFeedbackRating: average?._avg.rating ?? null,
+              averageFeedbackRating: average?._avg.rating==null?null:Number(average._avg.rating),
               feedbackCount: average?._count ?? 0,
             };
           }),

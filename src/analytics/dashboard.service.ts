@@ -188,7 +188,7 @@ export class DashboardService {
     return rows.map((row) => ({
       id: row.feedback.id,
       submittedAt: row.feedback.createdAt,
-      rating: row.rating,
+      rating: Number(row.rating),
     }));
   }
   async dashboard(actor: string, from?: Date, before?: Date, timeZone = "UTC") {

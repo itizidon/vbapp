@@ -1,11 +1,9 @@
 import React from "react";
 import { afterEach, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  PendingFeedbackApprovals,
-  type ApprovalCard,
-} from "../src/components/pending-feedback-approvals";
+import { ApprovalsPage as PendingFeedbackApprovals } from "../src/components/approvals-page";
+import type { ApprovalCard } from "../src/lib/approvals";
 import { ReviewerPicker } from "../src/components/reviewer-picker";
 import { FeedbackSubmissionForm } from "../src/components/feedback-form";
 vi.mock("next/navigation", () => ({
@@ -76,7 +74,18 @@ function setupQueue(initial: ApprovalCard[], fail = false) {
       return {
         ok: true,
         status: 200,
-        json: async () => ({ data: { decide: { id: variables.id } } }),
+        json: async () => ({
+          data: {
+            [query.includes("approveFeedback")
+              ? "approveFeedback"
+              : "rejectFeedback"]: {
+              id: variables.id,
+              status: query.includes("approveFeedback")
+                ? "PUBLISHED"
+                : "REJECTED",
+            },
+          },
+        }),
       };
     }
     return {
@@ -84,7 +93,7 @@ function setupQueue(initial: ApprovalCard[], fail = false) {
       status: 200,
       json: async () => ({
         data: {
-          myPendingFeedbackApprovals: {
+          myFeedbackApprovals: {
             totalCount: cards.length,
             items: cards,
             nextCursor: null,
@@ -97,47 +106,65 @@ function setupQueue(initial: ApprovalCard[], fail = false) {
   mount(<PendingFeedbackApprovals />);
   return fetcher;
 }
-it("shows exactly one pending card with every skill comment and a count", async () => {
+function expand(id: string) {
+  const article = screen.getByRole("article", {
+    name: `Feedback for @Player ${id}`,
+  });
+  fireEvent.click(article.querySelector("summary")!);
+  return within(article);
+}
+function acknowledge(scope: ReturnType<typeof within>) {
+  fireEvent.click(scope.getByRole("checkbox", { name: /I’ve reviewed every/ }));
+}
+it("shows compact pending cards, then exposes every comment only when expanded", async () => {
   setupQueue([card("one"), card("two")]);
-  await screen.findByRole("article", { name: "Feedback for Player one" });
+  await screen.findByRole("article", { name: "Feedback for @Player one" });
   expect(
-    screen.queryByRole("article", { name: "Feedback for Player two" }),
-  ).not.toBeInTheDocument();
-  expect(screen.getByText("2 pending")).toBeVisible();
-  expect(screen.getByText("Card 1 of 2")).toBeVisible();
-  expect(screen.getByText("Keep using open space")).toBeVisible();
-  expect(screen.getByText("Beach match")).toBeVisible();
+    screen.getByRole("article", { name: "Feedback for @Player two" }),
+  ).toBeVisible();
+  expect(screen.getByText("2 pending reviews · Newest first")).toBeVisible();
+  const scope = expand("one");
+  expect(scope.getByText("Keep using open space")).toBeVisible();
+  expect(scope.getByText("Beach match")).toBeVisible();
+  expect(
+    scope.getByRole("button", { name: "Approve" }),
+  ).toBeDisabled();
+  acknowledge(scope);
+  expect(
+    scope.getByRole("button", { name: "Approve" }),
+  ).toBeEnabled();
 });
-it("advances after successful approval and rejection and then shows the empty state", async () => {
+it("removes only the confirmed item, confirms rejection, and then shows the empty state", async () => {
   const fetcher = setupQueue([card("one"), card("two")]);
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Approve Feedback" }),
-  );
-  await screen.findByRole("article", { name: "Feedback for Player two" });
-  expect(screen.getByText("1 pending")).toBeVisible();
-  fireEvent.click(screen.getByRole("button", { name: "Reject" }));
-  await screen.findByText("You're all caught up!");
-  expect(screen.queryByRole("article")).not.toBeInTheDocument();
+  await screen.findByRole("article", { name: "Feedback for @Player one" });
+  let scope = expand("one");
+  acknowledge(scope);
+  fireEvent.click(scope.getByRole("button", { name: "Approve" }));
+  await screen.findByText("1 pending review · Newest first");
+  scope = expand("two");
+  fireEvent.click(scope.getByRole("button", { name: "Reject" }));
+  fireEvent.click(scope.getByRole("button", { name: "Confirm rejection" }));
+  await screen.findByText("You’re all caught up!");
   const actions = fetcher.mock.calls
     .map((c) => JSON.parse(c[1].body))
     .filter((c) => c.query.includes("mutation"));
   expect(actions[0].query).toContain("approveFeedback");
   expect(actions[1].query).toContain("rejectFeedback");
 });
-it("keeps a failed approval card available with its error", async () => {
+it("keeps a failed approval available with a retryable error", async () => {
   setupQueue([card("one")], true);
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Approve Feedback" }),
-  );
+  await screen.findByRole("article", { name: "Feedback for @Player one" });
+  const scope = expand("one");
+  acknowledge(scope);
+  fireEvent.click(scope.getByRole("button", { name: "Approve" }));
   await screen.findByRole("alert");
   expect(screen.getByRole("article")).toBeVisible();
-  expect(screen.getByText("1 pending")).toBeVisible();
   expect(
-    screen.getByRole("button", { name: "Approve Feedback" }),
+    scope.getByRole("button", { name: "Approve" }),
   ).toBeEnabled();
 });
-it("retains the card and disables both actions until the backend confirms success", async () => {
-  let finish: () => void = () => {};
+it("disables actions and sends only one mutation during repeated taps", async () => {
+  let finish!: () => void;
   const pending = new Promise<void>((resolve) => {
     finish = resolve;
   });
@@ -150,7 +177,9 @@ it("retains the card and disables both actions until the backend confirms succes
       return {
         ok: true,
         status: 200,
-        json: async () => ({ data: { approveFeedback: { id: "one" } } }),
+        json: async () => ({
+          data: { approveFeedback: { id: "one", status: "PUBLISHED" } },
+        }),
       };
     }
     return {
@@ -158,7 +187,7 @@ it("retains the card and disables both actions until the backend confirms succes
       status: 200,
       json: async () => ({
         data: {
-          myPendingFeedbackApprovals: {
+          myFeedbackApprovals: {
             items: processed ? [] : [card("one")],
             totalCount: processed ? 0 : 1,
             nextCursor: null,
@@ -169,27 +198,29 @@ it("retains the card and disables both actions until the backend confirms succes
   });
   vi.stubGlobal("fetch", fetcher);
   mount(<PendingFeedbackApprovals />);
-  const approve = await screen.findByRole("button", {
-    name: "Approve Feedback",
-  });
+  await screen.findByRole("article", { name: "Feedback for @Player one" });
+  const scope = expand("one");
+  acknowledge(scope);
+  const approve = scope.getByRole("button", { name: "Approve" });
   fireEvent.click(approve);
   fireEvent.click(approve);
   await screen.findByText("Approving…");
-  expect(screen.getByRole("article")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Reject" })).toBeDisabled();
+  expect(
+    scope.getByRole("button", { name: "Reject" }),
+  ).toBeDisabled();
   expect(
     fetcher.mock.calls.filter((c) =>
       JSON.parse(c[1].body).query.includes("mutation"),
     ),
   ).toHaveLength(1);
   finish();
-  await screen.findByText("You're all caught up!");
+  await screen.findByText("You’re all caught up!");
 });
-it("shows an empty queue without decision buttons", async () => {
+it("shows an empty queue without decision controls", async () => {
   setupQueue([]);
-  await screen.findByText("You're all caught up!");
+  await screen.findByText("You’re all caught up!");
   expect(
-    screen.queryByRole("button", { name: "Approve Feedback" }),
+    screen.queryByRole("button", { name: "Approve" }),
   ).not.toBeInTheDocument();
 });
 it("searches usernames, excludes the recipient and selects an immutable reviewer ID", async () => {
@@ -271,7 +302,7 @@ it("shows assigned reviewer read-only and submits a pending draft through the in
   fireEvent.click(screen.getByRole("button", { name: "Card Review" }));
   for (let i = 0; i < 2; i++)
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
-  fireEvent.click(screen.getByRole("radio", { name: "Passing: 4 out of 5" }));
+  fireEvent.change(screen.getByRole("slider",{name:"Passing rating"}),{target:{value:"4"}});
   for (let i = 2; i < 5; i++)
     fireEvent.click(
       screen.getByRole("button", { name: /^(Next|Review Feedback)$/ }),

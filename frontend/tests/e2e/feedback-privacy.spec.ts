@@ -1,3 +1,4 @@
+import { setPeerRating } from "./rating-helpers";
 import { test, expect } from "@playwright/test";
 test("private processing is optional and public sharing stays separate on every viewport", async ({
   page,
@@ -66,7 +67,7 @@ test("private processing is optional and public sharing stays separate on every 
   });
   await page.goto("/f/test-invitation?mode=device");
   await page.getByRole("button", { name: "Quick Review", exact: true }).click();
-  await page.getByRole("radio", { name: "Attacking: 4 out of 5" }).click();
+  await setPeerRating(page, "Attacking", 4);
   await page.getByRole("button", { name: "Review & Submit" }).click();
   await expect(
     page.getByRole("heading", { name: "How your feedback is used" }),

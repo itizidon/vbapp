@@ -1,4 +1,4 @@
-import { PrismaClient, Feedback } from "@prisma/client";
+import { PrismaClient, Feedback, Prisma } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { JwtService } from "@nestjs/jwt";
 import {
@@ -322,7 +322,7 @@ const url = process.env.TEST_DATABASE_URL;
         where: { feedbackId: f.id },
         select: { rating: true },
       }),
-    ).toEqual([{ rating: 4 }]);
+    ).toEqual([{ rating: new Prisma.Decimal(4) }]);
   });
   it("grants no identity access with a guest receipt and supports withdrawal without a login", async () => {
     const f = await make({

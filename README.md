@@ -135,3 +135,7 @@ Step 2 extends the existing cache with consent-gated SQL statistics, trends, rev
 Historical AI feedback processing: [preview, backfill and readiness commands](docs/feedback-backfill.md).
 
 Feedback privacy purposes, policy routes, migration and rollout: [privacy operations](docs/feedback-privacy.md).
+
+Approval bell, responsive review cards, history API and deployment: [approval notifications](docs/approval-notifications.md).
+
+Decimal peer feedback (1.0–5.0 in tenths): see [implementation, migration and Railway rollout notes](docs/decimal-feedback-ratings.md). Self assessments remain whole-number ratings.

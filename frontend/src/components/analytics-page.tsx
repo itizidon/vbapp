@@ -300,7 +300,7 @@ export function AnalyticsPage() {
                                 timeZone,
                               )}
                             </td>
-                            <td className="p-2">{sample.rating} / 5</td>
+                            <td className="p-2">{sample.rating.toFixed(1)} / 5</td>
                           </tr>
                         ))
                       : points.map((point) => (

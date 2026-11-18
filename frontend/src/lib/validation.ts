@@ -1,3 +1,4 @@
+import { isFeedbackRating } from "./feedback-rating";
 import { z } from "zod";
 export const loginSchema = z.object({
   login: z.string().trim().min(1, "Enter your email or username"),
@@ -23,7 +24,7 @@ export function validateRatings(
   return (
     ratings.length > 0 &&
     ratings.every(
-      (r) => Number.isInteger(r.rating) && r.rating >= 1 && r.rating <= 5,
+      (r) => isFeedbackRating(r.rating),
     ) &&
     new Set(ratings.map((r) => r.skillId)).size === ratings.length
   );

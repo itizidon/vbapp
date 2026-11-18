@@ -1,9 +1,10 @@
 import { OptionalGqlAuthGuard } from "../common/optional-gql-auth.guard";
-import { PendingApprovalsPage } from "./approval.models";
+import { ApprovalPreviewModel, PendingApprovalsPage } from "./approval.models";
 import { FeedbackInvitationModel } from "./invitation.models";
 import {
   Args,
   ID,
+  Int,
   GraphQLISODateTime,
   Mutation,
   Query,
@@ -11,7 +12,7 @@ import {
   ResolveField,
   Parent,
 } from "@nestjs/graphql";
-import { FeedbackReviewMode } from "@prisma/client";
+import { FeedbackStatus, FeedbackReviewMode } from "@prisma/client";
 import { SubmitFeedbackRequestInput } from "./request.models";
 import { UseGuards } from "@nestjs/common";
 import { FeedbackService } from "./feedback.service";
@@ -100,6 +101,29 @@ export class FeedbackResolver {
     mode?: FeedbackReviewMode,
   ) {
     return this.s.invite(u.id, r, s, m, reviewer, matchIds, mode);
+  }
+  @UseGuards(GqlAuthGuard)
+  @Query(() => Int)
+  myPendingApprovalCount(@CurrentUser() u: AuthUser) {
+    return this.s.pendingApprovalCount(u.id);
+  }
+  @UseGuards(GqlAuthGuard)
+  @Query(() => [ApprovalPreviewModel])
+  myRecentPendingApprovals(@CurrentUser() u: AuthUser) {
+    return this.s.recentPendingApprovals(u.id);
+  }
+  @UseGuards(GqlAuthGuard)
+  @Query(() => PendingApprovalsPage)
+  myFeedbackApprovals(
+    @CurrentUser() u: AuthUser,
+    @Args("status", {
+      type: () => FeedbackStatus,
+      defaultValue: FeedbackStatus.PENDING,
+    })
+    status: FeedbackStatus,
+    @Args("cursor", { type: () => ID, nullable: true }) cursor?: string,
+  ) {
+    return this.s.approvals(u.id, status, cursor);
   }
   @UseGuards(GqlAuthGuard)
   @Query(() => PendingApprovalsPage)

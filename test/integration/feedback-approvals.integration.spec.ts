@@ -212,10 +212,8 @@ const url = process.env.TEST_DATABASE_URL;
         feedbackLinkId: f.link.linkId,
         approvalRequired: true,
       });
-      expect(draft.ratings[0]).toMatchObject({
-        rating: 5,
-        comment: "Good control",
-      });
+      expect(draft.ratings[0].rating.toNumber()).toBe(5);
+      expect(draft.ratings[0].comment).toBe("Good control");
       expect(
         await db.internalRatingContribution.count({
           where: { feedbackId: draft.id },
@@ -406,7 +404,7 @@ const url = process.env.TEST_DATABASE_URL;
           before.reviewerFinalRateAtSubmission!,
         ),
       ).toBe(true);
-      expect(updated.ratings[0].rating).toBe(2);
+      expect(updated.ratings[0].rating.toNumber()).toBe(2);
       const contribution =
         await db.internalRatingContribution.findUniqueOrThrow({
           where: {

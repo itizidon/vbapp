@@ -90,15 +90,25 @@ export function RatingStars({
   if (!onChange)
     return (
       <span
-        aria-label={`${value.toFixed(1)} out of 5`}
+        aria-label={`${value.toFixed(2)} out of 5`}
         className="inline-flex gap-0.5 text-amber-500"
       >
         {[1, 2, 3, 4, 5].map((n) => (
-          <Star
+          <span
             key={n}
-            size={14}
-            fill={n <= Math.round(value) ? "currentColor" : "none"}
-          />
+            className="relative inline-block size-3.5"
+            aria-hidden="true"
+          >
+            <Star size={14} fill="none" />
+            <span
+              className="absolute inset-y-0 left-0 overflow-hidden"
+              style={{
+                width: `${Math.max(0, Math.min(1, value - (n - 1))) * 100}%`,
+              }}
+            >
+              <Star size={14} className="max-w-none" fill="currentColor" />
+            </span>
+          </span>
         ))}
       </span>
     );

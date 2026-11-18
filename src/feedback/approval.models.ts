@@ -1,3 +1,4 @@
+import { FeedbackStatus } from "@prisma/client";
 import {
   Field,
   ID,
@@ -28,4 +29,16 @@ export class PendingApprovalsPage {
   @Field(() => Int) totalCount!: number;
   @Field(() => [PendingApprovalModel]) items!: PendingApprovalModel[];
   @Field(() => ID, { nullable: true }) nextCursor?: string;
+}
+
+@ObjectType()
+export class ApprovalPreviewModel {
+  @Field(() => ID) id!: string;
+  @Field() recipientUsername!: string;
+  @Field(() => GraphQLISODateTime) createdAt!: Date;
+  @Field(() => FeedbackStatus) status!: FeedbackStatus;
+  @Field(() => Int) ratedSkillCount!: number;
+  @Field(() => Int) matchCount!: number;
+  @Field(() => ApprovalMatchModel, { nullable: true })
+  match?: ApprovalMatchModel;
 }

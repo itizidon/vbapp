@@ -1,3 +1,4 @@
+import { setPeerRating } from "./rating-helpers";
 import { test, expect, type Page } from "@playwright/test";
 const matchId = "44444444-4444-4444-8444-444444444444";
 async function openReview(
@@ -91,7 +92,7 @@ async function openReview(
   await expect(page.getByRole("link", { name: "BVBTips home" })).toBeVisible();
   if (!expired)
     await expect(
-      page.getByRole("radiogroup", { name: "Attacking rating" }),
+      page.getByRole("slider", { name: "Attacking rating" }),
     ).toBeVisible();
 }
 
@@ -120,7 +121,7 @@ for (const returnTo of ["/feedback", "/matches", `/matches/${matchId}`]) {
     await expect(
       page.getByRole("link", { name: "BVBTips home" }),
     ).toHaveAttribute("href", "/matches");
-    await page.getByRole("radio", { name: "Defense: 4 out of 5" }).click();
+    await setPeerRating(page, "Defense", 4);
     const back = page.getByRole("link", { name: "Back from feedback" });
     await back.click();
     await expect(
@@ -129,8 +130,8 @@ for (const returnTo of ["/feedback", "/matches", `/matches/${matchId}`]) {
     await page.getByRole("button", { name: "Keep reviewing" }).click();
     await expect(back).toBeFocused();
     await expect(
-      page.getByRole("radio", { name: "Defense: 4 out of 5" }),
-    ).toBeChecked();
+      page.getByRole("slider", { name: "Defense rating", exact: true }),
+    ).toHaveValue("4");
     await back.click();
     await page.getByRole("button", { name: "Leave without saving" }).click();
     await expect(page).toHaveURL(new RegExp(`${returnTo}$`));
@@ -163,7 +164,7 @@ test("successful guest feedback has a public return action with no exit warning"
   page,
 }) => {
   await openReview(page);
-  await page.getByRole("radio", { name: "Passing: 5 out of 5" }).click();
+  await setPeerRating(page, "Passing", 5);
   await page
     .getByRole("button", { name: "Review & Submit", exact: true })
     .click();

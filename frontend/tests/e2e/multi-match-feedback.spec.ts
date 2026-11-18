@@ -1,3 +1,4 @@
+import { setPeerRating } from "./rating-helpers";
 import { test, expect, type APIRequestContext } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 for (const combined of [false, true]) {
@@ -141,7 +142,9 @@ for (const combined of [false, true]) {
       await dialog
         .getByRole("button", { name: "Review on this device", exact: true })
         .click();
-      await expect(page).toHaveURL(/\/f\/[a-f0-9]{64}\?mode=device&returnTo=%2Faccount$/);
+      await expect(page).toHaveURL(
+        /\/f\/[a-f0-9]{64}\?mode=device&returnTo=%2Faccount$/,
+      );
       await expect(
         page.getByLabel("Guest name (optional)", { exact: true }),
       ).toHaveCount(0);
@@ -159,12 +162,7 @@ for (const combined of [false, true]) {
         .click();
       const rounds = combined ? 1 : 2;
       for (let i = 0; i < rounds; i++) {
-        await page
-          .getByRole("radio", {
-            name: `Attacking: ${i ? 2 : 4} out of 5`,
-            exact: true,
-          })
-          .click();
+        await setPeerRating(page, "Attacking", i ? 2 : 4);
         if (!combined)
           await page
             .getByLabel("Written feedback for this match (optional)", {
@@ -210,39 +208,51 @@ for (const combined of [false, true]) {
         ),
       ).toEqual(new Set(ids));
       const reviewerPage = await giver.newPage();
-      await reviewerPage.goto("/account");
+      await reviewerPage.goto("/approvals");
       const queue = reviewerPage.getByRole("region", {
-        name: "Pending Feedback Approvals",
+        name: "Feedback approvals",
         exact: true,
       });
       await expect(
-        queue.getByText(`Card 1 of ${combined ? 1 : 2}`, { exact: true }),
+        queue.getByText(
+          `${combined ? "1 pending review" : "2 pending reviews"} · Newest first`,
+          { exact: true },
+        ),
       ).toBeVisible();
       expect(
         await reviewerPage.evaluate(
           () => document.documentElement.scrollWidth <= window.innerWidth,
         ),
       ).toBe(true);
+      await queue.locator("article summary").first().click();
       if (combined) {
         await expect(
-          queue.getByText("Combined review · 2 matches", { exact: true }),
+          queue.getByRole("heading", {
+            name: "Combined feedback · 2 matches",
+            exact: true,
+          }),
         ).toBeVisible();
         for (const title of titles)
           await expect(queue.getByText(new RegExp(title))).toBeVisible();
       }
       await queue
-        .getByRole("button", { name: "Approve Feedback", exact: true })
-        .click();
+        .getByRole("checkbox", { name: /I’ve reviewed every/ })
+        .check();
+      await queue.getByRole("button", { name: "Approve", exact: true }).click();
       if (!combined) {
         await expect(
-          queue.getByText("Card 1 of 1", { exact: true }),
+          queue.getByText("1 pending review · Newest first", { exact: true }),
         ).toBeVisible();
+        await queue.locator("article summary").click();
         await queue
           .getByRole("button", { name: "Reject", exact: true })
           .click();
+        await queue
+          .getByRole("button", { name: "Confirm rejection", exact: true })
+          .click();
       }
       await expect(
-        queue.getByText("You're all caught up!", { exact: true }),
+        queue.getByText("You’re all caught up!", { exact: true }),
       ).toBeVisible();
       const published = (
         await gql(

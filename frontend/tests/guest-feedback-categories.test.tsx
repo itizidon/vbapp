@@ -160,9 +160,9 @@ function name(value = "Guest player") {
   fireEvent.change(screen.getByLabelText(/Guest name/), { target: { value } });
 }
 function rating(category: string, value: number) {
-  fireEvent.click(
-    screen.getByRole("radio", { name: `${category}: ${value} out of 5` }),
-  );
+  const slider = screen.getByRole("slider", { name: `${category} rating` });
+  fireEvent.change(slider, { target: { value: String(value) } });
+  fireEvent.pointerUp(slider);
 }
 function calls(fetcher: ReturnType<typeof setup>) {
   return fetcher.mock.calls
@@ -171,7 +171,7 @@ function calls(fetcher: ReturnType<typeof setup>) {
 }
 async function ready(cards = true) {
   await screen.findByText("@TestPlayer");
-  await screen.findByRole("radiogroup", { name: "Attacking rating" });
+  await screen.findByRole("slider", { name: "Attacking rating" });
   if (cards)
     fireEvent.click(screen.getByRole("button", { name: "Card Review" }));
 }
@@ -206,7 +206,7 @@ it("loads backend definitions and shows exactly five cards in order with the cor
       String(i + 1),
     );
     expect(
-      screen.getByRole("radiogroup", { name: `${meta.title} rating` }),
+      screen.getByRole("slider", { name: `${meta.title} rating` }),
     ).toHaveAccessibleDescription(
       expect.stringContaining(
         `${meta.title === "Attacking" ? "Attack" : meta.title} from the backend.`,
@@ -232,11 +232,11 @@ it("loads backend definitions and shows exactly five cards in order with the cor
 it("starts unrated and preserves answers through Previous and editing from review", async () => {
   setup();
   await ready();
-  expect(screen.getByText("Not rated yet")).toBeVisible();
+  expect(screen.getByText("Not rated")).toBeVisible();
   expect(
     screen
-      .getAllByRole("radio")
-      .every((r) => r.getAttribute("aria-checked") === "false"),
+      .getAllByRole("slider")
+      .every((r) => r.getAttribute("aria-valuetext")?.startsWith("Not rated")),
   ).toBe(true);
   rating("Attacking", 4);
   fireEvent.change(screen.getByLabelText("Add a comment (optional)"), {
@@ -244,9 +244,9 @@ it("starts unrated and preserves answers through Previous and editing from revie
   });
   next();
   fireEvent.click(screen.getByRole("button", { name: "Previous category" }));
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 4 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "4",
+  );
   expect(screen.getByLabelText("Add a comment (optional)")).toHaveValue(
     "Smart shots",
   );
@@ -257,7 +257,7 @@ it("starts unrated and preserves answers through Previous and editing from revie
   expect(
     within(
       screen.getByRole("article", { name: "Attacking summary" }),
-    ).getByText("2 / 5"),
+    ).getByText("2.0 / 5.0"),
   ).toBeVisible();
 });
 it("Skip clears previous rating and comment and omits that skill from submission", async () => {
@@ -271,7 +271,7 @@ it("Skip clears previous rating and comment and omits that skill from submission
   fireEvent.click(screen.getByRole("button", { name: "Skip" }));
   fireEvent.click(screen.getByRole("button", { name: "Previous category" }));
   expect(screen.getByLabelText("Add a comment (optional)")).toHaveValue("");
-  expect(screen.getByText("Not rated yet")).toBeVisible();
+  expect(screen.getByText("Skipped")).toBeVisible();
   next();
   rating("Defense", 4);
   next();
@@ -326,9 +326,13 @@ it("submits real skill IDs and separate comments in a single final GraphQL mutat
   fireEvent.change(screen.getByLabelText("Written feedback (optional)"), {
     target: { value: "Great game" },
   });
-  const consent=screen.getByRole("checkbox",{name:/Allow private performance analytics/});
+  const consent = screen.getByRole("checkbox", {
+    name: /Allow private performance analytics/,
+  });
   expect(consent).not.toBeChecked();
-  expect(screen.getByRole("link",{name:/Privacy notice and withdrawal/})).toHaveAttribute("href","/privacy");
+  expect(
+    screen.getByRole("link", { name: /Privacy notice and withdrawal/ }),
+  ).toHaveAttribute("href", "/privacy");
   fireEvent.click(consent);
   fireEvent.click(screen.getByRole("button", { name: "Submit Feedback" }));
   await screen.findByRole("heading", { name: "Thanks for your feedback." });
@@ -437,7 +441,7 @@ it("retains answers on errors and prevents duplicate submissions", async () => {
   fireEvent.click(submit);
   await screen.findByRole("alert");
   expect(calls(fetcher)).toHaveLength(1);
-  expect(screen.getByText("4 / 5")).toBeVisible();
+  expect(screen.getByText("4.0 / 5.0")).toBeVisible();
   expect(screen.getByLabelText(/Guest name/)).toHaveValue("Guest player");
 });
 it("resets all five cards between reviewers without using the signed-in device account", async () => {
@@ -456,8 +460,8 @@ it("resets all five cards between reviewers without using the signed-in device a
   await screen.findByRole("heading", { name: "Thanks for your feedback." });
   fireEvent.click(screen.getByRole("button", { name: "Next reviewer" }));
   expect(screen.getByLabelText(/Guest name/)).toHaveValue("");
-  expect(screen.getAllByRole("radiogroup")).toHaveLength(5);
-  expect(screen.getAllByText("Not rated yet")).toHaveLength(5);
+  expect(screen.getAllByRole("slider")).toHaveLength(5);
+  expect(screen.getAllByText("Not rated")).toHaveLength(5);
   fireEvent.click(screen.getByRole("button", { name: "Card Review" }));
   name("Second reviewer");
   next();
@@ -528,7 +532,7 @@ it("does not allow changing an invitation's existing reviewer", async () => {
 it("defaults to all five quick ratings, keeps descriptions collapsed, and preserves answers across modes", async () => {
   setup();
   await ready(false);
-  expect(screen.getAllByRole("radiogroup")).toHaveLength(5);
+  expect(screen.getAllByRole("slider")).toHaveLength(5);
   expect(
     screen.queryByRole("article", { name: "Attacking feedback card" }),
   ).not.toBeInTheDocument();
@@ -541,14 +545,14 @@ it("defaults to all five quick ratings, keeps descriptions collapsed, and preser
     target: { value: "Good placement" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Card Review" }));
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 4 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "4",
+  );
   expect(screen.getByLabelText(/Add a comment/)).toHaveValue("Good placement");
   fireEvent.click(screen.getByRole("button", { name: "Quick Review" }));
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 4 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "4",
+  );
 });
 it("reviews quick feedback before submitting without traversing the cards", async () => {
   const fetcher = setup();
@@ -558,7 +562,7 @@ it("reviews quick feedback before submitting without traversing the cards", asyn
   fireEvent.click(screen.getByRole("button", { name: "Review & Submit" }));
   expect(
     screen.getByRole("article", { name: "Passing summary" }),
-  ).toHaveTextContent("5 / 5");
+  ).toHaveTextContent("5.0 / 5.0");
   expect(screen.getAllByText("Skipped")).toHaveLength(4);
   fireEvent.click(screen.getByRole("button", { name: "Submit Feedback" }));
   await screen.findByRole("heading", { name: "Thanks for your feedback." });
@@ -622,20 +626,23 @@ it("reviews individual matches in saved order, retains separate answers and subm
     screen.getByRole("heading", { name: "Reviewing Match 2 of 2" }),
   ).toBeVisible();
   expect(
-    screen.getByRole("radio", { name: "Attacking: 4 out of 5" }),
-  ).not.toBeChecked();
+    screen.getByRole("slider", { name: "Attacking rating" }),
+  ).toHaveAttribute(
+    "aria-valuetext",
+    expect.stringMatching(/Not rated|Skipped/),
+  );
   rating("Attacking", 2);
   fireEvent.click(screen.getByRole("button", { name: "Match 1" }));
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 4 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "4",
+  );
   expect(screen.getByLabelText(/Written feedback for this match/)).toHaveValue(
     "First match note",
   );
   fireEvent.click(screen.getByRole("button", { name: "Match 2" }));
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 2 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "2",
+  );
   review();
   expect(calls(fetcher)).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Submit Feedback" }));
@@ -713,8 +720,8 @@ it("keeps multiple comments expanded independently, preserves collapsed comments
   );
   expect(
     screen
-      .getAllByRole("radio")
-      .every((r) => r.getAttribute("aria-checked") === "false"),
+      .getAllByRole("slider")
+      .every((r) => r.getAttribute("aria-valuetext")?.startsWith("Not rated")),
   ).toBe(true);
   rating("Attacking", 5);
   rating("Defense", 3);
@@ -732,28 +739,28 @@ it("keeps multiple comments expanded independently, preserves collapsed comments
   expect(screen.getByLabelText(/Defense comment/)).toHaveValue(
     "Strong coverage",
   );
-  expect(
-    screen.getByRole("radio", { name: "Defense: 3 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Defense rating" })).toHaveValue(
+    "3",
+  );
   expect(screen.getByLabelText("Comment added")).toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Card Review" }));
   next();
   expect(screen.getByLabelText(/Add a comment/)).toHaveValue("Strong coverage");
   rating("Defense", 4);
   fireEvent.click(screen.getByRole("button", { name: "Quick Review" }));
-  expect(
-    screen.getByRole("radio", { name: "Defense: 4 out of 5" }),
-  ).toBeChecked();
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 5 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Defense rating" })).toHaveValue(
+    "4",
+  );
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "5",
+  );
   fireEvent.click(screen.getByRole("button", { name: "Review & Submit" }));
   expect(
     screen.getByRole("article", { name: "Defense summary" }),
   ).toHaveTextContent("Strong coverage");
   expect(calls(fetcher)).toHaveLength(0);
   fireEvent.click(screen.getByRole("button", { name: "Back" }));
-  expect(screen.getAllByRole("radiogroup")).toHaveLength(5);
+  expect(screen.getAllByRole("slider")).toHaveLength(5);
   fireEvent.click(screen.getByRole("button", { name: "Review & Submit" }));
   fireEvent.click(screen.getByRole("button", { name: "Submit Feedback" }));
   await screen.findByRole("heading", { name: "Thanks for your feedback." });
@@ -771,7 +778,7 @@ it("defaults multi-match requests to quick review and isolates answers through m
     assigned: true,
   });
   await ready(false);
-  expect(screen.getAllByRole("radiogroup")).toHaveLength(5);
+  expect(screen.getAllByRole("slider")).toHaveLength(5);
   rating("Attacking", 5);
   fireEvent.click(screen.getByRole("button", { name: "Defense" }));
   rating("Defense", 3);
@@ -786,24 +793,27 @@ it("defaults multi-match requests to quick review and isolates answers through m
     screen.getByRole("heading", { name: "Reviewing Match 2 of 2" }),
   ).toBeVisible();
   expect(
-    screen.getByRole("radio", { name: "Attacking: 5 out of 5" }),
-  ).not.toBeChecked();
+    screen.getByRole("slider", { name: "Attacking rating" }),
+  ).toHaveAttribute(
+    "aria-valuetext",
+    expect.stringMatching(/Not rated|Skipped/),
+  );
   rating("Attacking", 2);
   fireEvent.click(screen.getByRole("button", { name: "Card Review" }));
   rating("Attacking", 4);
   fireEvent.click(screen.getByRole("button", { name: "Match 1" }));
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 5 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "5",
+  );
   next();
   expect(screen.getByLabelText(/Add a comment/)).toHaveValue(
     "Match one defense",
   );
   fireEvent.click(screen.getByRole("button", { name: "Quick Review" }));
   fireEvent.click(screen.getByRole("button", { name: "Match 2" }));
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 4 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "4",
+  );
   fireEvent.click(screen.getByRole("button", { name: "Review & Submit" }));
   expect(screen.getByText("First note")).toBeVisible();
   expect(screen.getAllByRole("article")).toHaveLength(10);
@@ -834,12 +844,12 @@ it("keeps one combined assessment when switching modes and submits it with all m
     reviewMode: "COMBINED_MATCHES",
   });
   await ready(false);
-  expect(screen.getAllByRole("radiogroup")).toHaveLength(5);
+  expect(screen.getAllByRole("slider")).toHaveLength(5);
   rating("Attacking", 3);
   fireEvent.click(screen.getByRole("button", { name: "Card Review" }));
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 3 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "3",
+  );
   rating("Attacking", 4);
   fireEvent.click(screen.getByRole("button", { name: "Quick Review" }));
   rating("Serving", 5);
@@ -895,9 +905,9 @@ it("uses one compact details panel and preserves guest names, ratings and commen
   ).toHaveLength(1);
   fireEvent.click(screen.getByRole("button", { name: "Guest" }));
   expect(screen.getByLabelText(/Guest name/)).toHaveValue("Unverified name");
-  expect(
-    screen.getByRole("radio", { name: "Defense: 4 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Defense rating" })).toHaveValue(
+    "4",
+  );
   expect(screen.getByLabelText(/Defense comment/)).toHaveValue(
     "Keep this comment",
   );
@@ -1015,9 +1025,9 @@ it("protects Back and the logo with one dialog, keeps answers and navigates only
   ).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Keep reviewing" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-  expect(
-    screen.getByRole("radio", { name: "Defense: 4 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Defense rating" })).toHaveValue(
+    "4",
+  );
   expect(navigation.push).not.toHaveBeenCalled();
   fireEvent.click(home);
   fireEvent.click(screen.getByRole("button", { name: "Leave without saving" }));
@@ -1082,9 +1092,9 @@ it("uses trusted return context for an authenticated reviewer and never changes 
   fireEvent.click(screen.getByRole("button", { name: "Match 2" }));
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole("button", { name: "Match 1" }));
-  expect(
-    screen.getByRole("radio", { name: "Attacking: 4 out of 5" }),
-  ).toBeChecked();
+  expect(screen.getByRole("slider", { name: "Attacking rating" })).toHaveValue(
+    "4",
+  );
 });
 
 it.each(["INDIVIDUAL_MATCHES", "COMBINED_MATCHES"] as const)(
@@ -1141,7 +1151,7 @@ it.each(["INDIVIDUAL_MATCHES", "COMBINED_MATCHES"] as const)(
     expect(screen.queryByText("@AssignedPlayer")).not.toBeInTheDocument();
     expect(screen.queryByText(/Draft entered by/)).not.toBeInTheDocument();
     expect(screen.getByLabelText(/Guest name/)).toHaveValue("");
-    expect(screen.getAllByText("Not rated yet")).toHaveLength(5);
+    expect(screen.getAllByText("Not rated")).toHaveLength(5);
     expect(screen.getByLabelText(/Attacking comment/)).toHaveValue("");
     const event = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(event);
@@ -1159,8 +1169,11 @@ it.each(["INDIVIDUAL_MATCHES", "COMBINED_MATCHES"] as const)(
         ).toHaveValue("");
       }
       expect(
-        screen.getByRole("radio", { name: "Attacking: 2 out of 5" }),
-      ).not.toBeChecked();
+        screen.getByRole("slider", { name: "Attacking rating" }),
+      ).toHaveAttribute(
+        "aria-valuetext",
+        expect.stringMatching(/Not rated|Skipped/),
+      );
       rating("Serving", 5);
       fireEvent.click(
         screen.getByRole("button", {
@@ -1215,7 +1228,7 @@ it("keeps Card Review selected while resetting to the first skill of a fresh gue
   expect(
     screen.getByRole("article", { name: "Attacking feedback card" }),
   ).toBeVisible();
-  expect(screen.getByText("Not rated yet")).toBeVisible();
+  expect(screen.getByText("Not rated")).toBeVisible();
   expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "1");
 });
 
@@ -1272,4 +1285,28 @@ it("waits for the guest-session response before resetting the completed review",
   release!();
   await screen.findByText("New guest review · Your own independent feedback");
   expect(screen.getByLabelText(/Guest name/)).toHaveValue("");
+});
+
+it("preserves exact decimal ratings between Quick and Card Review and submits their final value", async () => {
+  const fetcher = setup();
+  await ready(false);
+  name("Decimal reviewer");
+  rating("Defense", 4.7);
+  fireEvent.click(screen.getByRole("button", { name: "Card Review" }));
+  next();
+  expect(screen.getByRole("slider", { name: "Defense rating" })).toHaveValue(
+    "4.7",
+  );
+  rating("Defense", 4.5);
+  fireEvent.click(screen.getByRole("button", { name: "Quick Review" }));
+  expect(screen.getByRole("slider", { name: "Defense rating" })).toHaveValue(
+    "4.5",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Review & Submit" }));
+  expect(screen.getByText("4.5 / 5.0")).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Submit Feedback" }));
+  await screen.findByText("Thanks for your feedback.");
+  expect(calls(fetcher)[0].variables.input.ratings).toEqual([
+    { skillId: "backend-defense", rating: 4.5 },
+  ]);
 });

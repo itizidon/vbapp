@@ -1,3 +1,4 @@
+import { setPeerRating } from "./rating-helpers";
 import { test, expect } from "@playwright/test";
 
 for (const combined of [false, true]) {
@@ -87,16 +88,16 @@ for (const combined of [false, true]) {
     await expect(
       page.getByRole("button", { name: "Quick Review", exact: true }),
     ).toHaveAttribute("aria-pressed", "true");
-    await expect(page.getByRole("radiogroup")).toHaveCount(5);
+    await expect(page.getByRole("slider")).toHaveCount(5);
     await expect(page.locator(".feedback-art-image")).toHaveCount(0);
     await expect(
       page.getByLabel("Guest name (optional)", { exact: true }),
     ).toHaveCount(0);
-    await page.getByRole("radio", { name: "Attacking: 5 out of 5" }).click();
+    await setPeerRating(page, "Attacking", 5);
     const defense = page.getByRole("button", { name: /^Defense/ });
     await defense.click();
     await expect(defense).toHaveAttribute("aria-expanded", "true");
-    await page.getByRole("radio", { name: "Defense: 3 out of 5" }).click();
+    await setPeerRating(page, "Defense", 4.7);
     await page.getByLabel("Defense comment").fill("Good coverage");
     await defense.click();
     await expect(page.getByLabel("Defense comment")).not.toBeVisible();
@@ -105,17 +106,17 @@ for (const combined of [false, true]) {
       .getByRole("button", { name: "Card Review", exact: true })
       .click();
     await expect(
-      page.getByRole("radio", { name: "Attacking: 5 out of 5" }),
-    ).toBeChecked();
+      page.getByRole("slider", { name: "Attacking rating", exact: true }),
+    ).toHaveValue("5");
     await page.getByRole("button", { name: "Next", exact: true }).click();
     await expect(page.getByLabel("Add a comment")).toHaveValue("Good coverage");
-    await page.getByRole("radio", { name: "Defense: 4 out of 5" }).click();
+    await setPeerRating(page, "Defense", 4.5);
     await page
       .getByRole("button", { name: "Quick Review", exact: true })
       .click();
     await expect(
-      page.getByRole("radio", { name: "Defense: 4 out of 5" }),
-    ).toBeChecked();
+      page.getByRole("slider", { name: "Defense rating", exact: true }),
+    ).toHaveValue("4.5");
     if (!combined) {
       await page
         .getByRole("button", { name: "Next match", exact: true })
@@ -124,9 +125,9 @@ for (const combined of [false, true]) {
         page.getByRole("heading", { name: "Reviewing Match 2 of 2" }),
       ).toBeVisible();
       await expect(
-        page.getByRole("radio", { name: "Attacking: 5 out of 5" }),
-      ).not.toBeChecked();
-      await page.getByRole("radio", { name: "Serving: 2 out of 5" }).click();
+        page.getByRole("slider", { name: "Attacking rating", exact: true }),
+      ).toHaveAttribute("aria-valuetext", /Not rated/);
+      await setPeerRating(page, "Serving", 3.5);
     }
     expect(
       await page.evaluate(
@@ -158,12 +159,12 @@ for (const combined of [false, true]) {
       matchId: combined ? null : "match-1",
       ratings: [
         { skillId: "attack", rating: 5 },
-        { skillId: "defense", rating: 4, comment: "Good coverage" },
+        { skillId: "defense", rating: 4.5, comment: "Good coverage" },
       ],
     });
     if (!combined)
       expect(submissions[0].reviews[1].ratings).toEqual([
-        { skillId: "serving", rating: 2 },
+        { skillId: "serving", rating: 3.5 },
       ]);
     expect(
       submissions[0].reviews
@@ -186,9 +187,7 @@ for (const combined of [false, true]) {
       page.getByRole("button", { name: "Registered User", exact: true }),
     ).toBeDisabled();
     await expect(page.getByLabel("Guest name")).toHaveValue("");
-    await expect(page.getByText("Not rated yet", { exact: true })).toHaveCount(
-      5,
-    );
+    await expect(page.getByText("Not rated", { exact: true })).toHaveCount(5);
     expect(
       await page.evaluate(() => {
         const event = new Event("beforeunload", { cancelable: true });
@@ -209,13 +208,13 @@ for (const combined of [false, true]) {
     await page.getByLabel("Guest name").fill("New guest");
     for (let index = 0; index < (combined ? 1 : 2); index++) {
       await expect(
-        page.getByRole("radio", { name: "Attacking: 5 out of 5" }),
-      ).not.toBeChecked();
+        page.getByRole("slider", { name: "Attacking rating", exact: true }),
+      ).toHaveAttribute("aria-valuetext", /Not rated/);
       if (!combined)
         await expect(
           page.getByLabel("Written feedback for this match"),
         ).toHaveValue("");
-      await page.getByRole("radio", { name: "Serving: 3 out of 5" }).click();
+      await setPeerRating(page, "Serving", 3);
       await page
         .getByRole("button", {
           name: !combined && index === 0 ? "Next match" : "Review & Submit",
@@ -249,9 +248,7 @@ for (const combined of [false, true]) {
     await expect(
       page.getByRole("button", { name: "Guest", exact: true }),
     ).toBeDisabled();
-    await expect(page.getByText("Not rated yet", { exact: true })).toHaveCount(
-      5,
-    );
+    await expect(page.getByText("Not rated", { exact: true })).toHaveCount(5);
     expect(submissions).toHaveLength(2);
   });
 }

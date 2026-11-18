@@ -1,3 +1,5 @@
+> The Account queue has moved to the header bell and dedicated `/approvals` page. See [responsive notification and approval workflow](approval-notifications.md) for the current UI and additional queries. Original assignment/decision rules below remain authoritative.
+
 # Assigned feedback links and approvals
 
 The existing feedback-link dialog now offers **Assign feedback giver**, a debounced username search over registered members. It displays usernames and generated avatars, never email addresses. Selection stores the immutable user ID; the recipient is excluded in search and rejected by server validation. The dialog retains QR/copy/share and same-device guest review.

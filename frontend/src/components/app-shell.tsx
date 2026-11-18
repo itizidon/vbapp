@@ -17,6 +17,7 @@ import {
 import { useUser } from "@/lib/hooks";
 import { notifyAuthChanged } from "@/lib/auth-session";
 import { ApiError } from "@/lib/api";
+import { NotificationBell } from "./notification-bell";
 import { TopPlayerSearch } from "./top-player-search";
 import { Button } from "./ui/button";
 import { ErrorState, LoadingSkeleton } from "./common";
@@ -166,7 +167,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="order-last w-full min-w-0 lg:order-none lg:w-56 lg:shrink-0">
             <TopPlayerSearch enabled={!!user.data} />
           </div>
-          <ThemeToggle />
+          <div className="flex shrink-0 items-center gap-1">
+            <NotificationBell />
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       <main

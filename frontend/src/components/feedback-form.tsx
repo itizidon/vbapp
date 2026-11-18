@@ -17,7 +17,6 @@ import type { InvitedMatch } from "@/lib/invites";
 import type { Sport, Skill, Member } from "@/lib/types";
 import { Button } from "./ui/button";
 import {
-  RatingStars,
   LoadingSkeleton,
   ErrorState,
   Pending,
@@ -33,6 +32,7 @@ import {
   type SkillFeedbackAnswer,
 } from "@/lib/feedback-steps";
 import { FeedbackNavigation } from "./feedback-navigation";
+import { FeedbackRatingSlider } from "./feedback-rating-slider";
 import { FeedbackQuickRatings } from "./feedback-quick-ratings";
 import { FeedbackCategoryCard } from "./feedback-category-card";
 import { FeedbackReviewerHeader } from "./feedback-reviewer-header";
@@ -48,8 +48,8 @@ export function CategoryRatingInput({
 }: {
   name: string;
   description?: string | null;
-  value: number;
-  onChange: (n: number) => void;
+  value: number|null;
+  onChange: (n: number|null) => void;
   comment?: string;
   onCommentChange?: (value: string) => void;
 }) {
@@ -62,8 +62,8 @@ export function CategoryRatingInput({
           {description}
         </p>
       )}
-      <RatingStars
-        label={name}
+      <FeedbackRatingSlider
+        skillName={name}
         descriptionId={description?.trim() ? descriptionId : undefined}
         value={value}
         onChange={onChange}

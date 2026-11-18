@@ -1,4 +1,4 @@
-import { Field, ID, Int, ObjectType, registerEnumType, GraphQLISODateTime } from '@nestjs/graphql';
+import { Field, ID, Int, Float, ObjectType, registerEnumType, GraphQLISODateTime } from '@nestjs/graphql';
 import { FeedbackStatus, MatchStatus } from '@prisma/client';
 registerEnumType(MatchStatus,{name:'MatchStatus'}); registerEnumType(FeedbackStatus,{name:'FeedbackStatus'});
 
@@ -11,7 +11,7 @@ registerEnumType(MatchStatus,{name:'MatchStatus'}); registerEnumType(FeedbackSta
 @ObjectType() export class MatchTeamModel { @Field(()=>ID) id!:string; @Field(()=>ID) matchId!:string; @Field(()=>Int) teamNumber!:number; @Field({nullable:true}) name?:string; @Field(()=>Int,{nullable:true}) score?:number; }
 @ObjectType() export class MatchParticipantModel { @Field(()=>MemberModel,{nullable:true}) user?:MemberModel; @Field(()=>ID) id!:string; @Field(()=>ID) matchId!:string; @Field(()=>ID,{nullable:true}) teamId?:string; @Field(()=>ID,{nullable:true}) userId?:string; @Field({nullable:true}) guestName?:string; }
 @ObjectType() export class MatchModel { @Field(()=>ID) id!:string; @Field(()=>ID) createdById!:string; @Field(()=>ID,{nullable:true}) sportId?:string; @Field(()=>GraphQLISODateTime,{nullable:true}) playedAt?:Date; @Field({nullable:true}) description?:string; @Field(()=>MatchStatus) status!:MatchStatus; @Field(()=>[MatchTeamModel],{nullable:true}) teams?:MatchTeamModel[]; @Field(()=>[MatchParticipantModel],{nullable:true}) participants?:MatchParticipantModel[]; @Field(()=>GraphQLISODateTime) createdAt!:Date; @Field(()=>GraphQLISODateTime) updatedAt!:Date; }
-@ObjectType() export class FeedbackRatingModel { @Field(()=>ID) skillId!:string; @Field(()=>Int) rating!:number; @Field({nullable:true}) comment?:string; }
+@ObjectType() export class FeedbackRatingModel { @Field(()=>ID) skillId!:string; @Field(()=>Float) rating!:number; @Field({nullable:true}) comment?:string; }
 @ObjectType() export class ReviewerSnapshotModel { @Field(()=>ID) skillId!:string; @Field(()=>Int) ratingAtSubmission!:number; @Field(()=>GraphQLISODateTime) sourceRatingUpdatedAt!:Date; @Field(()=>GraphQLISODateTime) capturedAt!:Date; }
 @ObjectType() export class FeedbackMatchReference { @Field(()=>ID) id!:string; @Field(()=>GraphQLISODateTime,{nullable:true}) playedAt?:Date; @Field({nullable:true}) description?:string; }
 @ObjectType() export class FeedbackModel {

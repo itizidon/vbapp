@@ -1,3 +1,4 @@
+import { setPeerRating } from "./rating-helpers";
 import type { Match, Feedback, Skill } from "../../src/lib/types";
 import { test, expect, type Page } from "@playwright/test";
 const userId = "11111111-1111-4111-8111-111111111111",
@@ -685,7 +686,7 @@ test("request, copy, guest review, confirmation, and recipient feedback", async 
   await api(reviewer, { guest: true, state });
   await reviewer.goto(link);
   await openPassingCard(reviewer);
-  await reviewer.getByRole("radio", { name: "Passing: 5 out of 5" }).click();
+  await setPeerRating(reviewer, "Passing", 5);
   await reviewer
     .getByRole("textbox", { name: "Add a comment (optional)" })
     .fill("Reliable first touch.");
@@ -731,7 +732,7 @@ test("match-bound guest links preserve match scope without private match reads",
   ).toBeVisible();
   await expect(page.getByRole("radio", { name: /No match/ })).not.toBeVisible();
   await openPassingCard(page);
-  await page.getByRole("radio", { name: "Passing: 4 out of 5" }).click();
+  await setPeerRating(page, "Passing", 4);
   await reviewPassingFeedback(page);
   await page
     .getByRole("textbox", { name: "Guest name (optional)" })
@@ -757,7 +758,7 @@ test("registered reviewers can choose a shared match or general feedback", async
     .getByRole("radio", { name: /No match — General Feedback/ })
     .check();
   await openPassingCard(page);
-  await page.getByRole("radio", { name: "Passing: 3 out of 5" }).click();
+  await setPeerRating(page, "Passing", 3);
   await reviewPassingFeedback(page);
   await page.getByRole("button", { name: "Submit Feedback" }).click();
   await expect(
@@ -921,7 +922,7 @@ test("feedback descriptions and login/signup return links", async ({
     ),
   ).toBeVisible();
   await expect(
-    page.getByRole("radiogroup", { name: "Passing rating" }),
+    page.getByRole("slider", { name: "Passing rating" }),
   ).toHaveAccessibleDescription(
     /Control the first touch so your partner can play the next ball/,
   );
@@ -1899,7 +1900,7 @@ test("feedback artwork has immutable hashed URLs and supports light and dark the
     });
   }
   await openPassingCard(page);
-  await page.getByRole("radio", { name: "Passing: 4 out of 5" }).click();
+  await setPeerRating(page, "Passing", 4);
   await reviewPassingFeedback(page);
   await page
     .getByLabel("Written feedback")
@@ -1943,11 +1944,11 @@ test("quick feedback shows five categories, expands descriptions and retains rat
   await api(page, { guest: true, state });
   await page.goto(`/f/${token()}`);
   const quick = page.getByRole("region", { name: "Quick category ratings" });
-  await expect(quick.getByRole("radiogroup")).toHaveCount(5);
+  await expect(quick.getByRole("slider")).toHaveCount(5);
   await expect(page.locator(".feedback-art-image")).toHaveCount(0);
   if (page.viewportSize()!.width >= 1024) {
     const last = await quick
-      .getByRole("radiogroup", { name: "Serving rating" })
+      .getByRole("slider", { name: "Serving rating" })
       .boundingBox();
     expect(last!.y + last!.height).toBeLessThanOrEqual(
       page.viewportSize()!.height,
@@ -1967,7 +1968,7 @@ test("quick feedback shows five categories, expands descriptions and retains rat
   await expect(
     page.getByText("Passing description from the backend."),
   ).toBeVisible();
-  await page.getByRole("radio", { name: "Passing: 4 out of 5" }).click();
+  await setPeerRating(page, "Passing", 4);
   await page.getByLabel("Passing comment").fill("Consistent first touch.");
   const identity = await page
     .getByRole("complementary", { name: "Feedback user information" })
@@ -1981,15 +1982,15 @@ test("quick feedback shows five categories, expands descriptions and retains rat
   });
   await openPassingCard(page);
   await expect(
-    page.getByRole("radio", { name: "Passing: 4 out of 5" }),
-  ).toBeChecked();
+    page.getByRole("slider", { name: "Passing rating" }),
+  ).toHaveValue("4");
   await expect(page.getByLabel("Add a comment")).toHaveValue(
     "Consistent first touch.",
   );
   await page.getByRole("button", { name: "Quick Review", exact: true }).click();
   await expect(
-    page.getByRole("radio", { name: "Passing: 4 out of 5" }),
-  ).toBeChecked();
+    page.getByRole("slider", { name: "Passing rating" }),
+  ).toHaveValue("4");
   await page
     .getByRole("button", { name: "Review & Submit", exact: true })
     .click();

@@ -1,4 +1,4 @@
-import { Star, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import type { FeedbackAnswers, FeedbackStep } from "@/lib/feedback-steps";
 import { Button } from "./ui/button";
 export function FeedbackReviewSummary({
@@ -39,16 +39,7 @@ export function FeedbackReviewSummary({
             {rating != null ? (
               <>
                 <div className="feedback-review-score">
-                  <span aria-hidden="true">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Star
-                        key={n}
-                        size={15}
-                        fill={n <= rating ? "currentColor" : "none"}
-                      />
-                    ))}
-                  </span>
-                  <strong>{rating} / 5</strong>
+                  <strong>{rating.toFixed(1)} / 5.0</strong>
                 </div>
               </>
             ) : (

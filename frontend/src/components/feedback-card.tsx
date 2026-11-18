@@ -22,7 +22,7 @@ export function CategoryRatingDetails({
             </h3>
             <div className="flex items-center gap-2">
               <RatingStars value={rating.rating} />
-              <span className="subtle text-xs">{rating.rating}/5</span>
+              <span className="subtle text-xs">{rating.rating.toFixed(1)} / 5</span>
             </div>
           </div>
           {rating.comment && (
@@ -129,7 +129,7 @@ export function FeedbackCard({
                   />
                 </span>
                 <span className="feedback-skill-bar__value">
-                  {rating.rating}/5
+                  {rating.rating.toFixed(1)} / 5
                 </span>
               </div>
             );

@@ -212,7 +212,7 @@ model Feedback {
 model FeedbackRating {
   feedbackId                           String    @db.Uuid
   skillId                              String    @db.Uuid
-  rating                               Int
+  rating                               Decimal @db.Decimal(3, 1)
   comment                              String?
   // Private calculation inputs frozen when the feedback is submitted.
   reviewerInternalRatingAtSubmission   Decimal?  @db.Decimal(12, 8)
@@ -315,7 +315,7 @@ model PlayerInternalRatingEvent {
   sourceKey              String?                 @unique
   type                   InternalRatingEventType
   previousRating         Decimal                 @db.Decimal(12, 8)
-  submittedRating        Int?
+  submittedRating        Decimal? @db.Decimal(3, 1)
   reviewerId             String?                 @db.Uuid
   reviewerInternalRating Decimal?                @db.Decimal(12, 8)
   rawWeight              Decimal?                @db.Decimal(20, 12)
@@ -368,7 +368,7 @@ model InternalRatingContribution {
   algorithmVersion       Int                  @default(1)
   // Registered reviewer ID or guest invite nonce; one influence per UTC day.
   identityKey            String
-  submittedRating        Int
+  submittedRating        Decimal @db.Decimal(3, 1)
   published              Boolean              @default(false)
   eligible               Boolean              @default(false)
   effectiveAt            DateTime             @default(dbgenerated("timezone('UTC', clock_timestamp())"))
