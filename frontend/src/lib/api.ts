@@ -34,5 +34,5 @@ export async function gql<T>(
 }
 export const USER_FIELDS = "id username email createdAt isPublic aiCoachingEnabled";
 export const FEEDBACK_FIELDS =
-  "id recipientId matchId matches {id description playedAt} sportId reviewerId reviewerUsername guestName overallComment createdAt status privateAnalyticsAllowed privateCoachingAllowed publicAnalyticsAllowed analyticsAllowed evidenceAllowed ratings { skillId rating comment }";
+  "id recipientId matchId matches {id description playedAt} sportId reviewerId reviewerUsername guestName overallComment createdAt status pendingAiAllowed privateAnalyticsAllowed privateCoachingAllowed publicAnalyticsAllowed analyticsAllowed evidenceAllowed ratings { skillId rating comment }";
 export const CATALOG = `query Catalog { sports { id name slug skills { id name slug sportId active requiredForSelfAssessment description } } }`;

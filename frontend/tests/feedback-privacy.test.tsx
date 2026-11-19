@@ -56,14 +56,12 @@ describe("purpose-specific privacy controls", () => {
     ).toBeInTheDocument();
   });
   it("keeps public sharing separate and unchecked, and grants only the purpose selected", async () => {
-    const fetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue({
-        ok: true,
-        json: async () => ({
-          data: { updateFeedbackPrivacy: { id: "review" } },
-        }),
-      } as Response);
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: { updateFeedbackPrivacy: { id: "review" } },
+      }),
+    } as Response);
     wrapper(
       <FeedbackPermissionControls feedback={{ id: "review" }} showPublic />,
     );
@@ -107,12 +105,10 @@ describe("purpose-specific privacy controls", () => {
       screen.getByRole("link", { name: /Manage privacy/ }),
     ).toHaveAttribute("href", `/privacy/feedback#${receipt}`);
     window.history.replaceState(null, "", `/privacy/feedback#${receipt}`);
-    const fetch = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue({
-        ok: true,
-        json: async () => ({ data: { withdrawGuestFeedbackPrivacy: true } }),
-      } as Response);
+    const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { withdrawGuestFeedbackPrivacy: true } }),
+    } as Response);
     wrapper(<FeedbackPrivacySettings />);
     fireEvent.click(
       screen.getByRole("button", { name: "Withdraw processing permissions" }),
@@ -124,4 +120,35 @@ describe("purpose-specific privacy controls", () => {
     });
     expect(window.location.hash).toBe("");
   });
+});
+
+it("requires an unchecked separate disclosure choice for recipient AI before approval", async () => {
+  const fetch = vi
+    .spyOn(globalThis, "fetch")
+    .mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: {
+          updateFeedbackPrivacy: { id: "pending", pendingAiAllowed: true },
+        },
+      }),
+    } as Response);
+  wrapper(<FeedbackPermissionControls feedback={{ id: "pending" }} pending />);
+  const choice = screen.getByRole("checkbox", {
+    name: /Allow recipient AI insights and excerpts before I approve/,
+  });
+  expect(choice).not.toBeChecked();
+  expect(
+    screen.getByText(/Before approval, this review is private to you/),
+  ).toBeVisible();
+  fireEvent.click(choice);
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  const body = JSON.parse(String(fetch.mock.calls[0][1]?.body));
+  expect(body.variables.input).toEqual({
+    feedbackId: "pending",
+    pendingAiAllowed: true,
+    pendingAiNoticeVersion: "pending-ai-disclosure-v1",
+    privacyNoticeVersion: "feedback-privacy-v1",
+  });
+  expect(body.variables.input).not.toHaveProperty("privateCoachingAllowed");
 });

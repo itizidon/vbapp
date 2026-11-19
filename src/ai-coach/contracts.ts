@@ -117,6 +117,13 @@ export const coachAnswerSchema = z
             supportingReviewCount: z.number().int().min(0),
             feedbackIds: z.array(z.string().uuid()).max(10),
             metricKey: z.string().nullable(),
+            trustClassification: z
+              .enum([
+                "VERIFIED_APPROVED",
+                "UNVERIFIED_GUEST",
+                "AWAITING_REVIEWER_APPROVAL",
+              ])
+              .optional(),
             limited: z.boolean().optional(),
           })
           .strict(),

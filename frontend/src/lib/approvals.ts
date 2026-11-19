@@ -34,6 +34,7 @@ export interface ApprovalCard {
   approvedAt?: string | null;
   rejectedAt?: string | null;
   rejectionReason?: string | null;
+  pendingAiAllowed?: boolean;
   privateAnalyticsAllowed?: boolean;
   privateCoachingAllowed?: boolean;
   publicAnalyticsAllowed?: boolean;
@@ -49,7 +50,7 @@ export interface ApprovalQueue {
   items: ApprovalCard[];
   nextCursor: string | null;
 }
-export const APPROVAL_FIELDS = `id recipientUsername status createdAt overallComment guestName approvedAt rejectedAt rejectionReason privateAnalyticsAllowed privateCoachingAllowed publicAnalyticsAllowed match{id description playedAt} matches{id description playedAt} ratings{skillId skillName rating comment}`;
+export const APPROVAL_FIELDS = `id recipientUsername status createdAt overallComment guestName approvedAt rejectedAt rejectionReason pendingAiAllowed privateAnalyticsAllowed privateCoachingAllowed publicAnalyticsAllowed match{id description playedAt} matches{id description playedAt} ratings{skillId skillName rating comment}`;
 export const approvalKeys = {
   all: ["approvals"] as const,
   count: (user: string | undefined) => ["approvals", user, "count"] as const,

@@ -1,4 +1,4 @@
-export const PROFILE_ALGORITHM_VERSION = 2;
+export const PROFILE_ALGORITHM_VERSION = 3;
 export const PRIMARY_SKILL_SLUGS = [
   "attack",
   "defense",
@@ -32,3 +32,10 @@ export const PROFILE_REBUILD_RETRY_MS = 60_000;
 export const PROFILE_QUERY_TIMEOUT_MS = 5_000;
 export const PROFILE_TRANSACTION_TIMEOUT_MS = 20_000;
 export const DAY_MS = 86_400_000;
+
+// Initial heuristic evidence weights, not scientifically validated. No internal rating coefficients use these.
+export const FEEDBACK_TRUST_WEIGHTS = Object.freeze({
+  VERIFIED_APPROVED: 1,
+  UNVERIFIED_GUEST: 0.35,
+  AWAITING_REVIEWER_APPROVAL: 0.35,
+});

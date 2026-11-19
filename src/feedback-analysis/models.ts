@@ -45,7 +45,30 @@ export class RatingComparison {
   @Field() explanation!: string;
 }
 @ObjectType()
+export class FeedbackTrustEvidence {
+  @Field() classification!: string;
+  @Field(() => Int) feedbackCount!: number;
+  @Field(() => Int) positiveFeedbackCount!: number;
+  @Field(() => Int) negativeFeedbackCount!: number;
+  @Field(() => Int) neutralFeedbackCount!: number;
+}
+@ObjectType()
+export class FeedbackTrustRating {
+  @Field() classification!: string;
+  @Field(() => AnalysisAverage) all!: AnalysisAverage;
+  @Field(() => AnalysisAverage) recent!: AnalysisAverage;
+  @Field(() => AnalysisAverage) previous!: AnalysisAverage;
+}
+@ObjectType()
 export class FeedbackSkillAnalysis {
+  @Field(() => AnalysisAverage, { nullable: true })
+  verifiedPeer?: AnalysisAverage;
+  @Field(() => AnalysisAverage, { nullable: true })
+  unverifiedPeer?: AnalysisAverage;
+  @Field(() => [FeedbackTrustRating], { nullable: true })
+  trustBreakdown?: FeedbackTrustRating[];
+  @Field(() => RatingComparison, { nullable: true })
+  verifiedNinetyDayComparison?: RatingComparison;
   @Field(() => ID) skillId!: string;
   @Field() name!: string;
   @Field() slug!: string;
@@ -65,6 +88,8 @@ export class FeedbackSkillAnalysis {
 }
 @ObjectType()
 export class ThemePeriod {
+  @Field(() => [FeedbackTrustEvidence], { nullable: true })
+  trustBreakdown?: FeedbackTrustEvidence[];
   @Field(() => Int) feedbackCount!: number;
   @Field(() => Int) relevantFeedbackCount!: number;
   @Field(() => Int) positiveFeedbackCount!: number;
@@ -77,6 +102,9 @@ export class ThemePeriod {
 }
 @ObjectType()
 export class FeedbackThemeAnalysis {
+  @Field(() => [FeedbackTrustEvidence], { nullable: true })
+  trustBreakdown?: FeedbackTrustEvidence[];
+  @Field(() => Float, { nullable: true }) trustEvidenceFactor?: number;
   @Field(() => ID) themeId!: string;
   @Field() name!: string;
   @Field(() => [ID]) skillIds!: string[];
@@ -110,6 +138,11 @@ export class WeaknessComponent {
 }
 @ObjectType()
 export class FeedbackWeakness {
+  @Field(() => Int, { nullable: true })
+  verifiedSupportingFeedbackCount?: number;
+  @Field(() => Int, { nullable: true })
+  unverifiedSupportingFeedbackCount?: number;
+  @Field(() => Float, { nullable: true }) trustEvidenceFactor?: number;
   @Field(() => ID, { nullable: true }) skillId!: string | null;
   @Field(() => ID) themeId!: string;
   @Field(() => Float) priorityScore!: number;
@@ -126,6 +159,10 @@ export class FeedbackWeakness {
 }
 @ObjectType()
 export class FeedbackAnalysisProfile {
+  @Field(() => Int, { nullable: true }) verifiedFeedbackCount?: number;
+  @Field(() => Int, { nullable: true }) awaitingReviewerApprovalCount?: number;
+  @Field(() => [FeedbackTrustEvidence], { nullable: true })
+  trustBreakdown?: FeedbackTrustEvidence[];
   @Field(() => ID) playerId!: string;
   @Field(() => ID) sportId!: string;
   @Field(() => Int) algorithmVersion!: number;

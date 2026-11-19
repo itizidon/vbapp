@@ -139,3 +139,9 @@ Feedback privacy purposes, policy routes, migration and rollout: [privacy operat
 Approval bell, responsive review cards, history API and deployment: [approval notifications](docs/approval-notifications.md).
 
 Decimal peer feedback (1.0–5.0 in tenths): see [implementation, migration and Railway rollout notes](docs/decimal-feedback-ratings.md). Self assessments remain whole-number ratings.
+
+AI evidence eligibility is separate from verified internal ratings. See [trust classifications, pending-review privacy, backfill and Railway rollout](docs/feedback-ai-eligibility.md).
+
+Backend training library, deterministic drill targeting, and private video infrastructure: see [setup, GraphQL examples, worker contracts and deployment notes](docs/training-backend.md). Video analysis providers are intentionally unconfigured; no CV results are fabricated.
+
+See [coach video uploads and real movement comparison](docs/video-technique-comparison.md) for the CPU worker, private storage, training UI, tests and deployment instructions.

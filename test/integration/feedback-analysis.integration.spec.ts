@@ -87,6 +87,7 @@ const url = process.env.TEST_DATABASE_URL;
       data: {
         recipientId: userId,
         sportId,
+        submittedAt: day(options.days ?? 1), submittedById: options.guest ? null : (options.reviewer ?? reviewers[0]),
         reviewerId: options.guest ? null : (options.reviewer ?? reviewers[0]),
         guestName: options.guest ? "Same guest name" : null,
         status: "PUBLISHED",
@@ -363,7 +364,8 @@ const url = process.env.TEST_DATABASE_URL;
       distinctVerifiedReviewers: 2,
       evidenceStatus: E.SUFFICIENT,
     });
-    expect(p.weaknesses[0].priorityScore).toBeGreaterThan(50);
+    expect(p.weaknesses[0].priorityScore).toBeGreaterThan(0);
+    expect(p.weaknesses[0].trustEvidenceFactor).toBeCloseTo(2/6); // two independent accounts, six literal reviews
     const other = await user();
     userId = other;
     for (let i = 0; i < 5; i++)

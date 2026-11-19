@@ -25,7 +25,7 @@ import {
   renderDraft,
   validateDraft,
 } from "./facts";
-import { COACH_SYSTEM_PROMPT } from "./prompts/bvbtips-coach-v1";
+import { COACH_SYSTEM_PROMPT } from "./prompts/bvbtips-coach-v2";
 export interface CoachRun {
   draft: CoachDraft;
   answer: CoachAnswer;

@@ -12,15 +12,18 @@ import {
 import { Button } from "./ui/button";
 
 type Purpose =
+  | "pendingAiAllowed"
   | "privateAnalyticsAllowed"
   | "privateCoachingAllowed"
   | "publicAnalyticsAllowed";
 export function FeedbackPermissionControls({
   feedback,
   showPublic = false,
+  pending = false,
 }: {
   feedback: Pick<Feedback, "id" | Purpose>;
   showPublic?: boolean;
+  pending?: boolean;
 }) {
   const client = useQueryClient();
   const [overrides, setOverrides] = useState<Partial<Pick<Feedback, Purpose>>>(
@@ -36,13 +39,18 @@ export function FeedbackPermissionControls({
       allowed: boolean;
     }) => {
       await gql(
-        `mutation Privacy($input:FeedbackPrivacyInput!){updateFeedbackPrivacy(input:$input){id privateAnalyticsAllowed privateCoachingAllowed publicAnalyticsAllowed}}`,
+        `mutation Privacy($input:FeedbackPrivacyInput!){updateFeedbackPrivacy(input:$input){id pendingAiAllowed privateAnalyticsAllowed privateCoachingAllowed publicAnalyticsAllowed}}`,
         {
           input: {
             feedbackId: feedback.id,
             [key]: allowed,
             ...(allowed
-              ? { privacyNoticeVersion: PRIVACY_NOTICE_VERSION }
+              ? {
+                  privacyNoticeVersion: PRIVACY_NOTICE_VERSION,
+                  ...(key === "pendingAiAllowed"
+                    ? { pendingAiNoticeVersion: "pending-ai-disclosure-v1" }
+                    : {}),
+                }
               : {}),
           },
         },
@@ -91,6 +99,22 @@ export function FeedbackPermissionControls({
           "Allow OpenAI processing and private coaching evidence. Private analytics permission is also needed for coaching.",
         )}
       </FeedbackPrivacyNotice>
+      {pending && (
+        <div className="rounded-xl border border-border p-4 space-y-2 text-sm">
+          <p>
+            Before approval, this review is private to you. This separate choice
+            lets the recipient’s private AI Coach use its ratings, insights and
+            comment excerpts now. It does not approve the review, verify your
+            authorship or change internal ratings. Both private analytics and
+            OpenAI coaching permissions above are also required. You can
+            withdraw this choice here.
+          </p>
+          {checkbox(
+            "pendingAiAllowed",
+            "Allow recipient AI insights and excerpts before I approve this review (optional).",
+          )}
+        </div>
+      )}
       {showPublic && (
         <details className="rounded-xl border border-border p-4 text-sm">
           <summary>Optional public aggregate sharing</summary>
@@ -245,7 +269,11 @@ export function FeedbackPrivacySettings() {
               <p className="text-sm">
                 These choices do not approve or republish a review.
               </p>
-              <FeedbackPermissionControls feedback={f} showPublic />
+              <FeedbackPermissionControls
+                feedback={f}
+                showPublic
+                pending={f.status === "PENDING"}
+              />
             </article>
           ))}
           {rows.hasNextPage && (

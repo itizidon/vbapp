@@ -1,3 +1,4 @@
+import { feedbackTrust } from "../feedback/eligibility";
 import {
   Prisma,
   PrismaClient,
@@ -196,8 +197,8 @@ export class FeedbackProcessingWorker {
           return;
         }
         const check = await tx.$queryRaw<
-          { eligible: boolean }[]
-        >`SELECT feedback_analysis_eligible(f) AS eligible FROM "Feedback" f WHERE id=${job.feedbackId}::uuid`;
+          { eligible: boolean; trust: string }[]
+        >`SELECT feedback_analysis_eligible(f) AS eligible, feedback_trust_classification(f) AS trust FROM "Feedback" f WHERE id=${job.feedbackId}::uuid`;
         if (
           !check[0]?.eligible ||
           !["ALLOW", "UNASSESSED"].includes(locked[0].moderation)
@@ -240,6 +241,8 @@ export class FeedbackProcessingWorker {
             provider: extractor.provider,
             modelVersion: extractor.modelVersion,
             promptVersion: PROMPT_VERSION,
+            trustClassification: check[0].trust,
+            trustAtExtraction: feedbackTrust(source),
             processedAt: new Date(),
             leaseToken: null,
             leaseUntil: null,

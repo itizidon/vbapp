@@ -208,7 +208,7 @@ describeDb("internal ratings PostgreSQL integration", () => {
       }),
     ).toBe(3);
   });
-  it("uses conservative guest and missing-reviewer-rating influence and deduplicates invite-day reviews", async () => {
+  it("excludes guest submissions entirely and keeps authenticated missing-reviewer-rating influence", async () => {
     const f = await fixture(),
       skill = f.skills[0];
     const invite = await feedback.invite(
@@ -225,14 +225,9 @@ describeDb("internal ratings PostgreSQL integration", () => {
     };
     const guest = await feedback.submitGuest(input);
     await feedback.submitGuest(input);
-    const source = await db.internalRatingContribution.findUniqueOrThrow({
-      where: {
-        feedbackId_skillId: { feedbackId: guest.id, skillId: skill.id },
-      },
-    });
-    expect(source.reviewerInternalRating).toBeNull();
-    expect(source.confidence.toString()).toBe("0.05");
-    expect((await current(f.recipient.id, skill.id)).feedbackCount).toBe(1);
+    expect(await db.internalRatingContribution.count({where:{feedbackId:guest.id}})).toBe(0);
+    expect((await current(f.recipient.id,skill.id)).feedbackCount).toBe(0);
+    expect(await db.playerInternalRatingEvent.count({where:{feedbackId:guest.id}})).toBe(0);
     const suffix = randomUUID();
     const unassessed = await db.user.create({
       data: {
@@ -262,6 +257,7 @@ describeDb("internal ratings PostgreSQL integration", () => {
     const saved = await ratingTransaction(db as any, async (tx) => {
       const source = await tx.feedback.create({
         data: {
+          submittedAt: new Date(), submittedById: f.reviewer.id,
           recipientId: f.recipient.id,
           reviewerId: f.reviewer.id,
           sportId: f.sport.id,

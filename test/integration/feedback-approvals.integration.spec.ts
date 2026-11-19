@@ -177,7 +177,7 @@ const url = process.env.TEST_DATABASE_URL;
       expect(a.reviewerId).toBeNull();
       expect(a.id).not.toBe(b.id);
       expect(
-        (await rating(f.recipient.id, f.sport.skills[0].id)).currentRating.gt(
+        (await rating(f.recipient.id, f.sport.skills[0].id)).currentRating.eq(
           3,
         ),
       ).toBe(true);
@@ -425,6 +425,7 @@ const url = process.env.TEST_DATABASE_URL;
           recipientId: f.recipient.id,
           reviewerId: f.reviewer.id,
           sportId: f.sport.id,
+          submittedAt: new Date(),
           feedbackLinkId: f.link.linkId,
           approvalRequired: true,
           status: "PENDING",

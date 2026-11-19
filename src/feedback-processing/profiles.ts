@@ -2,6 +2,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import {
   ANALYSIS_CONFIG as C,
   PROFILE_ALGORITHM_VERSION,
+  FEEDBACK_TRUST_WEIGHTS,
   PROFILE_REBUILD_RETRY_MS,
   PROFILE_QUERY_TIMEOUT_MS,
   PROFILE_TRANSACTION_TIMEOUT_MS,
@@ -28,6 +29,10 @@ import {
   summaryQuery,
   themeQuery,
   ThemeRow,
+  trustRatingQuery,
+  trustThemeQuery,
+  trustSummaryQuery,
+  TrustThemeRow,
 } from "../feedback-analysis/queries";
 
 const iso = (date: Date | null) => date?.toISOString() ?? null;
@@ -107,6 +112,17 @@ export async function rebuildOneProfile(
         const summary = await summaryQuery(tx, userId, sportId, asOf);
         const rawSkills = await skillQuery(tx, userId, sportId, asOf);
         const rawThemes = await themeQuery(tx, userId, sportId, asOf);
+        const ratingTrust = await trustRatingQuery(tx, userId, sportId, asOf);
+        const themeTrust = await trustThemeQuery(tx, userId, sportId, asOf);
+        const summaryTrust = await trustSummaryQuery(tx, userId, sportId, asOf);
+        const breakdown = (rows: TrustThemeRow[]) =>
+          rows.map((r) => ({
+            classification: r.trust,
+            feedbackCount: r.feedbackCount,
+            positiveFeedbackCount: r.positive,
+            negativeFeedbackCount: r.negative,
+            neutralFeedbackCount: r.neutral,
+          }));
         const partial = summary.awaiting > 0 || summary.failed > 0;
         const skills: FeedbackSkillAnalysis[] = rawSkills.map((s) => {
           const lastFiveComparison = compareRatings(
@@ -118,7 +134,39 @@ export async function rebuildOneProfile(
             { count: s.previous90Count, average: s.previous90Average },
           );
           const trend = combinedTrend(lastFiveComparison, ninetyDayComparison);
+          const groups = ratingTrust.filter((r) => r.skillId === s.skillId);
+          const combine = (verified: boolean) => {
+            const selected = groups.filter(
+              (r) => (r.trust === "VERIFIED_APPROVED") === verified,
+            );
+            const count = selected.reduce((n, r) => n + r.count, 0);
+            return {
+              count,
+              average: count
+                ? selected.reduce((n, r) => n + r.count * r.average!, 0) / count
+                : null,
+            };
+          };
+          const verified = groups.find((r) => r.trust === "VERIFIED_APPROVED");
           return {
+            verifiedPeer: combine(true),
+            unverifiedPeer: combine(false),
+            trustBreakdown: groups.map((r) => ({
+              classification: r.trust,
+              all: { count: r.count, average: r.average },
+              recent: { count: r.recentCount, average: r.recentAverage },
+              previous: { count: r.previousCount, average: r.previousAverage },
+            })),
+            verifiedNinetyDayComparison: compareRatings(
+              {
+                count: verified?.recentCount ?? 0,
+                average: verified?.recentAverage ?? null,
+              },
+              {
+                count: verified?.previousCount ?? 0,
+                average: verified?.previousAverage ?? null,
+              },
+            ),
             skillId: s.skillId,
             name: s.name,
             slug: s.slug,
@@ -130,7 +178,7 @@ export async function rebuildOneProfile(
             lastFiveComparison,
             ninetyDayComparison,
             trend,
-            explanation: `Last-five trend ${lastFiveComparison.trend}; 90-day trend ${ninetyDayComparison.trend}. Opposing supported comparisons are MIXED.`,
+            explanation: `Last-five trend ${lastFiveComparison.trend}; 90-day trend ${ninetyDayComparison.trend}. Opposing supported comparisons are MIXED. These are descriptive all-eligible trends; consult verifiedNinetyDayComparison before claiming confirmed improvement.`,
             selfAssessment: s.selfRating,
             internalRating: s.internalRating,
             selfMinusPeer:
@@ -150,7 +198,11 @@ export async function rebuildOneProfile(
             previous = period(t, "previous");
           const related = skills.filter((s) => t.skillIds.includes(s.skillId));
           const supported = related
-            .map((s) => s.ninetyDayComparison.trend)
+            .map(
+              (s) =>
+                s.verifiedNinetyDayComparison?.trend ??
+                s.ninetyDayComparison.trend,
+            )
             .filter((trend) => trend !== RatingTrend.INSUFFICIENT_DATA);
           const rating =
             supported.includes(RatingTrend.IMPROVING) &&
@@ -159,6 +211,50 @@ export async function rebuildOneProfile(
               : (supported.find((x) => x !== RatingTrend.STABLE) ??
                 supported[0] ??
                 RatingTrend.INSUFFICIENT_DATA);
+          recent.trustBreakdown = breakdown(
+            themeTrust.filter(
+              (r) => r.themeId === t.themeId && r.period === "recent",
+            ),
+          );
+          previous.trustBreakdown = breakdown(
+            themeTrust.filter(
+              (r) => r.themeId === t.themeId && r.period === "previous",
+            ),
+          );
+          const allTrust = themeTrust.filter(
+            (r) => r.themeId === t.themeId && r.period === "all",
+          );
+          const approved = allTrust.find(
+            (r) => r.trust === "VERIFIED_APPROVED",
+          );
+          const unverifiedWeight = allTrust
+            .filter((r) => r.trust !== "VERIFIED_APPROVED")
+            .reduce(
+              (n, r) =>
+                n +
+                r.negativeSources *
+                  FEEDBACK_TRUST_WEIGHTS[
+                    r.trust as keyof typeof FEEDBACK_TRUST_WEIGHTS
+                  ],
+              0,
+            );
+          // One negative evidence unit per stable account; guests remain opaque submissions, never inferred people.
+          // Cap total unverified influence at 0.35 per independently verified source (minimum one contextual unit).
+          const trustEvidenceFactor = t.negative
+            ? Math.min(
+                1,
+                ((approved?.negativeSources ?? 0) +
+                  Math.min(
+                    unverifiedWeight,
+                    Math.max(1, approved?.negativeSources ?? 0) *
+                      Math.max(
+                        FEEDBACK_TRUST_WEIGHTS.UNVERIFIED_GUEST,
+                        FEEDBACK_TRUST_WEIGHTS.AWAITING_REVIEWER_APPROVAL,
+                      ),
+                  )) /
+                  t.negative,
+              )
+            : 0;
           const classification = themeImprovement({ recent, previous }, rating);
           const improvement = partial
             ? {
@@ -169,6 +265,8 @@ export async function rebuildOneProfile(
               }
             : classification;
           return {
+            trustBreakdown: breakdown(allTrust),
+            trustEvidenceFactor,
             themeId: t.themeId,
             name: t.name,
             skillIds: t.skillIds,
@@ -179,7 +277,9 @@ export async function rebuildOneProfile(
             neutralFeedbackCount: t.neutral,
             distinctVerifiedReviewers: t.verified,
             distinctNegativeReviewers: t.negativeVerified,
-            guestFeedbackCount: t.guests,
+            guestFeedbackCount:
+              allTrust.find((r) => r.trust === "UNVERIFIED_GUEST")
+                ?.feedbackCount ?? 0,
             relevantFeedbackCount: t.coverage,
             verifiedReviewerCoverage: t.verifiedCoverage,
             totalEligibleFeedbackCount: summary.feedback,
@@ -206,6 +306,19 @@ export async function rebuildOneProfile(
           ),
         );
         const data: FeedbackAnalysisProfile = {
+          verifiedFeedbackCount:
+            summaryTrust.find((r) => r.trust === "VERIFIED_APPROVED")?.count ??
+            0,
+          awaitingReviewerApprovalCount:
+            summaryTrust.find((r) => r.trust === "AWAITING_REVIEWER_APPROVAL")
+              ?.count ?? 0,
+          trustBreakdown: summaryTrust.map((r) => ({
+            classification: r.trust,
+            feedbackCount: r.count,
+            positiveFeedbackCount: 0,
+            negativeFeedbackCount: 0,
+            neutralFeedbackCount: 0,
+          })),
           playerId: userId,
           sportId,
           algorithmVersion: PROFILE_ALGORITHM_VERSION,
@@ -223,7 +336,7 @@ export async function rebuildOneProfile(
           moderated: summary.moderated,
           state: partial ? "PARTIAL" : "COMPLETE",
           evidenceStatus: evidence(summary.feedback, summary.verified, partial),
-          evidenceExplanation: `Requires ${C.minReviews} distinct eligible feedback IDs for rankings and ${C.minThemeMentions} negative submissions per recurring theme. Verified identity means a registered reviewer or completed assigned-review approval. Guest names cannot establish independent people. Rankings with limited verified diversity are tentative; incomplete extraction suppresses rankings.`,
+          evidenceExplanation: `Requires ${C.minReviews} distinct eligible feedback IDs for rankings and ${C.minThemeMentions} negative submissions per recurring theme. Verified identity requires authenticated author submission or recorded authorized approval; assignment alone is unverified. Guest names cannot establish independent people. Rankings with limited verified diversity are tentative; incomplete extraction suppresses rankings.`,
           skills,
           themes,
           weaknesses: rankWeaknesses(

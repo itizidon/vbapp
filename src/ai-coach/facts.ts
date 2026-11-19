@@ -10,6 +10,7 @@ import {
   safeMessages,
 } from "./contracts";
 export interface CoachFact {
+  trustClassification?: string;
   limited?: boolean;
   factId: string;
   claim: string;
@@ -18,6 +19,7 @@ export interface CoachFact {
   metricKey: string | null;
 }
 export interface CoachObservation {
+  trustClassification?: string;
   observationId: string;
   feedbackId: string;
   submittedAt: string;
@@ -52,18 +54,58 @@ export function profileFacts(
         id.startsWith(`theme.${t.themeId}.`) &&
         t.evidenceStatus !== EvidenceStatus.SUFFICIENT,
     );
-  const add = (factId: string, claim: string, count: number) =>
-    facts.set(factId, {
+  const add = (factId: string, claim: string, count: number) => {
+    const skill = profile.skills.find((s) =>
+      factId.startsWith(`skill.${s.skillId}.`),
+    );
+    if (
+      skill?.trustBreakdown &&
+      (factId.endsWith(".peer") || factId.endsWith(".self"))
+    )
+      claim += ` Includes ${skill.verifiedPeer?.count ?? 0} verified approved and ${skill.unverifiedPeer?.count ?? 0} unverified rated submissions. Unverified ratings are context, not confirmed ability.`;
+    return facts.set(factId, {
       factId,
-      claim,
+      claim:
+        claim +
+        (() => {
+          const theme = profile.themes.find(
+            (t) =>
+              factId.startsWith(`theme.${t.themeId}.`) ||
+              factId === `weakness.${t.themeId}`,
+          );
+          if (!theme?.trustBreakdown) return "";
+          const negative =
+            factId.endsWith(".negative") || factId.startsWith("weakness.");
+          const positive = factId.endsWith(".positive");
+          const count = (classification: string) =>
+            theme
+              .trustBreakdown!.filter(
+                (g) => g.classification === classification,
+              )
+              .reduce(
+                (n, g) =>
+                  n +
+                  (negative
+                    ? g.negativeFeedbackCount
+                    : positive
+                      ? g.positiveFeedbackCount
+                      : g.feedbackCount),
+                0,
+              );
+          return ` Evidence: ${count("VERIFIED_APPROVED")} verified approved submissions, ${count("UNVERIFIED_GUEST")} unverified guest submissions, ${count("AWAITING_REVIEWER_APPROVAL")} awaiting reviewer approval. Unverified evidence does not establish confirmed ability or independent people.`;
+        })(),
       supportingReviewCount: count,
       feedbackIds: [],
       metricKey: factId,
-      limited: limited(factId),
+      limited:
+        limited(factId) ||
+        (!!skill?.unverifiedPeer?.count &&
+          (factId.endsWith(".peer") || factId.endsWith(".self"))),
     });
+  };
   add(
     "profile.total",
-    `${profile.totalEligibleFeedbackCount} eligible feedback submissions are available in this profile.`,
+    `${profile.totalEligibleFeedbackCount} eligible feedback submissions are available in this profile.${profile.trustBreakdown ? ` ${profile.verifiedFeedbackCount ?? 0} verified approved, ${profile.guestFeedbackCount} unverified guest, and ${profile.awaitingReviewerApprovalCount ?? 0} awaiting reviewer approval.` : ""}`,
     profile.totalEligibleFeedbackCount,
   );
   for (const skill of profile.skills) {
@@ -73,11 +115,23 @@ export function profileFacts(
         `${skill.name}: average peer rating ${fmt(skill.peer.average)} / 5 across ${skill.peer.count} eligible rated reviews.`,
         skill.peer.count,
       );
-    const t = skill.ninetyDayComparison;
+    if (skill.verifiedPeer?.count)
+      add(
+        `skill.${skill.skillId}.verifiedPeer`,
+        `${skill.name}: verified approved average ${fmt(skill.verifiedPeer.average!)} / 5 from ${skill.verifiedPeer.count} rated submissions.`,
+        skill.verifiedPeer.count,
+      );
+    if (skill.unverifiedPeer?.count)
+      add(
+        `skill.${skill.skillId}.unverifiedPeer`,
+        `${skill.name}: unverified average ${fmt(skill.unverifiedPeer.average!)} / 5 from ${skill.unverifiedPeer.count} guest or awaiting-approval submissions; this is not verified performance.`,
+        skill.unverifiedPeer.count,
+      );
+    const t = skill.verifiedNinetyDayComparison ?? skill.ninetyDayComparison;
     if (t.trend !== "INSUFFICIENT_DATA")
       add(
         `skill.${skill.skillId}.trend90`,
-        `${skill.name}: the descriptive 90-day rating trend is ${t.trend.toLowerCase()}; recent average ${fmt(t.recent.average!)} from ${t.recent.count} ratings, preceding average ${fmt(t.previous.average!)} from ${t.previous.count}, change ${fmt(t.delta!)}. This is not statistical proof.`,
+        `${skill.name}: the descriptive verified 90-day rating trend is ${t.trend.toLowerCase()}; recent average ${fmt(t.recent.average!)} from ${t.recent.count} ratings, preceding average ${fmt(t.previous.average!)} from ${t.previous.count}, change ${fmt(t.delta!)}. This is not statistical proof.`,
         t.recent.count + t.previous.count,
       );
     if (skill.selfAssessment !== null && skill.peer.average !== null)
@@ -124,12 +178,15 @@ export function profileFacts(
   return facts;
 }
 export function observationFact(o: CoachObservation): CoachFact {
+  const verified = o.trustClassification === "VERIFIED_APPROVED";
   const source = o.untrustedSourceText
     .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, "[contact detail]")
     .replace(/https?:\/\/\S+/gi, "[link]");
   return {
+    trustClassification: o.trustClassification,
     factId: `observation.${o.observationId}`,
-    claim: `Feedback submitted ${o.submittedAt.slice(0, 10)} about ${o.themeName} was ${o.sentiment}: “${source}”`,
+    limited: !verified,
+    claim: `[${o.trustClassification ?? "UNVERIFIED"}] Feedback submitted ${o.submittedAt.slice(0, 10)} about ${o.themeName} was ${o.sentiment}: “${source}”`,
     supportingReviewCount: 1,
     feedbackIds: [o.feedbackId],
     metricKey: null,

@@ -1,3 +1,4 @@
+import { isEligibleForInternalRating } from "../feedback/eligibility";
 import {
   BadRequestException,
   ForbiddenException,
@@ -8,7 +9,6 @@ import {
   Prisma,
   InternalRatingContribution,
   PlayerInternalRating,
-  FeedbackStatus,
 } from "@prisma/client";
 import { isUUID } from "class-validator";
 import { PrismaService } from "../prisma/prisma.service";
@@ -36,7 +36,22 @@ export class InternalRatingsService {
         eligible: true,
         published: true,
         reviewerId: { not: null },
-        feedback: { status: "PUBLISHED" },
+        feedback: {
+          submittedAt: { not: null },
+          rejectedAt: null,
+          status: "PUBLISHED",
+          reviewerId: { not: null },
+          OR: [
+            {
+              approvedAt: { not: null },
+              approvedById: { equals: tx.feedback.fields.reviewerId },
+            },
+            {
+              approvalRequired: false,
+              submittedById: { equals: tx.feedback.fields.reviewerId },
+            },
+          ],
+        },
       },
       select: { reviewerId: true },
       distinct: ["reviewerId"],
@@ -50,7 +65,22 @@ export class InternalRatingsService {
         reviewerId,
         skillId,
         published: true,
-        feedback: { status: "PUBLISHED" },
+        feedback: {
+          submittedAt: { not: null },
+          rejectedAt: null,
+          status: "PUBLISHED",
+          reviewerId: { not: null },
+          OR: [
+            {
+              approvedAt: { not: null },
+              approvedById: { equals: tx.feedback.fields.reviewerId },
+            },
+            {
+              approvalRequired: false,
+              submittedById: { equals: tx.feedback.fields.reviewerId },
+            },
+          ],
+        },
       },
       select: { userId: true },
     });
@@ -103,6 +133,8 @@ export class InternalRatingsService {
     const old = await tx.internalRatingContribution.findMany({
       where: { feedbackId },
     });
+    // Preserve historical audit/state; this rollout never replays legacy guest contributions.
+    if (!feedback.reviewerId) return;
     const keys = [
       ...new Set([
         ...old.map((r) => r.skillId),
@@ -122,9 +154,7 @@ export class InternalRatingsService {
         throw new BadRequestException("Rating skill belongs to another sport");
       const submitted = feedback.ratings.find((r) => r.skillId === skillId);
       const published =
-        feedback.status === FeedbackStatus.PUBLISHED &&
-        !!submitted &&
-        skill.active;
+        isEligibleForInternalRating(feedback) && !!submitted && skill.active;
       const existing = old.find((r) => r.skillId === skillId);
       if (existing) {
         if (
@@ -277,6 +307,7 @@ export class InternalRatingsService {
   ) {
     const contributions = await tx.internalRatingContribution.findMany({
       where: { userId: current.userId, skillId: current.skillId },
+      include: { feedback: true },
       orderBy: { sequence: "asc" },
     });
     const applied = await tx.playerInternalRatingEvent.findMany({
@@ -306,7 +337,10 @@ export class InternalRatingsService {
     const seen = new Set<string>();
     for (const source of contributions) {
       const key = `${source.identityKey}:${source.effectiveAt.toISOString().slice(0, 10)}`;
-      const eligible = source.published && !seen.has(key);
+      const eligible =
+        source.published &&
+        isEligibleForInternalRating(source.feedback) &&
+        !seen.has(key);
       if (eligible) seen.add(key);
       if (source.eligible !== eligible)
         await tx.internalRatingContribution.update({
@@ -509,7 +543,10 @@ export class InternalRatingsService {
                   : own.rating
                 : null,
               internalRating: internal?.toNumber() ?? null,
-              averageFeedbackRating: average?._avg.rating==null?null:Number(average._avg.rating),
+              averageFeedbackRating:
+                average?._avg.rating == null
+                  ? null
+                  : Number(average._avg.rating),
               feedbackCount: average?._count ?? 0,
             };
           }),

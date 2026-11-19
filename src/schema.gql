@@ -97,6 +97,7 @@ type CoachEvidenceModel {
   feedbackIds: [ID!]!
   metricKey: String
   supportingReviewCount: Int!
+  trustClassification: String
 }
 
 type CoachMessageModel {
@@ -118,6 +119,73 @@ type CoachMessagePage {
   nextCursor: ID
 }
 
+type CoachingSituationModel {
+  categoryId: ID
+  description: String!
+  id: ID!
+  name: String!
+  slug: String!
+  status: TrainingContentStatus!
+  tags: [String!]!
+}
+
+input CreateCoachingSituationInput {
+  categoryId: ID
+  description: String!
+  name: String!
+  slug: String!
+  status: TrainingContentStatus
+  tags: [String!]
+}
+
+input CreateDrillInput {
+  bestForSummary: String
+  coachingCues: [String!]
+  commonMistakes: [String!]
+  description: String!
+  difficulty: DrillDifficulty
+  durationMinutes: Int
+  equipment: [String!]
+  maxPlayers: Int
+  metricConfig: TrainingJSON
+  minPlayers: Int
+  name: String!
+  notIdealWhen: String
+  objective: String!
+  safetyNotes: String
+  setup: String!
+  slug: String!
+  status: TrainingContentStatus
+  successCriteria: TrainingJSON
+}
+
+input CreateDrillRecommendationRuleInput {
+  conditions: TrainingJSON!
+  drillId: ID!
+  effect: TrainingRuleEffect!
+  enabled: Boolean
+  name: String!
+  priority: Int
+  rationale: String!
+  situationId: ID
+}
+
+input CreateDrillTechniqueVariantInput {
+  description: String!
+  drillId: ID!
+  isDefault: Boolean
+  name: String!
+  slug: String!
+  status: TrainingContentStatus
+}
+
+input CreateDrillWithContentInput {
+  drill: CreateDrillInput!
+  newPrimarySkill: CreateSkillTreeNodeInput
+  primarySkillId: ID
+  steps: [TrainingStepInput!]!
+}
+
 input CreateMatchInput {
   description: String
   guestNames: [String!]
@@ -134,11 +202,42 @@ input CreateSelfAssessmentInput {
   sportId: ID!
 }
 
+input CreateSkillTreeNodeInput {
+  aiDescription: String
+  categoryId: ID!
+  commonMistakes: TrainingJSON
+  description: String!
+  difficulty: Int
+  learningObjective: String!
+  name: String!
+  slug: String!
+  sortOrder: Int
+  status: TrainingContentStatus
+  successCriteria: TrainingJSON
+  tags: [String!]
+  technique: TrainingJSON
+  tier: TrainingTier
+  whyItMatters: String!
+}
+
 input CreateTeamInput {
   matchId: ID!
   name: String
   score: Int
   teamNumber: Int
+}
+
+input CreateTechniqueCheckpointInput {
+  coachingExplanation: String!
+  description: String!
+  drillId: ID!
+  importance: Float
+  measurementConfig: TrainingJSON
+  name: String!
+  phaseKey: String!
+  sortOrder: Int
+  status: TrainingContentStatus
+  techniqueVariantId: ID
 }
 
 type DailyAnalyticsPoint {
@@ -160,10 +259,117 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+enum DrillDifficulty {
+  ADVANCED
+  BEGINNER
+  INTERMEDIATE
+}
+
+type DrillModel {
+  bestForSummary: String
+  coachingCues: [String!]!
+  commonMistakes: [String!]!
+  description: String!
+  difficulty: DrillDifficulty!
+  durationMinutes: Int!
+  equipment: [String!]!
+  id: ID!
+  maxPlayers: Int!
+  metricConfig: TrainingJSON
+  minPlayers: Int!
+  name: String!
+  notIdealWhen: String
+  objective: String!
+  safetyNotes: String
+  setup: String!
+  slug: String!
+  status: TrainingContentStatus!
+  successCriteria: TrainingJSON
+}
+
+type DrillRecommendationRuleModel {
+  conditions: TrainingJSON!
+  drillId: ID!
+  effect: TrainingRuleEffect!
+  enabled: Boolean!
+  id: ID!
+  name: String!
+  priority: Int!
+  rationale: String!
+  situationId: ID
+  version: Int!
+}
+
+type DrillReferenceVideoModel {
+  cameraAngle: String!
+  description: String
+  drillId: ID!
+  durationMs: Int
+  fileSizeBytes: Float!
+  frameRate: Float
+  handedness: String
+  height: Int
+  id: ID!
+  isPrimary: Boolean!
+  mimeType: String!
+  referenceVersion: Int!
+  status: TrainingContentStatus!
+  techniqueVariantId: ID
+  title: String!
+  uploadStatus: VideoSubmissionStatus!
+  width: Int
+}
+
+type DrillSkillModel {
+  drillId: ID!
+  role: DrillSkillRole!
+  skillTreeNodeId: ID!
+}
+
+enum DrillSkillRole {
+  PRIMARY
+  SECONDARY
+}
+
+type DrillStepModel {
+  drillId: ID!
+  id: ID!
+  instruction: String!
+  metadata: TrainingJSON
+  sortOrder: Int!
+}
+
+type DrillTechniqueVariantModel {
+  description: String!
+  drillId: ID!
+  id: ID!
+  isDefault: Boolean!
+  name: String!
+  slug: String!
+  status: TrainingContentStatus!
+}
+
+type DrillVideoSubmissionModel {
+  cameraAngle: String!
+  createdAt: DateTime!
+  deletedAt: DateTime
+  drillId: ID!
+  durationMs: Int
+  fileSizeBytes: Float!
+  id: ID!
+  mimeType: String!
+  referenceVideoId: ID
+  status: VideoSubmissionStatus!
+  techniqueVariantId: ID
+  uploadedAt: DateTime
+  userId: ID!
+}
+
 type FeedbackAnalysisProfile {
   algorithmVersion: Int!
   asOf: String!
   awaiting: Int!
+  awaitingReviewerApprovalCount: Int
   calculatedAt: String!
   distinctVerifiedReviewers: Int!
   evidenceExplanation: String!
@@ -180,6 +386,8 @@ type FeedbackAnalysisProfile {
   state: String!
   themes: [FeedbackThemeAnalysis!]!
   totalEligibleFeedbackCount: Int!
+  trustBreakdown: [FeedbackTrustEvidence!]
+  verifiedFeedbackCount: Int
   weaknesses: [FeedbackWeakness!]!
   writtenFeedbackCount: Int!
 }
@@ -231,6 +439,7 @@ type FeedbackModel {
   matchId: ID
   matches: [FeedbackMatchReference!]
   overallComment: String
+  pendingAiAllowed: Boolean
   privacyNoticeVersion: String
   privacyWithdrawalToken: String
   privateAnalyticsAllowed: Boolean!
@@ -255,6 +464,8 @@ type FeedbackModel {
 
 input FeedbackPrivacyInput {
   feedbackId: ID!
+  pendingAiAllowed: Boolean
+  pendingAiNoticeVersion: String
   privacyNoticeVersion: String
   privateAnalyticsAllowed: Boolean
   privateCoachingAllowed: Boolean
@@ -297,6 +508,10 @@ type FeedbackSkillAnalysis {
   skillId: ID!
   slug: String!
   trend: FeedbackRatingTrend!
+  trustBreakdown: [FeedbackTrustRating!]
+  unverifiedPeer: AnalysisAverage
+  verifiedNinetyDayComparison: RatingComparison
+  verifiedPeer: AnalysisAverage
 }
 
 type FeedbackSkillAnalysisResult {
@@ -347,6 +562,8 @@ type FeedbackThemeAnalysis {
   skillIds: [ID!]!
   themeId: ID!
   totalEligibleFeedbackCount: Int!
+  trustBreakdown: [FeedbackTrustEvidence!]
+  trustEvidenceFactor: Float
   verifiedReviewerCoverage: Int!
 }
 
@@ -355,6 +572,21 @@ type FeedbackThemeAnalysisResult {
   rebuildQueued: Boolean!
   state: String!
   themes: [FeedbackThemeAnalysis!]!
+}
+
+type FeedbackTrustEvidence {
+  classification: String!
+  feedbackCount: Int!
+  negativeFeedbackCount: Int!
+  neutralFeedbackCount: Int!
+  positiveFeedbackCount: Int!
+}
+
+type FeedbackTrustRating {
+  all: AnalysisAverage!
+  classification: String!
+  previous: AnalysisAverage!
+  recent: AnalysisAverage!
 }
 
 type FeedbackWeakness {
@@ -371,6 +603,9 @@ type FeedbackWeakness {
   skillId: ID
   supportingFeedbackCount: Int!
   themeId: ID!
+  trustEvidenceFactor: Float
+  unverifiedSupportingFeedbackCount: Int
+  verifiedSupportingFeedbackCount: Int
 }
 
 type FeedbackWeaknessResult {
@@ -496,34 +731,68 @@ type Mutation {
   addGuestMatchParticipant(input: AddGuestParticipantInput!): MatchParticipantModel!
   addMatchParticipant(input: AddParticipantInput!): MatchParticipantModel!
   approveFeedback(feedbackId: ID!): FeedbackModel!
+  archiveDrill(id: ID!): DrillModel!
+  archiveReferenceVideo(id: ID!): DrillReferenceVideoModel!
+  archiveSkillTreeNode(id: ID!): SkillTreeNodeModel!
   askAiCoach(input: AskAiCoachInput!): CoachMessageModel!
   assignParticipantToTeam(participantId: ID!, teamId: ID): MatchParticipantModel!
+  configureDrillMotion(config: TrainingJSON!, drillId: ID!): Boolean!
+  configureReferenceCoverage(config: TrainingJSON!, id: ID!): Boolean!
+  createCoachingSituation(input: CreateCoachingSituationInput!): CoachingSituationModel!
+  createDrill(input: CreateDrillInput!): DrillModel!
+  createDrillRecommendationRule(input: CreateDrillRecommendationRuleInput!): DrillRecommendationRuleModel!
+  createDrillWithContent(input: CreateDrillWithContentInput!): DrillModel!
   createGuestFeedbackInvite(assignedReviewerId: ID, matchId: ID, matchIds: [ID!], recipientId: ID!, reviewMode: FeedbackReviewMode! = INDIVIDUAL_MATCHES, sportId: ID!): GuestInvitePayload!
   createMatch(input: CreateMatchInput): MatchModel!
   createMatchTeam(input: CreateTeamInput!): MatchTeamModel!
+  createReferenceVideoUpload(input: ReferenceVideoUploadInput!): TrainingUpload!
   createSelfAssessment(input: CreateSelfAssessmentInput!): SelfAssessmentModel!
+  createSkillTreeNode(input: CreateSkillTreeNodeInput!): SkillTreeNodeModel!
+  createTechniqueCheckpoint(input: CreateTechniqueCheckpointInput!): TechniqueCheckpointModel!
+  createTechniqueVariant(input: CreateDrillTechniqueVariantInput!): DrillTechniqueVariantModel!
+  deleteDrillRecommendationRule(id: ID!): Boolean!
   deleteFeedback(id: ID!): FeedbackModel!
   deleteMatch(id: ID!): MatchModel!
+  deleteMyDrillVideoSubmission(id: ID!): Boolean!
+  deleteReferenceVideo(id: ID!): Boolean!
+  finalizeDrillVideoUpload(id: ID!): DrillVideoSubmissionModel!
+  finalizeReferenceVideoUpload(id: ID!): DrillReferenceVideoModel!
   login(input: LoginInput!): AuthPayload!
   moveParticipantToTeam(participantId: ID!, teamId: ID!): MatchParticipantModel!
+  recordDrillCompletion(drillId: ID!): Boolean!
   register(input: RegisterInput!): AuthPayload!
   rejectFeedback(feedbackId: ID!, reason: String): FeedbackModel!
   removeMatchParticipant(id: ID!): MatchParticipantModel!
   removeMatchTeam(id: ID!): MatchTeamModel!
+  requestDrillVideoAnalysis(id: ID!, requestId: ID!): VideoAnalysisModel!
+  requestDrillVideoUpload(input: TrainingVideoUploadInput!): TrainingUpload!
+  retryTrainingVideo(id: ID!, reference: Boolean!): Boolean!
   revokeFeedbackLink(linkId: ID!): Boolean!
+  setDrillSkills(id: ID!, skills: [TrainingSkillLinkInput!]!): [DrillSkillModel!]!
+  setDrillSteps(id: ID!, steps: [TrainingStepInput!]!): [DrillStepModel!]!
+  setSkillPrerequisites(id: ID!, prerequisites: [PrerequisiteInput!]!): [SkillPrerequisiteModel!]!
   startGuestReviewSession(completedSubmissionId: ID!, token: String!): GuestInvitePayload!
   submitFeedback(input: SubmitFeedbackInput!): FeedbackModel!
   submitFeedbackRequest(input: SubmitFeedbackRequestInput!): [FeedbackModel!]!
   submitGuestFeedback(input: SubmitGuestFeedbackInput!): FeedbackModel!
   updateAccountVisibility(isPublic: Boolean!): UserModel!
+  updateCoachingSituation(id: ID!, input: UpdateCoachingSituationInput!): CoachingSituationModel!
+  updateDrill(id: ID!, input: UpdateDrillInput!): DrillModel!
+  updateDrillRecommendationRule(id: ID!, input: UpdateDrillRecommendationRuleInput!): DrillRecommendationRuleModel!
   updateFeedback(input: UpdateFeedbackInput!): FeedbackModel!
   updateFeedbackPrivacy(input: FeedbackPrivacyInput!): FeedbackModel!
   updateMatch(input: UpdateMatchInput!): MatchModel!
   updateMatchTeam(input: UpdateTeamInput!): MatchTeamModel!
+  updateMySkillProgress(skillId: ID!, state: String!): TrainingJSON!
+  updateMyTrainingProfile(data: TrainingJSON!): TrainingJSON!
   updatePrivateCoachingPreference(enabled: Boolean!): UserModel!
+  updateReferenceVideo(id: ID!, input: UpdateReferenceVideoInput!): DrillReferenceVideoModel!
   updateSelfAssessment(input: UpdateSelfAssessmentInput!): SelfAssessmentModel!
   updateSelfAssessmentRatings(input: UpdateSelfAssessmentRatingsInput!): SelfAssessmentModel!
+  updateSkillTreeNode(id: ID!, input: UpdateSkillTreeNodeInput!): SkillTreeNodeModel!
   updateTeamScore(score: Int, teamId: ID!): MatchTeamModel!
+  updateTechniqueCheckpoint(id: ID!, input: UpdateTechniqueCheckpointInput!): TechniqueCheckpointModel!
+  updateTechniqueVariant(id: ID!, input: UpdateDrillTechniqueVariantInput!): DrillTechniqueVariantModel!
   withdrawGuestFeedbackPrivacy(token: String!): Boolean!
 }
 
@@ -538,6 +807,7 @@ type PendingApprovalModel {
   matchId: ID
   matches: [FeedbackMatchReference!]
   overallComment: String
+  pendingAiAllowed: Boolean
   privacyNoticeVersion: String
   privacyWithdrawalToken: String
   privateAnalyticsAllowed: Boolean!
@@ -582,8 +852,26 @@ type PlayerDirectoryModel {
   username: String!
 }
 
+input PrerequisiteInput {
+  prerequisiteId: ID!
+  required: Boolean!
+}
+
 type Query {
+  analysisReferencePlayback(analysisId: ID!, referenceVideoId: ID!): TrainingPlayback!
   averageSkillRating(skillId: ID!): AverageSkillRating
+  canManageTraining: Boolean!
+  coachingSituations: [CoachingSituationModel!]!
+  drill(id: ID!): DrillModel!
+  drillRecommendationRules(drillId: ID!): [DrillRecommendationRuleModel!]!
+  drillSkills(id: ID!): [DrillSkillModel!]!
+  drillSteps(id: ID!): [DrillStepModel!]!
+  drillTrainingContext(id: ID!): TrainingJSON!
+  drillVideoJobs(id: ID!): [VideoProcessingJobModel!]!
+  drillVideoSubmission(id: ID!): DrillVideoSubmissionModel!
+  drills(after: ID, limit: Int! = 30, skillId: ID): [DrillModel!]!
+  drillsForSkill(id: ID!): [DrillModel!]!
+  evaluateDrillRecommendations(skillId: ID): [TrainingRecommendation!]!
   feedback(id: ID!): FeedbackModel!
   feedbackCount(sportId: ID, userId: ID): FeedbackCount!
   feedbackInvitation(token: String!): FeedbackInvitationModel!
@@ -600,6 +888,8 @@ type Query {
   myAiCoachMessages(conversationId: ID!, cursor: ID): CoachMessagePage!
   myAnalytics(before: DateTime, from: DateTime, timeZone: String! = "UTC"): AnalyticsDashboard!
   myCategoryFeedback(before: DateTime, from: DateTime, skillId: ID!): [IndividualCategoryFeedback!]!
+  myDrillVideoPlayback(id: ID!): TrainingPlayback!
+  myDrillVideoSubmissions(after: ID, limit: Int! = 20): [DrillVideoSubmissionModel!]!
   myFeedbackAnalysisProfile(sportId: ID!): FeedbackAnalysisResult!
   myFeedbackApprovals(cursor: ID, status: FeedbackStatus! = PENDING): PendingApprovalsPage!
   myPendingApprovalCount: Int!
@@ -608,26 +898,39 @@ type Query {
   myRecentPendingApprovals: [ApprovalPreviewModel!]!
   mySelfAssessments: [SelfAssessmentModel!]!
   mySkillAnalysis(sportId: ID!): FeedbackSkillAnalysisResult!
+  mySkillLearningPath(id: ID!): TrainingJSON!
   myThemeTrends(sportId: ID!): FeedbackThemeAnalysisResult!
   myTopWeaknesses(sportId: ID!): FeedbackWeaknessResult!
   playerMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime, userId: ID!): [MatchModel!]!
   playerProfile(id: ID!): PlayerDirectoryModel!
   playerSuggestions(search: String!): [PlayerDirectoryModel!]!
   receivedFeedback(createdBefore: DateTime, createdFrom: DateTime, cursor: String, matchId: ID, matchOnly: Boolean): [FeedbackModel!]!
+  referenceVideoJobs(id: ID!): [VideoProcessingJobModel!]!
+  referenceVideoPlayback(id: ID!): TrainingPlayback!
+  referenceVideosForDrill(drillId: ID!, variantId: ID): [DrillReferenceVideoModel!]!
   searchPlayers(cursor: String, search: String! = ""): [PlayerDirectoryModel!]!
   selfAssessmentHistory(before: DateTime, cursor: String, from: DateTime, limit: Int! = 100, skillId: ID!, userId: ID!): RatingHistoryPage!
   selfVsPeerRatings(sportId: ID!): [SelfVsPeerRating!]!
+  skillDependents(id: ID!): [SkillPrerequisiteModel!]!
+  skillPrerequisites(id: ID!): [SkillPrerequisiteModel!]!
   skillRadarProfile(asOf: DateTime, sportId: ID!, userId: ID!): SkillRadarProfileModel!
   skillRatingTrends(skillId: ID!): [SkillRatingPoint!]!
+  skillTree(categoryId: ID): TrainingGraph!
+  skillTreeNode(id: ID!): SkillTreeNodeModel!
   skills(sportId: ID!): [SkillModel!]!
   sport(id: ID!): SportModel
   sports: [SportModel!]!
   submittedFeedback(cursor: String, matchId: ID): [FeedbackModel!]!
+  techniqueCheckpoints(drillId: ID!): [TechniqueCheckpointModel!]!
+  techniqueVariants(drillId: ID!): [DrillTechniqueVariantModel!]!
+  trainingVideoWorkspace(drillId: ID!): TrainingJSON!
   userMatchHistory: [MatchModel!]!
   userMatches(cursor: String, playedBefore: DateTime, playedFrom: DateTime): [MatchModel!]!
   userSelfAssessment(sportId: ID!, userId: ID!): SelfAssessmentModel
   userSkillRatings(sportId: ID, userId: ID!): [AverageSkillRating!]!
   userSportFeedbackSummary: [SportFeedbackSummary!]!
+  videoAnalysis(id: ID!): VideoAnalysisModel!
+  videoAnalysisReferences(id: ID!): [VideoAnalysisReferenceModel!]!
 }
 
 type RatingComparison {
@@ -662,6 +965,22 @@ input RatingInput {
   comment: String
   rating: Float!
   skillId: ID!
+}
+
+input ReferenceVideoUploadInput {
+  aiExplanationAllowed: Boolean
+  allowMirroring: Boolean
+  cameraAngle: String!
+  description: String
+  drillId: ID!
+  fileSizeBytes: Float!
+  handedness: String
+  mimeType: String!
+  originalFilename: String!
+  referenceVideoId: ID
+  replacesReferenceId: ID
+  techniqueVariantId: ID
+  title: String!
 }
 
 input RegisterInput {
@@ -714,6 +1033,12 @@ type SkillModel {
   sportId: ID!
 }
 
+type SkillPrerequisiteModel {
+  prerequisiteId: ID!
+  required: Boolean!
+  skillId: ID!
+}
+
 type SkillRadarProfileModel {
   asOf: DateTime
   skills: [SkillRadarValueModel!]!
@@ -734,6 +1059,25 @@ type SkillRatingPoint {
   count: Int!
   period: DateTime!
   skillId: ID!
+}
+
+type SkillTreeNodeModel {
+  aiDescription: String
+  categoryId: ID!
+  commonMistakes: TrainingJSON
+  description: String!
+  difficulty: Int!
+  id: ID!
+  learningObjective: String!
+  name: String!
+  slug: String!
+  sortOrder: Int!
+  status: TrainingContentStatus!
+  successCriteria: TrainingJSON
+  tags: [String!]!
+  technique: TrainingJSON
+  tier: TrainingTier!
+  whyItMatters: String!
 }
 
 type SportFeedbackSummary {
@@ -790,6 +1134,20 @@ input SubmitGuestFeedbackInput {
   token: String!
 }
 
+type TechniqueCheckpointModel {
+  coachingExplanation: String!
+  description: String!
+  drillId: ID!
+  id: ID!
+  importance: Float!
+  measurementConfig: TrainingJSON
+  name: String!
+  phaseKey: String!
+  sortOrder: Int!
+  status: TrainingContentStatus!
+  techniqueVariantId: ID
+}
+
 type ThemePeriod {
   distinctNegativeReviewers: Int!
   distinctVerifiedReviewers: Int!
@@ -800,6 +1158,124 @@ type ThemePeriod {
   positiveFeedbackCount: Int!
   positiveMentionRate: Float
   relevantFeedbackCount: Int!
+  trustBreakdown: [FeedbackTrustEvidence!]
+}
+
+enum TrainingContentStatus {
+  ARCHIVED
+  DRAFT
+  PUBLISHED
+}
+
+type TrainingGraph {
+  edges: [SkillPrerequisiteModel!]!
+  nodes: [SkillTreeNodeModel!]!
+}
+
+"""Bounded structured training content"""
+scalar TrainingJSON
+
+type TrainingPlayback {
+  expiresAt: DateTime!
+  url: String!
+}
+
+type TrainingRecommendation {
+  drill: DrillModel!
+  evaluation: TrainingJSON!
+  excluded: Boolean!
+  score: Float!
+}
+
+enum TrainingRuleEffect {
+  BOOST
+  EXCLUDE
+}
+
+input TrainingSkillLinkInput {
+  role: DrillSkillRole!
+  skillTreeNodeId: ID!
+}
+
+input TrainingStepInput {
+  instruction: String!
+  metadata: TrainingJSON
+}
+
+enum TrainingTier {
+  APPLICATION
+  CONTROL
+  FOUNDATION
+  MASTERY
+}
+
+type TrainingUpload {
+  expiresAt: DateTime!
+  headers: TrainingJSON!
+  id: ID!
+  url: String!
+}
+
+input TrainingVideoUploadInput {
+  aiExplanationAllowed: Boolean
+  allowMirroring: Boolean
+  cameraAngle: String!
+  drillId: ID!
+  fileSizeBytes: Float!
+  handedness: String
+  mimeType: String!
+  referenceVideoId: ID
+  techniqueVariantId: ID
+}
+
+input UpdateCoachingSituationInput {
+  categoryId: ID
+  description: String
+  name: String
+  slug: String
+  status: TrainingContentStatus
+  tags: [String!]
+}
+
+input UpdateDrillInput {
+  bestForSummary: String
+  coachingCues: [String!]
+  commonMistakes: [String!]
+  description: String
+  difficulty: DrillDifficulty
+  durationMinutes: Int
+  equipment: [String!]
+  maxPlayers: Int
+  metricConfig: TrainingJSON
+  minPlayers: Int
+  name: String
+  notIdealWhen: String
+  objective: String
+  safetyNotes: String
+  setup: String
+  slug: String
+  status: TrainingContentStatus
+  successCriteria: TrainingJSON
+}
+
+input UpdateDrillRecommendationRuleInput {
+  conditions: TrainingJSON
+  drillId: ID
+  effect: TrainingRuleEffect
+  enabled: Boolean
+  name: String
+  priority: Int
+  rationale: String
+  situationId: ID
+}
+
+input UpdateDrillTechniqueVariantInput {
+  description: String
+  drillId: ID
+  isDefault: Boolean
+  name: String
+  slug: String
+  status: TrainingContentStatus
 }
 
 input UpdateFeedbackInput {
@@ -819,6 +1295,13 @@ input UpdateMatchInput {
   status: MatchStatus
 }
 
+input UpdateReferenceVideoInput {
+  description: String
+  isPrimary: Boolean
+  status: TrainingContentStatus
+  title: String
+}
+
 input UpdateSelfAssessmentInput {
   id: ID!
   overallLevel: String!
@@ -829,10 +1312,41 @@ input UpdateSelfAssessmentRatingsInput {
   ratings: [AssessmentRatingInput!]!
 }
 
+input UpdateSkillTreeNodeInput {
+  aiDescription: String
+  categoryId: ID
+  commonMistakes: TrainingJSON
+  description: String
+  difficulty: Int
+  learningObjective: String
+  name: String
+  slug: String
+  sortOrder: Int
+  status: TrainingContentStatus
+  successCriteria: TrainingJSON
+  tags: [String!]
+  technique: TrainingJSON
+  tier: TrainingTier
+  whyItMatters: String
+}
+
 input UpdateTeamInput {
   id: ID!
   name: String
   score: Int
+}
+
+input UpdateTechniqueCheckpointInput {
+  coachingExplanation: String
+  description: String
+  drillId: ID
+  importance: Float
+  measurementConfig: TrainingJSON
+  name: String
+  phaseKey: String
+  sortOrder: Int
+  status: TrainingContentStatus
+  techniqueVariantId: ID
 }
 
 type UserModel {
@@ -843,6 +1357,76 @@ type UserModel {
   isPublic: Boolean!
   updatedAt: DateTime!
   username: String!
+}
+
+type VideoAnalysisModel {
+  analysisProvider: String
+  analysisVersion: String!
+  comparisonAlgorithmVersion: String
+  completedAt: DateTime
+  confidence: Float
+  errorCode: String
+  id: ID!
+  poseModelVersion: String
+  result: TrainingJSON
+  startedAt: DateTime
+  status: VideoAnalysisStatus!
+  submissionId: ID!
+}
+
+type VideoAnalysisReferenceModel {
+  analysisId: ID!
+  referenceVersion: Int!
+  referenceVideoId: ID!
+  selectionReason: String!
+}
+
+enum VideoAnalysisStatus {
+  ANALYSIS_UNAVAILABLE
+  ANALYZING
+  COMPLETED
+  DELETED
+  FAILED
+  PENDING
+}
+
+enum VideoJobStatus {
+  CANCELLED
+  COMPLETED
+  FAILED
+  PENDING
+  PROCESSING
+  UNAVAILABLE
+}
+
+enum VideoJobType {
+  CLEANUP_MEDIA
+  COMPARE_TECHNIQUE
+  EXTRACT_PLAYER_POSE
+  EXTRACT_REFERENCE_POSE
+  GENERATE_COACHING_SUMMARY
+  VALIDATE_VIDEO
+}
+
+type VideoProcessingJobModel {
+  attempts: Int!
+  errorCode: String
+  id: ID!
+  status: VideoJobStatus!
+  type: VideoJobType!
+}
+
+enum VideoSubmissionStatus {
+  ANALYSIS_PENDING
+  ANALYSIS_UNAVAILABLE
+  ANALYZING
+  COMPLETED
+  DELETED
+  FAILED
+  PENDING_UPLOAD
+  READY_FOR_ANALYSIS
+  UPLOADED
+  VALIDATION_PENDING
 }
 
 type WeaknessComponent {

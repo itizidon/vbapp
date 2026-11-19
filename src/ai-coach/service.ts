@@ -37,7 +37,7 @@ import {
   renderDraft,
   validateDraft,
 } from "./facts";
-import { COACH_PROMPT_VERSION } from "./prompts/bvbtips-coach-v1";
+import { COACH_PROMPT_VERSION } from "./prompts/bvbtips-coach-v2";
 const DAY = 86400000;
 @Injectable()
 export class AiCoachService {

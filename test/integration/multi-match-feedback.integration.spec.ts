@@ -290,7 +290,7 @@ const url = process.env.TEST_DATABASE_URL;
         service.startGuestReviewSession(f.link.token, f.input.submissionId),
       ).rejects.toThrow("expired");
     });
-    it("counts individual match reviews independently while retaining the existing daily influence cap", async () => {
+    it("counts individual match reviews independently while excluding unverified guest influence", async () => {
       const f = await fixture();
       const records = await service.submitRequest({
         ...f.input,
@@ -317,7 +317,7 @@ const url = process.env.TEST_DATABASE_URL;
             type: "FEEDBACK_APPLIED",
           },
         }),
-      ).toBe(1);
+      ).toBe(0);
     });
     it("queues every individual match in the selected giver’s Account for same-device guest review, including an assignment chosen on the form", async () => {
       const f = await fixture();

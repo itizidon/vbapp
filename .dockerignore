@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+frontend
+.venv-video
+.video-tools
+.video-tmp
+video-worker/models/*.task
+video-worker/__pycache__
+video-worker/tests/__pycache__
+video-worker/local-storage/node_modules
+dist
+coverage

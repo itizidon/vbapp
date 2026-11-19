@@ -71,6 +71,23 @@ export function themeImprovement(
   rating: RatingTrend,
 ): { improvement: TechniqueTrend; explanation: string } {
   const { recent: r, previous: p } = theme;
+  if (
+    r.trustBreakdown &&
+    p.trustBreakdown &&
+    (![r, p].every(
+      (period) =>
+        (period.trustBreakdown?.find(
+          (g) => g.classification === "VERIFIED_APPROVED",
+        )?.feedbackCount ?? 0) >= C.minThemeMentions,
+    ) ||
+      r.distinctVerifiedReviewers < C.minVerifiedReviewers ||
+      p.distinctVerifiedReviewers < C.minVerifiedReviewers)
+  )
+    return {
+      improvement: TechniqueTrend.INSUFFICIENT_DATA,
+      explanation:
+        "Trust groups lack independent verified support in both periods; changes in guest or pending submissions are not confirmed improvement.",
+    };
   const explanation = `Recent positives ${r.positiveFeedbackCount}/${r.relevantFeedbackCount}, negatives ${r.negativeFeedbackCount}/${r.relevantFeedbackCount}; previous positives ${p.positiveFeedbackCount}/${p.relevantFeedbackCount}, negatives ${p.negativeFeedbackCount}/${p.relevantFeedbackCount}; verified reviewers ${r.distinctVerifiedReviewers}/${p.distinctVerifiedReviewers}; numerical trend ${rating}.`;
   if (
     r.relevantFeedbackCount < C.minReviews ||
@@ -215,8 +232,16 @@ export function rankWeaknesses(
       const score =
         breakdown.reduce((n, c) => n + (c.value ?? 0) * c.effectiveWeight, 0) *
         factor *
+        (t.trustEvidenceFactor ?? 1) *
         100;
       return {
+        verifiedSupportingFeedbackCount: t.trustBreakdown?.find(
+          (g) => g.classification === "VERIFIED_APPROVED",
+        )?.negativeFeedbackCount,
+        unverifiedSupportingFeedbackCount: t.trustBreakdown
+          ?.filter((g) => g.classification !== "VERIFIED_APPROVED")
+          .reduce((n, g) => n + g.negativeFeedbackCount, 0),
+        trustEvidenceFactor: t.trustEvidenceFactor,
         skillId: t.skillIds.length === 1 ? t.skillIds[0] : null,
         themeId: t.themeId,
         priorityScore: Number(score.toFixed(6)),
@@ -229,11 +254,13 @@ export function rankWeaknesses(
         evidenceStatus: status,
         evidenceFactor: factor,
         components: breakdown,
-        explanation: `Heuristic priority: ${t.negativeFeedbackCount}/${t.relevantFeedbackCount} relevant reviews mention this negatively. ${t.distinctNegativeReviewers} verified negative reviewers. Missing components are reweighted; limited diversity halves the score. Guests are not verified independent people.`,
+        explanation: `Heuristic priority: ${t.negativeFeedbackCount}/${t.relevantFeedbackCount} relevant reviews mention this negatively. ${t.distinctNegativeReviewers} verified negative reviewers. Missing components are reweighted; limited diversity halves the score. Guests are not verified independent people. Trust weights are applied once to the final score, with one evidence unit per stable account and a capped unverified evidence budget; raw counts remain literal submissions.`,
       };
     })
     .sort(
       (a, b) =>
+        Number((b.verifiedSupportingFeedbackCount ?? 0) > 0) -
+          Number((a.verifiedSupportingFeedbackCount ?? 0) > 0) ||
         b.priorityScore - a.priorityScore ||
         (a.themeId < b.themeId ? -1 : a.themeId > b.themeId ? 1 : 0),
     )

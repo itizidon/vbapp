@@ -497,6 +497,7 @@ export class FeedbackService {
       }
       const feedback = await tx.feedback.create({
         data: {
+          submittedAt: new Date(),
           submissionId: identity.submissionId,
           recipientId: input.recipientId,
           sportId: input.sportId,
@@ -512,6 +513,7 @@ export class FeedbackService {
           feedbackLinkId,
           submittedById: identity.submittedById ?? identity.reviewerId,
           approvalRequired,
+          ...(!approvalRequired && identity.reviewerId ? { approvedAt: new Date(), approvedById: identity.reviewerId } : {}),
           status: approvalRequired ? "PENDING" : "PUBLISHED",
           ...(assessment
             ? {
@@ -1112,6 +1114,7 @@ export class FeedbackService {
         throw new BadRequestException(
           "Feedback has no matching reviewer assignment",
         );
+      if (!feedback.submittedAt) throw new BadRequestException("Only submitted reviews can be approved or rejected");
       const target = approve ? "PUBLISHED" : "REJECTED";
       if (
         (approve &&

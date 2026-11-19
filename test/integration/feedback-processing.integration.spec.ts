@@ -23,8 +23,13 @@ const url = process.env.TEST_DATABASE_URL;
       reviewerId: string;
     let extract: jest.Mock, embed: jest.Mock;
     const eligible = {
+      submittedAt: new Date(),
       status: "PUBLISHED" as const,
-      privateAnalyticsAllowed: true, privateCoachingAllowed: true, privacyNoticeVersion: "feedback-privacy-v1", privateAnalyticsConsentAt: new Date(), privateCoachingConsentAt: new Date(),
+      privateAnalyticsAllowed: true,
+      privateCoachingAllowed: true,
+      privacyNoticeVersion: "feedback-privacy-v1",
+      privateAnalyticsConsentAt: new Date(),
+      privateCoachingConsentAt: new Date(),
       analyticsAllowed: true,
       evidenceAllowed: true,
     };
@@ -90,7 +95,9 @@ const url = process.env.TEST_DATABASE_URL;
         modelVersion: "v1",
         extract,
       };
-      worker = new FeedbackProcessingWorker(db, extractor, embedder());
+      worker = new FeedbackProcessingWorker(db, extractor, embedder(), {
+        playerId: userId,
+      });
     });
     afterAll(async () => {
       await db?.feedback.deleteMany({ where: { recipientId: userId } });
@@ -101,7 +108,7 @@ const url = process.env.TEST_DATABASE_URL;
         data: {
           recipientId: userId,
           reviewerId,
-          submittedById: userId,
+          submittedById: reviewerId,
           sportId,
           ...eligible,
           overallComment: "Stable platform helps.",
@@ -193,7 +200,13 @@ const url = process.env.TEST_DATABASE_URL;
         data: { privateAnalyticsAllowed: false },
       });
       expect(await observations()).toHaveLength(0);
-      expect(await db.feedbackObservationEmbedding.count()).toBe(0);
+      expect(
+        await db.feedbackObservationEmbedding.count({
+          where: {
+            observation: { job: { feedback: { recipientId: userId } } },
+          },
+        }),
+      ).toBe(0);
       expect(await readOwnAnalysisProfile(db, userId, sportId)).toEqual({
         state: "STALE",
         data: null,
@@ -251,6 +264,7 @@ const url = process.env.TEST_DATABASE_URL;
           extract: async (i) => result(i),
         },
         embedder(),
+        { playerId: userId },
       );
       extract.mockImplementationOnce(async (input: ExtractionInput) => {
         await db.feedbackAnalysisJob.update({
@@ -315,19 +329,33 @@ const url = process.env.TEST_DATABASE_URL;
       await worker.embedOne();
       expect(extract).toHaveBeenCalledTimes(1);
       await db.feedbackEmbeddingJob.updateMany({
-        where: { status: "PENDING" },
+        where: {
+          status: "PENDING",
+          observation: { job: { feedback: { recipientId: userId } } },
+        },
         data: { runAfter: new Date(0) },
       });
       await worker.embedOne();
       expect(extract).toHaveBeenCalledTimes(1);
-      const next = new FeedbackProcessingWorker(db, worker.extractor, {
-        ...embedder(),
-        modelVersion: "v2",
-      });
+      const next = new FeedbackProcessingWorker(
+        db,
+        worker.extractor,
+        {
+          ...embedder(),
+          modelVersion: "v2",
+        },
+        { playerId: userId },
+      );
       expect(await next.enqueueEmbeddings()).toBe(1);
       expect(await next.enqueueEmbeddings()).toBe(0);
       await next.embedOne();
-      expect(await db.feedbackObservationEmbedding.count()).toBe(2);
+      expect(
+        await db.feedbackObservationEmbedding.count({
+          where: {
+            observation: { job: { feedback: { recipientId: userId } } },
+          },
+        }),
+      ).toBe(2);
     });
     it("does not save embedding output when consent changes while the API runs", async () => {
       const f = await feedback();
@@ -340,7 +368,13 @@ const url = process.env.TEST_DATABASE_URL;
         return [0.1, 0.2, 0.3];
       });
       await worker.embedOne();
-      expect(await db.feedbackObservationEmbedding.count()).toBe(0);
+      expect(
+        await db.feedbackObservationEmbedding.count({
+          where: {
+            observation: { job: { feedback: { recipientId: userId } } },
+          },
+        }),
+      ).toBe(0);
     });
     it("deletion cascades observations, vectors and jobs and invalidates profiles", async () => {
       const f = await feedback();
@@ -349,7 +383,13 @@ const url = process.env.TEST_DATABASE_URL;
       await rebuildOneProfile(db, userId, sportId);
       await db.feedback.delete({ where: { id: f.id } });
       expect(await observations()).toHaveLength(0);
-      expect(await db.feedbackObservationEmbedding.count()).toBe(0);
+      expect(
+        await db.feedbackObservationEmbedding.count({
+          where: {
+            observation: { job: { feedback: { recipientId: userId } } },
+          },
+        }),
+      ).toBe(0);
       expect(
         await db.feedbackAnalysisJob.findUnique({
           where: { feedbackId: f.id },

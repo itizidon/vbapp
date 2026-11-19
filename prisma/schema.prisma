@@ -24,6 +24,12 @@ enum FeedbackStatus {
 }
 
 model User {
+ trainingDrills Drill[]
+ trainingReferences DrillReferenceVideo[]
+ trainingSubmissions DrillVideoSubmission[]
+ trainingProfile PlayerTrainingProfile?
+ trainingProgress PlayerSkillProgress[]
+ drillCompletions DrillCompletion[]
   id                String                       @id @default(uuid()) @db.Uuid
   username          String                       @unique @db.Citext
   email             String                       @unique @db.Citext
@@ -69,6 +75,8 @@ model Sport {
 }
 
 model Skill {
+ trainingNodes SkillTreeNode[]
+ coachingSituations CoachingSituation[]
   id                        String                          @id @default(uuid()) @db.Uuid
   sportId                   String                          @db.Uuid
   name                      String
@@ -146,6 +154,10 @@ model MatchParticipant {
 }
 
 model Feedback {
+  submittedAt DateTime?
+  pendingAiAllowed Boolean @default(false)
+  pendingAiConsentAt DateTime?
+  pendingAiNoticeVersion String?
   submissionId                                String?                         @db.Uuid
   submission                                  FeedbackSubmission?             @relation(fields: [submissionId], references: [id], onDelete: Restrict)
   associatedMatches                           FeedbackMatch[]
@@ -456,6 +468,8 @@ model FeedbackTheme {
 }
 
 model FeedbackAnalysisJob {
+  trustClassification String?
+  trustAtExtraction String?
   feedbackId    String                  @id @db.Uuid
   generation    Int                     @default(1)
   status        String                  @default("PENDING")
@@ -646,4 +660,403 @@ model FeedbackPrivacyEvent {
   actorRole String
   feedback Feedback @relation(fields:[feedbackId], references:[id], onDelete:Cascade)
   @@index([feedbackId, occurredAt])
+}
+
+// Curated training catalog. Existing Skill rows remain the five category records.
+enum TrainingContentStatus {
+ DRAFT
+ PUBLISHED
+ ARCHIVED
+}
+enum TrainingTier {
+ FOUNDATION
+ CONTROL
+ APPLICATION
+ MASTERY
+}
+enum DrillDifficulty {
+ BEGINNER
+ INTERMEDIATE
+ ADVANCED
+}
+enum DrillSkillRole {
+ PRIMARY
+ SECONDARY
+}
+enum TrainingRuleEffect {
+ BOOST
+ EXCLUDE
+}
+enum VideoSubmissionStatus {
+ PENDING_UPLOAD
+ UPLOADED
+ VALIDATION_PENDING
+ READY_FOR_ANALYSIS
+ ANALYSIS_PENDING
+ ANALYZING
+ COMPLETED
+ FAILED
+ ANALYSIS_UNAVAILABLE
+ DELETED
+}
+enum VideoAnalysisStatus {
+ PENDING
+ ANALYZING
+ COMPLETED
+ FAILED
+ ANALYSIS_UNAVAILABLE
+ DELETED
+}
+enum VideoJobType {
+ VALIDATE_VIDEO
+ EXTRACT_REFERENCE_POSE
+ EXTRACT_PLAYER_POSE
+ COMPARE_TECHNIQUE
+ GENERATE_COACHING_SUMMARY
+ CLEANUP_MEDIA
+}
+enum VideoJobStatus {
+ PENDING
+ PROCESSING
+ COMPLETED
+ FAILED
+ UNAVAILABLE
+ CANCELLED
+}
+model SkillTreeNode {
+ id String @id @default(uuid()) @db.Uuid
+ slug String @unique
+ categoryId String @db.Uuid
+ name String
+ description String
+ tier TrainingTier @default(FOUNDATION)
+ difficulty Int @default(1)
+ learningObjective String
+ whyItMatters String
+ technique Json?
+ commonMistakes Json?
+ successCriteria Json?
+ aiDescription String?
+ tags String[] @default([])
+ sortOrder Int @default(0)
+ status TrainingContentStatus @default(DRAFT)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ category Skill @relation(fields:[categoryId],references:[id],onDelete:Restrict)
+ prerequisites SkillPrerequisite[] @relation("TrainingPrerequisites")
+ dependents SkillPrerequisite[] @relation("TrainingDependents")
+ drills DrillSkill[]
+ progress PlayerSkillProgress[]
+ @@index([categoryId,status,sortOrder])
+}
+model SkillPrerequisite {
+ skillId String @db.Uuid
+ prerequisiteId String @db.Uuid
+ required Boolean @default(true)
+ skill SkillTreeNode @relation("TrainingPrerequisites",fields:[skillId],references:[id],onDelete:Restrict)
+ prerequisite SkillTreeNode @relation("TrainingDependents",fields:[prerequisiteId],references:[id],onDelete:Restrict)
+ @@id([skillId,prerequisiteId])
+ @@index([prerequisiteId])
+}
+model Drill {
+ id String @id @default(uuid()) @db.Uuid
+ slug String @unique
+ name String
+ description String
+ objective String
+ setup String
+ difficulty DrillDifficulty @default(BEGINNER)
+ durationMinutes Int @default(10)
+ minPlayers Int @default(1)
+ maxPlayers Int @default(2)
+ equipment String[] @default([])
+ coachingCues String[] @default([])
+ commonMistakes String[] @default([])
+ safetyNotes String?
+ successCriteria Json?
+ metricConfig Json?
+ motionConfig Json?
+ bestForSummary String?
+ notIdealWhen String?
+ status TrainingContentStatus @default(DRAFT)
+ createdById String @db.Uuid
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ createdBy User @relation(fields:[createdById],references:[id],onDelete:Restrict)
+ steps DrillStep[]
+ skills DrillSkill[]
+ rules DrillRecommendationRule[]
+ variants DrillTechniqueVariant[]
+ referenceVideos DrillReferenceVideo[]
+ checkpoints TechniqueCheckpoint[]
+ submissions DrillVideoSubmission[]
+ completions DrillCompletion[]
+ @@index([status,id])
+}
+model DrillStep {
+ id String @id @default(uuid()) @db.Uuid
+ drillId String @db.Uuid
+ sortOrder Int
+ instruction String
+ metadata Json?
+ drill Drill @relation(fields:[drillId],references:[id],onDelete:Cascade)
+ @@unique([drillId,sortOrder])
+}
+model DrillSkill {
+ drillId String @db.Uuid
+ skillTreeNodeId String @db.Uuid
+ role DrillSkillRole
+ drill Drill @relation(fields:[drillId],references:[id],onDelete:Cascade)
+ skillTreeNode SkillTreeNode @relation(fields:[skillTreeNodeId],references:[id],onDelete:Restrict)
+ @@id([drillId,skillTreeNodeId])
+ @@index([skillTreeNodeId,role])
+}
+model CoachingSituation {
+ id String @id @default(uuid()) @db.Uuid
+ slug String @unique
+ name String
+ description String
+ categoryId String? @db.Uuid
+ tags String[] @default([])
+ status TrainingContentStatus @default(DRAFT)
+ category Skill? @relation(fields:[categoryId],references:[id],onDelete:Restrict)
+ rules DrillRecommendationRule[]
+}
+model DrillRecommendationRule {
+ id String @id @default(uuid()) @db.Uuid
+ drillId String @db.Uuid
+ situationId String? @db.Uuid
+ name String
+ rationale String
+ conditions Json
+ effect TrainingRuleEffect
+ priority Int @default(1)
+ enabled Boolean @default(true)
+ version Int @default(1)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ drill Drill @relation(fields:[drillId],references:[id],onDelete:Cascade)
+ situation CoachingSituation? @relation(fields:[situationId],references:[id],onDelete:Restrict)
+ @@index([drillId,enabled])
+}
+model DrillTechniqueVariant {
+ id String @id @default(uuid()) @db.Uuid
+ drillId String @db.Uuid
+ slug String
+ name String
+ description String
+ isDefault Boolean @default(false)
+ status TrainingContentStatus @default(DRAFT)
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ drill Drill @relation(fields:[drillId],references:[id],onDelete:Restrict)
+ referenceVideos DrillReferenceVideo[]
+ checkpoints TechniqueCheckpoint[]
+ submissions DrillVideoSubmission[]
+ @@unique([drillId,slug])
+ @@unique([drillId,id])
+}
+model DrillReferenceVideo {
+ id String @id @default(uuid()) @db.Uuid
+ drillId String @db.Uuid
+ techniqueVariantId String? @db.Uuid
+ uploadedById String @db.Uuid
+ title String
+ description String?
+ storageKey String @unique
+ originalFilename String
+ mimeType String
+ fileSizeBytes BigInt
+ durationMs Int?
+ width Int?
+ height Int?
+ frameRate Float?
+ cameraAngle String
+ handedness String?
+ isPrimary Boolean @default(false)
+ status TrainingContentStatus @default(DRAFT)
+ uploadStatus VideoSubmissionStatus @default(PENDING_UPLOAD)
+ uploadExpiresAt DateTime
+ referenceVersion Int @default(1)
+ seriesId String @db.Uuid
+ poseArtifactKey String?
+ poseModelVersion String?
+ checkpointIds String[] @default([])
+ qualityAcknowledgedAt DateTime?
+ poseArtifacts VideoPoseArtifact[]
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ drill Drill @relation(fields:[drillId],references:[id],onDelete:Restrict)
+ techniqueVariant DrillTechniqueVariant? @relation(fields:[drillId,techniqueVariantId],references:[drillId,id],onDelete:Restrict)
+ uploadedBy User @relation(fields:[uploadedById],references:[id],onDelete:Restrict)
+ preferredSubmissions DrillVideoSubmission[]
+ analyses VideoAnalysisReference[]
+ jobs VideoProcessingJob[]
+ @@unique([id,referenceVersion])
+ @@unique([seriesId,referenceVersion])
+ @@index([drillId,status,techniqueVariantId])
+}
+model TechniqueCheckpoint {
+ id String @id @default(uuid()) @db.Uuid
+ drillId String @db.Uuid
+ techniqueVariantId String? @db.Uuid
+ name String
+ description String
+ phaseKey String
+ sortOrder Int
+ importance Float @default(1)
+ measurementConfig Json?
+ coachingExplanation String
+ status TrainingContentStatus @default(DRAFT)
+ drill Drill @relation(fields:[drillId],references:[id],onDelete:Restrict)
+ techniqueVariant DrillTechniqueVariant? @relation(fields:[drillId,techniqueVariantId],references:[drillId,id],onDelete:Restrict)
+ @@index([drillId,sortOrder,id])
+}
+model DrillVideoSubmission {
+ id String @id @default(uuid()) @db.Uuid
+ userId String @db.Uuid
+ drillId String @db.Uuid
+ techniqueVariantId String? @db.Uuid
+ referenceVideoId String? @db.Uuid
+ storageKey String @unique
+ mimeType String
+ fileSizeBytes BigInt
+ durationMs Int?
+ width Int?
+ height Int?
+ frameRate Float?
+ cameraAngle String
+ handedness String?
+ allowMirroring Boolean @default(false)
+ aiExplanationAllowed Boolean @default(false)
+ poseArtifacts VideoPoseArtifact[]
+ status VideoSubmissionStatus @default(PENDING_UPLOAD)
+ uploadExpiresAt DateTime
+ createdAt DateTime @default(now())
+ uploadedAt DateTime?
+ deletedAt DateTime?
+ retentionExpiresAt DateTime
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict)
+ drill Drill @relation(fields:[drillId],references:[id],onDelete:Restrict)
+ techniqueVariant DrillTechniqueVariant? @relation(fields:[drillId,techniqueVariantId],references:[drillId,id],onDelete:Restrict)
+ referenceVideo DrillReferenceVideo? @relation(fields:[referenceVideoId],references:[id],onDelete:Restrict)
+ analyses VideoAnalysis[]
+ jobs VideoProcessingJob[]
+ @@index([userId,createdAt,id])
+ @@index([status,uploadExpiresAt])
+ @@index([retentionExpiresAt,deletedAt])
+}
+model VideoAnalysis {
+ artifactKeys String[] @default([])
+ id String @id @default(uuid()) @db.Uuid
+ submissionId String @db.Uuid
+ requestId String @db.Uuid
+ status VideoAnalysisStatus @default(PENDING)
+ analysisVersion String
+ analysisProvider String?
+ poseModelVersion String?
+ comparisonAlgorithmVersion String?
+ checkpointSnapshot Json
+ result Json?
+ confidence Float?
+ errorCode String?
+ startedAt DateTime?
+ completedAt DateTime?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ submission DrillVideoSubmission @relation(fields:[submissionId],references:[id],onDelete:Restrict)
+ references VideoAnalysisReference[]
+ jobs VideoProcessingJob[]
+ @@unique([submissionId,requestId])
+ @@unique([submissionId,analysisVersion])
+}
+model VideoAnalysisReference {
+ analysisId String @db.Uuid
+ referenceVideoId String @db.Uuid
+ referenceVersion Int
+ storageKeySnapshot String
+ selectionReason String
+ checkpointIdsSnapshot String[] @default([])
+ mirrored Boolean @default(false)
+ poseArtifactId String? @db.Uuid
+ poseArtifact VideoPoseArtifact? @relation(fields:[poseArtifactId],references:[id],onDelete:Restrict)
+ analysis VideoAnalysis @relation(fields:[analysisId],references:[id],onDelete:Restrict)
+ referenceVideo DrillReferenceVideo @relation(fields:[referenceVideoId,referenceVersion],references:[id,referenceVersion],onDelete:Restrict)
+ @@id([analysisId,referenceVideoId])
+}
+model VideoProcessingJob {
+ id String @id @default(uuid()) @db.Uuid
+ type VideoJobType
+ status VideoJobStatus @default(PENDING)
+ idempotencyKey String @unique
+ submissionId String? @db.Uuid
+ referenceVideoId String? @db.Uuid
+ analysisId String? @db.Uuid
+ payload Json?
+ attempts Int @default(0)
+ maxAttempts Int @default(5)
+ runAfter DateTime @default(now())
+ leaseToken String? @db.Uuid
+ leaseUntil DateTime?
+ errorCode String?
+ createdAt DateTime @default(now())
+ updatedAt DateTime @updatedAt
+ submission DrillVideoSubmission? @relation(fields:[submissionId],references:[id],onDelete:Restrict)
+ referenceVideo DrillReferenceVideo? @relation(fields:[referenceVideoId],references:[id],onDelete:Restrict)
+ analysis VideoAnalysis? @relation(fields:[analysisId],references:[id],onDelete:Restrict)
+ @@index([status,runAfter])
+}
+// Self-reported training preferences are private and never used to change internal ratings.
+model PlayerTrainingProfile {
+ userId String @id @db.Uuid
+ data Json
+ updatedAt DateTime @updatedAt
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict)
+}
+model PlayerSkillProgress {
+ userId String @db.Uuid
+ skillTreeNodeId String @db.Uuid
+ state String
+ updatedAt DateTime @updatedAt
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict)
+ skill SkillTreeNode @relation(fields:[skillTreeNodeId],references:[id],onDelete:Restrict)
+ @@id([userId,skillTreeNodeId])
+}
+model DrillCompletion {
+ id String @id @default(uuid()) @db.Uuid
+ userId String @db.Uuid
+ drillId String @db.Uuid
+ completedAt DateTime @default(now())
+ user User @relation(fields:[userId],references:[id],onDelete:Restrict)
+ drill Drill @relation(fields:[drillId],references:[id],onDelete:Restrict)
+ @@index([userId,drillId,completedAt])
+}
+
+// Immutable extraction provenance; large frame arrays live in private object storage.
+model VideoPoseArtifact {
+ id String @id @default(uuid()) @db.Uuid
+ referenceVideoId String? @db.Uuid
+ submissionId String? @db.Uuid
+ fingerprint String
+ storageKey String @unique
+ sourceHash String
+ modelVersion String
+ extractionVersion String
+ featureVersion String
+ samplingFps Int
+ quality Json
+ metadata Json
+ status String
+ createdAt DateTime @default(now())
+ referenceVideo DrillReferenceVideo? @relation(fields:[referenceVideoId],references:[id],onDelete:Restrict)
+ submission DrillVideoSubmission? @relation(fields:[submissionId],references:[id],onDelete:Restrict)
+ analyses VideoAnalysisReference[]
+ @@unique([referenceVideoId,fingerprint])
+ @@unique([submissionId,fingerprint])
+ @@index([submissionId,createdAt])
+}
+model VideoWorkerHeartbeat {
+ id String @id
+ versions Json
+ expiresAt DateTime
 }

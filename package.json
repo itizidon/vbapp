@@ -26,11 +26,19 @@
     "feedback:backfill": "node dist/src/feedback-processing/cli.js enqueue --all",
     "feedback:work": "node dist/src/feedback-processing/cli.js work --all",
     "feedback:ready": "node dist/src/feedback-processing/cli.js status --ready",
-    "feedback:profiles": "node dist/src/feedback-processing/cli.js profiles-all"
+    "feedback:profiles": "node dist/src/feedback-processing/cli.js profiles-all",
+    "training:seed": "node dist/src/training/cli.js seed",
+    "training:maintenance": "node dist/src/training/cli.js maintenance",
+    "video:worker": "node dist/src/training/motion-worker.js",
+    "video:health": "node dist/src/training/motion-worker.js health",
+    "test:video:python": ".venv-video/bin/python -m unittest discover -s video-worker/tests -v",
+    "test:video:smoke": "tsc -p tsconfig.video-smoke.json && node dist/video-worker/smoke.js"
   },
   "dependencies": {
     "@apollo/server": "^5.1.0",
     "@as-integrations/express5": "^1.1.2",
+    "@aws-sdk/client-s3": "^3.1172.0",
+    "@aws-sdk/s3-request-presigner": "^3.1172.0",
     "@nestjs/apollo": "^13.2.0",
     "@nestjs/common": "^11.1.9",
     "@nestjs/config": "^4.0.2",

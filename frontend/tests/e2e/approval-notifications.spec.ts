@@ -7,6 +7,7 @@ test("notifications and independent approvals work with keyboard, mobile sheet a
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
   let calls = 0;
+  const privacyCalls: Record<string, unknown>[] = [];
   const decided = new Map<string, string>();
   const cards = [1, 2].map((n) => ({
     id: `33333333-3333-4333-8333-${String(n).padStart(12, "0")}`,
@@ -25,6 +26,7 @@ test("notifications and independent approvals work with keyboard, mobile sheet a
             description: `Match ${i}`,
           }))
         : [],
+    pendingAiAllowed: false,
     privateAnalyticsAllowed: false,
     privateCoachingAllowed: false,
     publicAnalyticsAllowed: false,
@@ -81,6 +83,11 @@ test("notifications and independent approvals work with keyboard, mobile sheet a
           nextCursor: null,
         },
       };
+    } else if (q.includes("mutation Privacy")) {
+      privacyCalls.push(v.input);
+      const card = cards.find((c) => c.id === v.input.feedbackId)!;
+      card.pendingAiAllowed = v.input.pendingAiAllowed;
+      data = { updateFeedbackPrivacy: card };
     } else if (q.includes("mutation Approve")) {
       calls++;
       await new Promise((r) => setTimeout(r, 200));
@@ -144,6 +151,21 @@ test("notifications and independent approvals work with keyboard, mobile sheet a
     first.getByRole("heading", { name: "Associated match" }),
   ).toHaveCount(0);
   await expect(first.getByText("Use a stable platform.")).toBeVisible();
+  await expect(
+    first.getByRole("button", { name: "Approve", exact: true }),
+  ).toBeDisabled();
+  const pendingAi = first.getByRole("checkbox", {
+    name: /Allow recipient AI insights and excerpts before I approve/,
+  });
+  await expect(pendingAi).not.toBeChecked();
+  await pendingAi.click();
+  await expect(pendingAi).toBeChecked();
+  await expect.poll(() => privacyCalls.length).toBe(1);
+  expect(privacyCalls[0]).toMatchObject({
+    pendingAiAllowed: true,
+    pendingAiNoticeVersion: "pending-ai-disclosure-v1",
+  });
+  expect(calls).toBe(0);
   await expect(
     first.getByRole("button", { name: "Approve", exact: true }),
   ).toBeDisabled();

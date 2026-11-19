@@ -44,8 +44,21 @@ function fixture(
     pending?: boolean;
     failOnce?: boolean;
     hold?: boolean;
+    pendingEvidence?: boolean;
   } = {},
 ) {
+  const responseTurn = options.pendingEvidence
+    ? {
+        ...turn,
+        response: {
+          ...turn.response,
+          evidence: turn.response.evidence.map((e) => ({
+            ...e,
+            trustClassification: "AWAITING_REVIEWER_APPROVAL",
+          })),
+        },
+      }
+    : turn;
   let saved = false,
     fail = options.failOnce,
     release!: (value: unknown) => void;
@@ -81,7 +94,10 @@ function fixture(
       };
     else if (query.includes("query CoachMessages"))
       data = {
-        myAiCoachMessages: { messages: saved ? [turn] : [], nextCursor: null },
+        myAiCoachMessages: {
+          messages: saved ? [responseTurn] : [],
+          nextCursor: null,
+        },
       };
     else if (query.includes("mutation AskAiCoach")) {
       requests.push(variables.input);
@@ -97,7 +113,7 @@ function fixture(
       }
       if (options.hold) await new Promise((resolve) => (release = resolve));
       saved = true;
-      data = { askAiCoach: turn };
+      data = { askAiCoach: responseTurn };
     } else throw Error("Unexpected coach query");
     return { ok: true, status: 200, json: async () => ({ data }) };
   });
@@ -208,4 +224,26 @@ it("can start a new conversation and does not carry old messages into it", async
   expect(
     screen.getByText("What would help your game today?"),
   ).toBeInTheDocument();
+});
+
+it("labels pending evidence without linking to the restricted raw review", async () => {
+  fixture({ pendingEvidence: true });
+  mount();
+  fireEvent.change(await screen.findByRole("textbox"), {
+    target: { value: turn.question },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  expect(await screen.findByText(turn.response.message)).toBeInTheDocument();
+  expect(screen.getByText("Feedback evidence (1)")).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      /Awaiting reviewer approval · AI excerpt shared by permission/,
+    ),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("link", {
+      name: "View supporting feedback",
+      hidden: true,
+    }),
+  ).not.toBeInTheDocument();
 });

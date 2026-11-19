@@ -24,6 +24,9 @@ interface ProfileSummary {
   rebuildQueued: boolean;
   profile: {
     totalEligibleFeedbackCount: number;
+    verifiedFeedbackCount?: number;
+    guestFeedbackCount?: number;
+    awaitingReviewerApprovalCount?: number;
     evidenceStatus: string;
     state: string;
   } | null;
@@ -67,7 +70,7 @@ export function CoachChat({
     queryKey: ["coach-profile", userId, sportId],
     queryFn: () =>
       gql<{ myFeedbackAnalysisProfile: ProfileSummary }>(
-        `query CoachProfile($sportId:ID!){myFeedbackAnalysisProfile(sportId:$sportId){state rebuildQueued profile {totalEligibleFeedbackCount evidenceStatus state}}}`,
+        `query CoachProfile($sportId:ID!){myFeedbackAnalysisProfile(sportId:$sportId){state rebuildQueued profile {totalEligibleFeedbackCount verifiedFeedbackCount guestFeedbackCount awaitingReviewerApprovalCount evidenceStatus state}}}`,
         { sportId },
       ),
     staleTime: 0,
@@ -264,9 +267,10 @@ export function CoachChat({
               <div className="ai-coach__notice">
                 <strong>No eligible feedback yet</strong>
                 <p>
-                  Your coach needs published feedback with permission for private
-                  analytics and AI coaching. Any required reviewer approval
-                  must also be complete.
+                  Your coach needs submitted feedback with permission for
+                  private analytics and AI coaching. Pending assigned reviews
+                  also need the reviewer’s explicit permission to share AI
+                  insights before approval.
                 </p>
                 <Link href="/feedback">Request feedback</Link>
               </div>
@@ -277,6 +281,17 @@ export function CoachChat({
                 keep conclusions cautious.
               </p>
             ) : null}
+            {snapshot?.profile &&
+              snapshot.profile.verifiedFeedbackCount !== undefined && (
+                <p className="ai-coach__notice text-sm">
+                  Evidence: {snapshot.profile.verifiedFeedbackCount} verified
+                  approved · {snapshot.profile.guestFeedbackCount ?? 0}{" "}
+                  unverified guest ·{" "}
+                  {snapshot.profile.awaitingReviewerApprovalCount ?? 0} awaiting
+                  reviewer approval. Unverified feedback adds context and never
+                  changes internal ratings.
+                </p>
+              )}
             <div
               role="log"
               aria-label="Coaching conversation"
@@ -336,7 +351,7 @@ export function CoachChat({
                       {turn.response.evidence.length > 0 && (
                         <details>
                           <summary>
-                            Verified evidence ({turn.response.evidence.length})
+                            Feedback evidence ({turn.response.evidence.length})
                           </summary>
                           <ul>
                             {turn.response.evidence.map((e) => (
@@ -349,11 +364,19 @@ export function CoachChat({
                                     : "reviews"}
                                   {e.metricKey ? " · SQL profile metric" : ""}
                                 </small>
-                                {e.feedbackIds.map((id) => (
-                                  <Link key={id} href={`/feedback/${id}`}>
-                                    View supporting feedback
-                                  </Link>
-                                ))}
+                                {e.trustClassification ===
+                                "AWAITING_REVIEWER_APPROVAL" ? (
+                                  <small>
+                                    Awaiting reviewer approval · AI excerpt
+                                    shared by permission
+                                  </small>
+                                ) : (
+                                  e.feedbackIds.map((id) => (
+                                    <Link key={id} href={`/feedback/${id}`}>
+                                      View supporting feedback
+                                    </Link>
+                                  ))
+                                )}
                               </li>
                             ))}
                           </ul>

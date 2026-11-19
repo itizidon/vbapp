@@ -29,15 +29,27 @@ import { GqlAuthGuard } from "../common/gql-auth.guard";
 import { AuthUser, CurrentUser } from "../common/current-user.decorator";
 import { FeedbackModel, UserModel } from "../common/models";
 
+export const PENDING_AI_NOTICE_VERSION = "pending-ai-disclosure-v1";
 export const PRIVACY_NOTICE_VERSION = "feedback-privacy-v1";
 export type PrivacyChoices = {
   privateAnalyticsAllowed?: boolean;
   privateCoachingAllowed?: boolean;
   publicAnalyticsAllowed?: boolean;
   privacyNoticeVersion?: string;
+  pendingAiAllowed?: boolean;
+  pendingAiNoticeVersion?: string;
 };
 @InputType()
 export class FeedbackPrivacyInput implements PrivacyChoices {
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  pendingAiAllowed?: boolean;
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  pendingAiNoticeVersion?: string;
   @Field(() => ID) @IsUUID() feedbackId!: string;
   @Field({ nullable: true })
   @IsOptional()
@@ -149,8 +161,29 @@ export class FeedbackPrivacyService {
         ].includes(true)
       )
         throw new BadRequestException("Removed feedback cannot be opted in");
+      if (
+        input.pendingAiAllowed === true &&
+        (old.status !== "PENDING" ||
+          !old.approvalRequired ||
+          !old.submittedAt ||
+          input.pendingAiNoticeVersion !== PENDING_AI_NOTICE_VERSION)
+      )
+        throw new BadRequestException(
+          "Read and accept the pending AI disclosure for a submitted assigned review",
+        );
       const grant = privacyGrant(input);
       const data: Prisma.FeedbackUpdateInput = {
+        ...(input.pendingAiAllowed !== undefined
+          ? {
+              pendingAiAllowed: input.pendingAiAllowed,
+              ...(input.pendingAiAllowed
+                ? {
+                    pendingAiConsentAt: new Date(),
+                    pendingAiNoticeVersion: PENDING_AI_NOTICE_VERSION,
+                  }
+                : {}),
+            }
+          : {}),
         ...(input.privateAnalyticsAllowed !== undefined
           ? {
               privateAnalyticsAllowed: grant.privateAnalyticsAllowed,
@@ -187,6 +220,17 @@ export class FeedbackPrivacyService {
       };
       const row = await tx.feedback.update({ where: { id: old.id }, data });
       await privacyEvents(tx, row, actor, "REGISTERED_REVIEWER", old);
+      if (old.pendingAiAllowed !== row.pendingAiAllowed)
+        await tx.feedbackPrivacyEvent.create({
+          data: {
+            feedbackId: old.id,
+            purpose: "PENDING_RECIPIENT_AI_DISCLOSURE",
+            allowed: row.pendingAiAllowed,
+            noticeVersion: PENDING_AI_NOTICE_VERSION,
+            actorId: actor,
+            actorRole: "ASSIGNED_REVIEWER",
+          },
+        });
       return row;
     });
   }

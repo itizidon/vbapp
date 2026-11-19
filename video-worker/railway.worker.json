@@ -1,0 +1,1 @@
+{"$schema":"https://railway.com/railway.schema.json","build":{"builder":"DOCKERFILE","dockerfilePath":"video-worker/Dockerfile"},"deploy":{"startCommand":"node dist/src/training/motion-worker.js watch --execute --allow-remote --confirm-database $VIDEO_WORKER_DATABASE_NAME","restartPolicyType":"ON_FAILURE","restartPolicyMaxRetries":3}}

@@ -1,0 +1,1 @@
+{"name":"bvbtips-video-local-storage","private":true,"version":"1.0.0","scripts":{"start":"node server.cjs"},"dependencies":{"s3rver":"3.7.1"}}

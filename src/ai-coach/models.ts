@@ -2,6 +2,7 @@ import { Field, ID, Int, ObjectType, InputType } from "@nestjs/graphql";
 import { IsOptional, IsUUID, IsString, Length } from "class-validator";
 @ObjectType()
 export class CoachEvidenceModel {
+  @Field(() => String, {nullable:true}) trustClassification?: string;
   @Field() factId!: string;
   @Field() claim!: string;
   @Field(() => Int) supportingReviewCount!: number;

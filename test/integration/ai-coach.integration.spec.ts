@@ -67,6 +67,7 @@ const url = process.env.TEST_DATABASE_URL;
         data: {
           recipientId: owner,
           sportId,
+          submittedAt: new Date(), submittedById: opts.guest ? null : reviewers[observations.length % 2],
           reviewerId: opts.guest ? null : reviewers[observations.length % 2],
           guestName: opts.guest ? "Same name" : null,
           status: opts.status ?? "PUBLISHED",
@@ -224,7 +225,7 @@ const url = process.env.TEST_DATABASE_URL;
         userId: actor,
         status: "COMPLETED",
         model: "gpt-6.1-sol",
-        promptVersion: "bvbtips-coach-v1",
+        promptVersion: "bvbtips-coach-v2",
         inputTokens: 200,
         outputTokens: 100,
       });

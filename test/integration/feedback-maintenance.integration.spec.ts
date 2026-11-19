@@ -61,7 +61,8 @@ const url = process.env.TEST_DATABASE_URL;
       data: {
         recipientId: player,
         reviewerId: other,
-        submittedById: player,
+        submittedAt: new Date(),
+        submittedById: other,
         sportId: sport,
         status: "PUBLISHED",
         privateAnalyticsAllowed: true, privateCoachingAllowed: true, privacyNoticeVersion: "feedback-privacy-v1", privateAnalyticsConsentAt: new Date(), privateCoachingConsentAt: new Date(),

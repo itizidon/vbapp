@@ -150,7 +150,11 @@ export function FeedbackApprovalCard({
             <p className="approval-subtle">No skill ratings were submitted.</p>
           )}
           {pending && (
-            <FeedbackPermissionControls key={feedback.id} feedback={feedback} />
+            <FeedbackPermissionControls
+              key={feedback.id}
+              feedback={feedback}
+              pending
+            />
           )}
           {feedback.rejectionReason && (
             <section className="approval-comment">

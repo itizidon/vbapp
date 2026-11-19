@@ -16,7 +16,7 @@ test("AI coach is usable on mobile and desktop with verified references and gene
     startedAt: "2026-11-16T12:00:00Z",
     status: "COMPLETED",
     model: "gpt-6.1-sol",
-    promptVersion: "bvbtips-coach-v1",
+    promptVersion: "bvbtips-coach-v2",
     inputTokens: 100,
     outputTokens: 50,
     response: {
@@ -77,6 +77,9 @@ test("AI coach is usable on mobile and desktop with verified references and gene
           rebuildQueued: false,
           profile: {
             totalEligibleFeedbackCount: 6,
+            verifiedFeedbackCount: 2,
+            guestFeedbackCount: 3,
+            awaitingReviewerApprovalCount: 1,
             evidenceStatus: "SUFFICIENT",
             state: "COMPLETE",
           },
@@ -154,6 +157,8 @@ test("AI coach is usable on mobile and desktop with verified references and gene
   await expect(
     coach.getByRole("heading", { name: "AI Coach", exact: true }),
   ).toBeVisible();
+  await expect(coach.getByText(/Evidence: 2 verified approved/)).toBeVisible();
+  await expect(coach.getByText(/1 awaiting reviewer approval/)).toBeVisible();
   await coach
     .getByRole("button", { name: "What are my biggest weaknesses?" })
     .click();
@@ -170,7 +175,7 @@ test("AI coach is usable on mobile and desktop with verified references and gene
   await expect(
     coach.getByRole("heading", { name: "General practice suggestions" }),
   ).toBeVisible();
-  await coach.getByText("Verified evidence (1)").click();
+  await coach.getByText("Feedback evidence (1)").click();
   await expect(
     coach.getByRole("link", { name: "View supporting feedback" }),
   ).toHaveAttribute("href", "/feedback/" + feedback);

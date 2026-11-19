@@ -43,6 +43,7 @@ export interface Feedback {
   createdAt: string;
   status: "PUBLISHED" | "PENDING" | "HIDDEN" | "DELETED" | "REJECTED";
   ratings: Rating[] | null;
+  pendingAiAllowed?: boolean;
   privateAnalyticsAllowed?: boolean;
   privateCoachingAllowed?: boolean;
   publicAnalyticsAllowed?: boolean;

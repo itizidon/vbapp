@@ -28,6 +28,7 @@ const url = process.env.TEST_DATABASE_URL;
     db.feedback.create({
       data: {
         recipientId: recipient,
+        submittedAt: new Date(), submittedById: reviewer,
         reviewerId: reviewer,
         sportId: sport,
         status: "PUBLISHED",

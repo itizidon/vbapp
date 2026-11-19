@@ -24,8 +24,10 @@ export function FeedbackPrivacyNotice({
       <p>
         Submitting feedback does not make comments public or opt you into public
         aggregates, advertising, unrelated research, or model training by
-        BVBTips. The recipient and registered reviewer can still see the
-        original feedback.
+        BVBTips. Published feedback remains visible to the recipient and its
+        registered reviewer. Pending assigned reviews remain restricted until
+        approval; sharing AI insights before approval requires a separate
+        assigned-reviewer choice.
       </p>
       {assigned && (
         <p>

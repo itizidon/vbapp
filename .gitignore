@@ -3,3 +3,10 @@ dist/
 coverage/
 .env
 *.log
+
+.venv-video/
+.video-tools/
+video-worker/models/*.task
+video-worker/__pycache__/
+video-worker/tests/__pycache__/
+.video-tmp/

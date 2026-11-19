@@ -21,7 +21,7 @@ import { EvidenceStatus } from "../src/feedback-analysis/models";
 import {
   COACH_PROMPT_VERSION,
   COACH_SYSTEM_PROMPT,
-} from "../src/ai-coach/prompts/bvbtips-coach-v1";
+} from "../src/ai-coach/prompts/bvbtips-coach-v2";
 const config = () =>
   coachConfig({
     OPENAI_CHAT_MODEL: "gpt-6.1-sol",
@@ -221,7 +221,7 @@ describe("AI coach source validation and tool protocol", () => {
       ]),
     );
     expect(first.instructions).toContain(COACH_SYSTEM_PROMPT);
-    expect(COACH_PROMPT_VERSION).toBe("bvbtips-coach-v1");
+    expect(COACH_PROMPT_VERSION).toBe("bvbtips-coach-v2");
   });
   it("injects the authenticated player into search and rejects model-selected player IDs", async () => {
     const h = harness(),

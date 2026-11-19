@@ -16,20 +16,22 @@ export default function PrivacyPage() {
       <p>
         Feedback includes ratings, optional comments, match associations and
         reviewer identity or guest name. The recipient and registered reviewer
-        can access the original feedback. Submitting a review does not require
-        opting in to analytics or AI.
+        can access published original feedback; pending assigned reviews remain
+        restricted until approval. Submitting a review does not require opting
+        in to analytics or AI.
       </p>
       <p>
         Private numerical analytics and private AI coaching are separate
         permissions. The submission form offers an unchecked choice for both;
-        you can change them separately later. When AI is permitted and any
-        assigned-reviewer approval is complete, comments may be sent to OpenAI
-        to extract volleyball observations. Observations are embedded by OpenAI
-        and stored in our PostgreSQL database. AI coaching may send minimized
-        aggregates, observation snippets, your questions and limited chat
-        history to OpenAI. We omit account emails/usernames, internal user IDs,
-        reviewer rating snapshots and match rosters from extraction; free text
-        can still contain identifying details. Avoid including them.
+        you can change them separately later. When AI is permitted and the
+        review is published or the assigned reviewer separately permits
+        recipient AI before approval, comments may be sent to OpenAI to extract
+        volleyball observations. Observations are embedded by OpenAI and stored
+        in our PostgreSQL database. AI coaching may send minimized aggregates,
+        observation snippets, your questions and limited chat history to OpenAI.
+        We omit account emails/usernames, internal user IDs, reviewer rating
+        snapshots and match rosters from extraction; free text can still contain
+        identifying details. Avoid including them.
       </p>
       <p>
         OpenAI is an external processor. Responses requests use store:false,
@@ -47,6 +49,17 @@ export default function PrivacyPage() {
           OpenAI data controls
         </a>
         .
+      </p>
+      <h2 className="text-xl">Pending reviews and AI insights</h2>
+      <p>
+        Submitted guest reviews can support private AI coaching with the
+        permissions above, but never change internal ratings. Assigned pending
+        reviews remain private to the assigned reviewer unless that reviewer
+        separately allows recipient AI insights and comment excerpts before
+        approval. That choice is optional, recorded with its own notice version,
+        and can be withdrawn in Feedback privacy or the approval card. It does
+        not approve the review or verify authorship. Historical pending reviews
+        are not automatically opted in.
       </p>
       <h2 className="text-xl">Public sharing and other uses</h2>
       <p>

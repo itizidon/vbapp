@@ -1,3 +1,4 @@
+import { feedbackTrust } from "../feedback/eligibility";
 import { readFileSync } from "node:fs";
 import { parseEnv } from "node:util";
 import { isUUID } from "class-validator";
@@ -154,6 +155,8 @@ export async function inventory(
     pendingEmbeddingOperations: 0,
     failedEmbeddings: 0,
   };
+  const trustCounts: Record<string, number> = {};
+  let sourceCharacters = 0;
   let cursor: string | null = null;
   do {
     const ids: { id: string }[] = await db.$queryRaw<
@@ -182,6 +185,12 @@ export async function inventory(
     );
     for (const row of rows) {
       counts.eligible++;
+      const trust = feedbackTrust(row);
+      trustCounts[trust] = (trustCounts[trust] ?? 0) + 1;
+      sourceCharacters += feedbackSources(row).reduce(
+        (n, s) => n + s.text.length,
+        0,
+      );
       const sources = feedbackSources(row),
         j = row.analysisJob;
       const current =
@@ -247,6 +256,23 @@ export async function inventory(
   return {
     counts,
     privacyReport,
+    trustCounts,
+    sourceCharacterCount: sourceCharacters,
+    estimatedCost: {
+      currency: "USD",
+      extraction: env.FEEDBACK_ESTIMATED_EXTRACTION_USD_PER_REVIEW
+        ? counts.needsExtraction *
+          Number(env.FEEDBACK_ESTIMATED_EXTRACTION_USD_PER_REVIEW)
+        : null,
+      embeddingMaximum: env.FEEDBACK_ESTIMATED_EMBEDDING_USD_PER_OBSERVATION
+        ? (embeddings.missing +
+            embeddings.pending +
+            embeddings.incomplete +
+            counts.needsExtraction * 50) *
+          Number(env.FEEDBACK_ESTIMATED_EMBEDDING_USD_PER_OBSERVATION)
+        : null,
+      note: "Operator-provided per-operation budget estimates, not provider prices or a spending limit; null means unconfigured. Actual extraction usage is recorded in FeedbackExtractionRun and embedding request attempts in FeedbackEmbeddingJob.",
+    },
     estimatedOperations: {
       llmRequests: {
         minimum: counts.needsExtraction,

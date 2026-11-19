@@ -119,6 +119,7 @@ export function AccountMenu() {
   return (
     <section className="panel space-y-5">
       <h2>Settings</h2>
+      <Link href="/training" className="block rounded-xl border border-border p-4 text-primary">Skills, drills and video practice →</Link>
       <div>
         <p className="mb-3 text-sm">Appearance</p>
         <div className="flex flex-wrap gap-2">

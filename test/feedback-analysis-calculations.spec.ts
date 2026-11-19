@@ -238,3 +238,48 @@ describe("deterministic feedback analytics calculations", () => {
     ]);
   });
 });
+it("applies trust weighting once and preserves literal counts", () => {
+  const baseline = rankWeaknesses([theme()], [], 10, asOf, false)[0];
+  const weighted = rankWeaknesses(
+    [
+      theme({
+        trustEvidenceFactor: 0.35,
+        trustBreakdown: [
+          {
+            classification: "UNVERIFIED_GUEST",
+            feedbackCount: 6,
+            positiveFeedbackCount: 1,
+            negativeFeedbackCount: 5,
+            neutralFeedbackCount: 0,
+          },
+        ],
+      }),
+    ],
+    [],
+    10,
+    asOf,
+    false,
+  )[0];
+  expect(weighted.supportingFeedbackCount).toBe(5);
+  expect(weighted.priorityScore).toBeCloseTo(baseline.priorityScore * 0.35, 5);
+  expect(weighted.unverifiedSupportingFeedbackCount).toBe(5);
+});
+it("does not call guest-only changes confirmed improvement", () => {
+  const unverified = [
+    {
+      classification: "UNVERIFIED_GUEST",
+      feedbackCount: 10,
+      positiveFeedbackCount: 8,
+      negativeFeedbackCount: 1,
+      neutralFeedbackCount: 0,
+    },
+  ];
+  const result = themeImprovement(
+    {
+      recent: period({ trustBreakdown: unverified }),
+      previous: period({ trustBreakdown: unverified }),
+    },
+    R.IMPROVING,
+  );
+  expect(result.improvement).toBe(T.INSUFFICIENT_DATA);
+});

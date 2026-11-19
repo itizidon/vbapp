@@ -15,6 +15,7 @@ registerEnumType(MatchStatus,{name:'MatchStatus'}); registerEnumType(FeedbackSta
 @ObjectType() export class ReviewerSnapshotModel { @Field(()=>ID) skillId!:string; @Field(()=>Int) ratingAtSubmission!:number; @Field(()=>GraphQLISODateTime) sourceRatingUpdatedAt!:Date; @Field(()=>GraphQLISODateTime) capturedAt!:Date; }
 @ObjectType() export class FeedbackMatchReference { @Field(()=>ID) id!:string; @Field(()=>GraphQLISODateTime,{nullable:true}) playedAt?:Date; @Field({nullable:true}) description?:string; }
 @ObjectType() export class FeedbackModel {
+ @Field({nullable:true}) pendingAiAllowed?:boolean;
  @Field() privateAnalyticsAllowed!:boolean; @Field() privateCoachingAllowed!:boolean; @Field() publicAnalyticsAllowed!:boolean;
  @Field({nullable:true}) privacyNoticeVersion?:string; @Field({nullable:true}) privacyWithdrawalToken?:string;
  @Field(()=>GraphQLISODateTime,{nullable:true}) privateAnalyticsConsentAt?:Date;

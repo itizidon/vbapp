@@ -9,6 +9,7 @@ import { CoachConfig } from "./config";
 import { SearchArgs } from "./contracts";
 
 interface ObservationRow {
+  trustClassification: string;
   observationId: string;
   feedbackId: string;
   submittedAt: Date;
@@ -63,6 +64,9 @@ export class CoachTools {
       asOf: profile.asOf,
       evidenceStatus: profile.evidenceStatus,
       eligibleReviewCount: profile.totalEligibleFeedbackCount,
+      trustBreakdown: profile.trustBreakdown,
+      evidencePolicy:
+        "Verified approved evidence is preferred; guest names do not establish independent reviewers. Pending evidence requires explicit recipient-AI disclosure. Weighted scores are not review counts.",
       reviewerDiversity: {
         verified: profile.distinctVerifiedReviewers,
         guestFeedback: profile.guestFeedbackCount,
@@ -71,6 +75,10 @@ export class CoachTools {
         skillId: s.skillId,
         name: s.name,
         peer: s.peer,
+        verifiedPeer: s.verifiedPeer,
+        unverifiedPeer: s.unverifiedPeer,
+        trustBreakdown: s.trustBreakdown,
+        verifiedNinetyDayComparison: s.verifiedNinetyDayComparison,
         ninetyDayComparison: {
           recent: s.ninetyDayComparison.recent,
           previous: s.ninetyDayComparison.previous,
@@ -88,6 +96,7 @@ export class CoachTools {
         .map((t) => ({
           themeId: t.themeId,
           feedbackCount: t.feedbackCount,
+          trustBreakdown: t.trustBreakdown,
           positive: t.positiveFeedbackCount,
           negative: t.negativeFeedbackCount,
           denominator: t.relevantFeedbackCount,
@@ -133,9 +142,9 @@ export class CoachTools {
    ${args.theme ? Prisma.sql`AND o."themeId"=${args.theme}` : Prisma.empty}
    ${args.from ? Prisma.sql`AND f."createdAt">=${new Date(args.from)}` : Prisma.empty}
    ${args.before ? Prisma.sql`AND f."createdAt"<${new Date(args.before)}` : Prisma.empty}`;
-    const base = Prisma.sql`FROM "EligibleFeedbackObservation" o JOIN "AnalysisEligibleFeedback" f ON f.id=o."feedbackId"
+    const base = Prisma.sql`FROM "EligibleFeedbackObservation" o JOIN "Feedback" f ON f.id=o."feedbackId" JOIN "AnalysisEligibleFeedback" a ON a.id=f.id
    JOIN "FeedbackTheme" t ON t.id=o."themeId" LEFT JOIN "Skill" s ON s.id=o."skillId"`;
-    const fields = Prisma.sql`o.id AS "observationId",f.id AS "feedbackId",f."createdAt" AS "submittedAt",o."themeId",t.name AS "themeName",o."skillId",o.sentiment,o.evidence`;
+    const fields = Prisma.sql`feedback_trust_classification(f) AS "trustClassification",o.id AS "observationId",f.id AS "feedbackId",f."createdAt" AS "submittedAt",o."themeId",t.name AS "themeName",o."skillId",o.sentiment,o.evidence`;
     let rows: ObservationRow[] = [];
     let mode = "EXACT_FILTER";
     if (query) {
@@ -152,7 +161,7 @@ export class CoachTools {
     WHERE ${filters} AND e.provider=${embedding.provider} AND e.model=${embedding.model} AND e."modelVersion"=${embedding.modelVersion}
      AND e.dimensions=${embedding.dimensions} AND e."templateVersion"=${TEMPLATE_VERSION}),
     distinct_hits AS (SELECT DISTINCT ON ("feedbackId","themeId",sentiment) * FROM candidates ORDER BY "feedbackId","themeId",sentiment,distance,"observationId")
-    SELECT "observationId","feedbackId","submittedAt","themeId","themeName","skillId",sentiment,evidence FROM distinct_hits ORDER BY distance,"submittedAt" DESC,"observationId" LIMIT ${limit}`);
+    SELECT "trustClassification","observationId","feedbackId","submittedAt","themeId","themeName","skillId",sentiment,evidence FROM distinct_hits ORDER BY distance,"submittedAt" DESC,"observationId" LIMIT ${limit}`);
       mode = "SEMANTIC";
     }
     if (!rows.length) {
@@ -180,8 +189,8 @@ export class CoachTools {
     if (!ids.length) return [];
     const rows = await this.query<
       ObservationRow[]
-    >(Prisma.sql`SELECT o.id AS "observationId",f.id AS "feedbackId",f."createdAt" AS "submittedAt",o."themeId",t.name AS "themeName",o."skillId",o.sentiment,o.evidence
-   FROM "EligibleFeedbackObservation" o JOIN "AnalysisEligibleFeedback" f ON f.id=o."feedbackId" JOIN "FeedbackTheme" t ON t.id=o."themeId"
+    >(Prisma.sql`SELECT feedback_trust_classification(f) AS "trustClassification",o.id AS "observationId",f.id AS "feedbackId",f."createdAt" AS "submittedAt",o."themeId",t.name AS "themeName",o."skillId",o.sentiment,o.evidence
+   FROM "EligibleFeedbackObservation" o JOIN "Feedback" f ON f.id=o."feedbackId" JOIN "AnalysisEligibleFeedback" a ON a.id=f.id JOIN "FeedbackTheme" t ON t.id=o."themeId"
    WHERE f."recipientId"=${actorId}::uuid AND f."sportId"=${sportId}::uuid AND o.id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})`);
     return rows.map(mapRow);
   }
