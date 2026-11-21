@@ -74,6 +74,7 @@ it("stops before fingerprinting or mutation when historical tables are missing",
     main(["--dry-run", "--allow-remote", "--allow-production"]),
   ).rejects.toMatchObject({
     code: "MISSING_PREREQUISITE_TABLES",
+    message: expect.stringContaining("UserAuthProvider"),
     details: { missingTables: ["UserAuthProvider"] },
   });
   expect(db.$queryRawUnsafe).not.toHaveBeenCalled();

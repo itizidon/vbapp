@@ -170,6 +170,8 @@ Updated previews start with JSON containing `tool: "clerk-cutover"`, `diagnostic
 - `FAILED_MIGRATIONS`: execute mode stops before backup/permit creation when unresolved failures exist. Dry-run mode can still inventory an otherwise complete legacy schema and list those failed migration names.
 - `ENOENT` in backup phases: compatible backup executables may be missing from the runtime image.
 
+Railway may show only the structured log `message` in its default view. Expand the error entry and inspect its `missingTables`, `failedMigrations`, `phase` and `code` attributes; copying only visible message text can omit these fields. Updated missing-table errors also list table names in the visible message.
+
 The preview remains read-only and never resolves migrations automatically. If deployment logs contain only the previous generic failure sentence, the updated tool has not been deployed. Repeated process starts are deployment restarts or separate invocations, not an internal cutover retry loop. Preview configs specify `restartPolicyType: "NEVER"`; inspect the latest deployment's effective config if the platform keeps restarting it. Keep the actual database intact until the diagnostic output identifies the failure and the reviewed backup/recovery procedure is ready.
 
 ## Production rollout (manual only)

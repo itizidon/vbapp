@@ -243,7 +243,7 @@ export async function main(args = process.argv.slice(2)) {
     console.log(JSON.stringify({ phase: "schema", ...schema }));
     if (schema.missingTables.length)
       throw new CutoverCheckError(
-        "Historical schema is missing required cutover tables. Inspect migration status before continuing; no reset was attempted.",
+        `Historical schema is missing required cutover tables: ${schema.missingTables.join(", ")}. ${schema.failedMigrations.length ? `Failed migrations: ${schema.failedMigrations.join(", ")}. ` : ""}Inspect migration status before continuing; no reset was attempted.`,
         "MISSING_PREREQUISITE_TABLES",
         schema,
       );
