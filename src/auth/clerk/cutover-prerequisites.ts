@@ -11,6 +11,7 @@ import {
 } from "./cutover-diagnostics";
 export const CLERK_CUTOVER = "20261126000000_clerk_identity_cutover";
 export const PREREQUISITE_MIGRATIONS = [
+  "20261121000000_separate_ai_rating_eligibility",
   "20261122000000_training_library",
   "20261123000000_motion_comparison",
   "20261124000000_social_auth",

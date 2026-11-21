@@ -162,7 +162,7 @@ QA also needs the production acknowledgement flag when `NODE_ENV=production`. Th
 
 ## Older schemas missing prerequisite tables
 
-For the supported five missing training/video/auth migrations, use the separate [backup-gated prerequisite preparation](clerk-prerequisites.md) before the Clerk reset. `pnpm clerk:prepare --dry-run --allow-remote --allow-production` previews that plan; only its explicit execute mode installs prerequisites after creating a verified backup. It excludes the final identity reset.
+For the supported six missing AI-eligibility/training/video/auth migrations, use the separate [backup-gated prerequisite preparation](clerk-prerequisites.md) before the Clerk reset. `pnpm clerk:prepare --dry-run --allow-remote --allow-production` previews that plan; only its explicit execute mode installs prerequisites after creating a verified backup. It excludes the final identity reset.
 
 ## Preview diagnostics
 

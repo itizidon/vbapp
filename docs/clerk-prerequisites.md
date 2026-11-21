@@ -1,12 +1,17 @@
 # Prepare historical schema before the Clerk reset
 
-The reported production preview found 23 missing tables and no failed migration records. These tables correspond to the five migrations after `20261121000000_separate_ai_rating_eligibility` and before the Clerk reset:
+The production table preview found 23 missing tables and no failed migration records. The subsequent migration-history inspection confirmed six pending prerequisites, including an AI eligibility change that adds columns/functions rather than new tables:
 
-1. `20261122000000_training_library`
-2. `20261123000000_motion_comparison`
-3. `20261124000000_social_auth`
-4. `20261124010000_oauth_deletion_replay`
-5. `20261125000000_email_verification`
+1. `20261121000000_separate_ai_rating_eligibility`
+2. `20261122000000_training_library`
+3. `20261123000000_motion_comparison`
+4. `20261124000000_social_auth`
+5. `20261124010000_oauth_deletion_replay`
+6. `20261125000000_email_verification`
+
+The supported baseline includes `20261120000000_decimal_feedback_ratings` and all earlier migrations. If AI eligibility is already installed, the planner still supports the remaining five. Any earlier unapplied migration remains blocked for separate review.
+
+The AI eligibility migration backfills submission provenance and refreshes trust metadata. It invalidates analytical profile caches and stored AI answers; it does not grant new reviewer approvals or consent and does not call AI providers. Account records, original feedback/comments and numerical ratings remain. All prerequisites still require a validated backup before execution.
 
 The original cutover assumed these were already applied. `clerk:prepare` now supports this older schema as a separate operation. It checks actual migration history and refuses older unsupported baselines, recorded failures or drift. It never selects `20261126000000_clerk_identity_cutover` or later migrations for its deployment tree.
 
@@ -65,3 +70,7 @@ The supplied production log has `failedMigrations: []`: do not run `migrate reso
 ## Verification performed locally
 
 A disposable pgvector PostgreSQL database was initialized through migration 17, reproducing the exact 23 missing table names from the production report. Preparation created a validated backup, applied precisely the five missing migrations, preserved a synthetic User, credential value and Match, and created neither a ClerkDeletionJob table nor a reset permit. The separate final Clerk cutover then removed the fixture account/match while retaining a drill and its instruction step, with creator attribution cleared as designed. Restoring the prerequisite backup into another disposable database matched all 32 recorded table fingerprints. All 234 unit tests, TypeScript and backend build checks passed. Production was not connected to or modified by these tests.
+
+The expanded six-migration path was also reproduced from migration 16 with synthetic users, matches, self ratings, peer ratings/comments, observations and an analytical cache. All six prerequisites applied after backup; original records, consent and internal rating 4 were preserved, and the intended analytical cache was invalidated. The final identity reset remained excluded. The read-only planner and the older five-migration path have regression coverage.
+
+The expanded path passes all 235 unit tests, TypeScript and backend build checks. Its backup was restored into another disposable database with all 32 recorded table fingerprints matching, including original feedback and observations. No production data was changed during verification.

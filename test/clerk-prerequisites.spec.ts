@@ -43,24 +43,33 @@ function database(applied = baseline) {
 beforeEach(() => {
   jest.clearAllMocks();
   jest.spyOn(console, "log").mockImplementation(() => {});
-  jest
-    .mocked(createVerifiedBackup)
-    .mockResolvedValue({
-      backup: "/tmp/fixture.dump",
-      manifest: "/tmp/fixture.json",
-      snapshot: {
-        User: { count: 1, hash: "unchanged" },
-        Sport: { count: 1, hash: "unchanged" },
-      },
-    });
+  jest.mocked(createVerifiedBackup).mockResolvedValue({
+    backup: "/tmp/fixture.dump",
+    manifest: "/tmp/fixture.json",
+    snapshot: {
+      User: { count: 1, hash: "unchanged" },
+      Sport: { count: 1, hash: "unchanged" },
+    },
+  });
 });
 afterEach(() => jest.restoreAllMocks());
-it("plans precisely the five prerequisites missing from the reported production schema", async () => {
+it("plans precisely the six prerequisites missing from the confirmed production migration history", async () => {
   expect(await prerequisitePlan(database())).toEqual(PREREQUISITE_MIGRATIONS);
+});
+it("still supports the five-migration path when AI eligibility is already installed", async () => {
+  expect(
+    await prerequisitePlan(database([...baseline, PREREQUISITE_MIGRATIONS[0]])),
+  ).toEqual(PREREQUISITE_MIGRATIONS.slice(1));
 });
 it("rejects an older baseline rather than silently applying unrelated history", async () => {
   await expect(
-    prerequisitePlan(database(baseline.slice(1))),
+    prerequisitePlan(
+      database(
+        baseline.filter(
+          (name) => name !== "20261120000000_decimal_feedback_ratings",
+        ),
+      ),
+    ),
   ).rejects.toMatchObject({ code: "UNSUPPORTED_PREREQUISITE_BASELINE" });
 });
 it("previews prerequisites without backup, migration subprocesses or database writes", async () => {
@@ -167,16 +176,14 @@ it("creates a backup without an identity-reset permit and excludes the Clerk mig
 });
 it("aborts if source records change after backup", async () => {
   const db = database();
-  jest
-    .mocked(createVerifiedBackup)
-    .mockResolvedValueOnce({
-      backup: "/tmp/fixture.dump",
-      manifest: "/tmp/fixture.json",
-      snapshot: {
-        User: { count: 1, hash: "older" },
-        Sport: { count: 1, hash: "unchanged" },
-      },
-    });
+  jest.mocked(createVerifiedBackup).mockResolvedValueOnce({
+    backup: "/tmp/fixture.dump",
+    manifest: "/tmp/fixture.json",
+    snapshot: {
+      User: { count: 1, hash: "older" },
+      Sport: { count: 1, hash: "unchanged" },
+    },
+  });
   await expect(
     prepareHistoricalSchema(
       db,
