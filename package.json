@@ -34,7 +34,8 @@
     "test:video:python": ".venv-video/bin/python -m unittest discover -s video-worker/tests -v",
     "test:video:smoke": "tsc -p tsconfig.video-smoke.json && node dist/video-worker/smoke.js",
     "clerk:cutover": "node dist/src/auth/clerk/cutover.js",
-    "clerk:deletions": "node dist/src/auth/clerk/deletions-cli.js"
+    "clerk:deletions": "node dist/src/auth/clerk/deletions-cli.js",
+    "clerk:prepare": "node dist/src/auth/clerk/cutover.js --prepare-schema"
   },
   "dependencies": {
     "@apollo/server": "^5.1.0",

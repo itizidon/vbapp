@@ -160,6 +160,10 @@ pnpm clerk:cutover --dry-run --allow-remote --allow-production
 
 QA also needs the production acknowledgement flag when `NODE_ENV=production`. This preview performs no reset. Review its target and counts before using the backup-gated execution procedure above. The execution host must have compatible PostgreSQL backup tools and durable backup storage; a standard Node deployment image may not have either. After successful cutover, ordinary `db:deploy` can apply later migrations and seed catalog content. No remote migration recovery is performed automatically by this documentation or the preflight.
 
+## Older schemas missing prerequisite tables
+
+For the supported five missing training/video/auth migrations, use the separate [backup-gated prerequisite preparation](clerk-prerequisites.md) before the Clerk reset. `pnpm clerk:prepare --dry-run --allow-remote --allow-production` previews that plan; only its explicit execute mode installs prerequisites after creating a verified backup. It excludes the final identity reset.
+
 ## Preview diagnostics
 
 Updated previews start with JSON containing `tool: "clerk-cutover"`, `diagnosticsVersion: 1`, the non-secret database target and `mode: "dry-run"`. Failures now identify `phase`, `code` and a safe explanation, without serializing connection strings, raw Prisma errors, SQL record details or subprocess stderr.

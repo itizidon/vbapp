@@ -48,3 +48,5 @@ After the QA preview succeeds, the production backend can use the separate `rail
 This prints the target and reset/preservation inventory, then exits. It does not resolve failed migration records, reset accounts, run migrations, create a backup or serve the API. A working preview does not mean the database cutover is complete. Review the inventory before the separate backed-up cutover. Restore `/railway.backend.json` for normal API deployment after recovery/cutover. Neither preview config is a normal server start configuration.
 
 Full ordered production procedure: [production runbook](production-runbook.md).
+
+If the production inventory reports missing historical training/video/auth tables, use [prerequisite preparation](../clerk-prerequisites.md) before the final Clerk reset.

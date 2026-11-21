@@ -5,6 +5,7 @@ export type CutoverPhase =
   | "schema"
   | "inventory"
   | "bootstrap"
+  | "prerequisites"
   | "backup"
   | "backup-validation"
   | "migration"
@@ -16,6 +17,7 @@ export class CutoverCheckError extends Error {
     readonly details: {
       missingTables?: string[];
       failedMigrations?: string[];
+      pendingMigrations?: string[];
     } = {},
   ) {
     super(message);
