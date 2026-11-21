@@ -115,6 +115,41 @@ const url = process.env.TEST_DATABASE_URL;
       await users.updatePlayerMetadata(id, { role: "ADMIN" } as never);
       expect(fixtureUsers.get(id).privateMetadata.bvbtips.role).toBe("PLAYER");
     });
+    it("replaces Clerk assessments left over from a deleted database without replaying obsolete skill IDs", async () => {
+      const user = createFixtureUser();
+      const obsoleteSkillId = randomUUID();
+      Object.assign(user.privateMetadata.bvbtips, {
+        assessment: {
+          id: randomUUID(),
+          sportId: randomUUID(),
+          overallLevel: "BB",
+          ratings: [{ skillId: obsoleteSkillId, rating: 4 }],
+          revision: randomUUID(),
+          updatedAt: new Date().toISOString(),
+        },
+      });
+      expect(await self.list(user.id)).toEqual([]);
+      expect(
+        await db.selfAssessmentRatingEvent.count({
+          where: { userId: user.id },
+        }),
+      ).toBe(0);
+      await self.onboard(user.id, input());
+      expect((await self.list(user.id))[0]).toMatchObject({
+        sportId,
+        ratings: [{ skillId, rating: 3 }],
+      });
+      const events = await db.selfAssessmentRatingEvent.findMany({
+        where: { userId: user.id },
+      });
+      expect(events).toHaveLength(1);
+      expect(events[0].skillId).toBe(skillId);
+      expect(
+        await db.playerInternalRating.count({
+          where: { userId: user.id, skillId: obsoleteSkillId },
+        }),
+      ).toBe(0);
+    });
     it("edits the current Clerk assessment and appends history without changing established internal baselines", async () => {
       const id = await player(),
         a = (await self.list(id))[0];

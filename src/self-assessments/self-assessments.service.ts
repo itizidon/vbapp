@@ -70,7 +70,7 @@ export class SelfAssessmentsService {
       await this.users.getUserById(userId, true),
     ).assessment;
     if (!a) return [];
-    await this.reconcile(userId, a);
+    if (!(await this.reconcile(userId, a))) return [];
     return [this.shape(userId, a)];
   }
   async get(actor: string, userId: string, sportId: string) {
@@ -83,8 +83,18 @@ export class SelfAssessmentsService {
     userId: string,
     a: NonNullable<ReturnType<typeof privatePlayer>["assessment"]>,
   ) {
-    if (this.reconciled.get(userId) === a.revision) return;
-    await ratingTransaction(this.db, async (tx) => {
+    if (this.reconciled.get(userId) === a.revision) return true;
+    const valid = await ratingTransaction(this.db, async (tx) => {
+      // Clerk metadata survives a database replacement. Never replay a revision
+      // whose database-scoped skill IDs no longer belong to its sport.
+      const skills = await tx.skill.findMany({
+        where: {
+          sportId: a.sportId,
+          id: { in: a.ratings.map((r) => r.skillId) },
+        },
+        select: { id: true },
+      });
+      if (skills.length !== a.ratings.length) return false;
       for (const r of a.ratings) {
         const existing = await tx.selfAssessmentRatingEvent.findUnique({
           where: {
@@ -143,10 +153,13 @@ export class SelfAssessmentsService {
           update: {},
         });
       }
+      return true;
     });
+    if (!valid) return false;
     if (this.reconciled.size >= 1000)
       this.reconciled.delete(this.reconciled.keys().next().value!);
     this.reconciled.set(userId, a.revision);
+    return true;
   }
   async onboard(
     userId: string,
@@ -184,8 +197,8 @@ export class SelfAssessmentsService {
       const user = await this.users.getUserById(userId, true),
         old = privatePlayer(user).assessment;
       if (old) {
-        await this.reconcile(userId, old);
-        if (old.sportId === assessment.sportId) assessment.id = old.id;
+        const valid = await this.reconcile(userId, old);
+        if (valid && old.sportId === assessment.sportId) assessment.id = old.id;
       }
       await this.users.updatePlayerMetadata(
         userId,
