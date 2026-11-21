@@ -160,6 +160,18 @@ pnpm clerk:cutover --dry-run --allow-remote --allow-production
 
 QA also needs the production acknowledgement flag when `NODE_ENV=production`. This preview performs no reset. Review its target and counts before using the backup-gated execution procedure above. The execution host must have compatible PostgreSQL backup tools and durable backup storage; a standard Node deployment image may not have either. After successful cutover, ordinary `db:deploy` can apply later migrations and seed catalog content. No remote migration recovery is performed automatically by this documentation or the preflight.
 
+## Preview diagnostics
+
+Updated previews start with JSON containing `tool: "clerk-cutover"`, `diagnosticsVersion: 1`, the non-secret database target and `mode: "dry-run"`. Failures now identify `phase`, `code` and a safe explanation, without serializing connection strings, raw Prisma errors, SQL record details or subprocess stderr.
+
+- `INVALID_DATABASE_URL`: the service variable is absent, a placeholder or not a PostgreSQL URL.
+- `P1000` / `P1001`: database authentication or connectivity failed; verify the selected service's database reference and network access.
+- `MISSING_PREREQUISITE_TABLES`: the preview lists exact missing historical tables. A production database may not yet contain the intermediate auth/training schema required by this cutover. Inspect its historical migration state; do not remove the backup guard or blindly retry `db:deploy`.
+- `FAILED_MIGRATIONS`: execute mode stops before backup/permit creation when unresolved failures exist. Dry-run mode can still inventory an otherwise complete legacy schema and list those failed migration names.
+- `ENOENT` in backup phases: compatible backup executables may be missing from the runtime image.
+
+The preview remains read-only and never resolves migrations automatically. If deployment logs contain only the previous generic failure sentence, the updated tool has not been deployed. Repeated process starts are deployment restarts or separate invocations, not an internal cutover retry loop. Preview configs specify `restartPolicyType: "NEVER"`; inspect the latest deployment's effective config if the platform keeps restarting it. Keep the actual database intact until the diagnostic output identifies the failure and the reviewed backup/recovery procedure is ready.
+
 ## Production rollout (manual only)
 
 Provision a separate production Clerk instance, provider credentials, exact issuer/origins and verified email policy. Configure backend/frontend server secrets and webhook endpoint. Protect QA separately; CORS/APP_ENV are not tester access controls. Review the inventory with release owners, stop writes/workers, take and restore-test the backup, and only then invoke the CLI with explicit `--allow-remote --allow-production --execute --confirm-database NAME --backup-dir SECURE-PATH` in the selected environment. The flags are operator acknowledgements, not authorization to run production changes from this task. Do not put destructive migrations in automatic pre-deploy hooks.

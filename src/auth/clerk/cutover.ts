@@ -1,5 +1,12 @@
 /** Backup-gated, explicit fresh-start cutover. Never called at application startup. */
 import { PrismaClient } from "@prisma/client";
+import {
+  CutoverCheckError,
+  cutoverDiagnostic,
+  inspectCutoverSchema,
+  type CutoverPhase,
+} from "./cutover-diagnostics";
+let phase: CutoverPhase = "configuration";
 import { createHash, randomUUID } from "node:crypto";
 import {
   mkdirSync,
@@ -90,6 +97,7 @@ export async function fingerprints(
   return rows;
 }
 export async function main(args = process.argv.slice(2)) {
+  phase = "configuration";
   const envFile = args.find((a) => a.startsWith("--env-file="));
   if (envFile) process.loadEnvFile(envFile.slice(11));
   const known = new Set([
@@ -104,7 +112,8 @@ export async function main(args = process.argv.slice(2)) {
   const flags = new Map<string, string>();
   for (let i = 0; i < args.length; i++) {
     if (args[i].startsWith("--env-file=")) continue;
-    if (!known.has(args[i])) throw Error("Unknown cutover option");
+    if (!known.has(args[i]))
+      throw new CutoverCheckError("Unknown cutover option");
     const name = args[i];
     flags.set(
       name,
@@ -115,8 +124,25 @@ export async function main(args = process.argv.slice(2)) {
         : "true",
     );
   }
-  const url = new URL(process.env.DATABASE_URL ?? ""),
-    host = url.hostname,
+  let url: URL;
+  try {
+    url = new URL(process.env.DATABASE_URL ?? "");
+  } catch {
+    throw new CutoverCheckError(
+      "DATABASE_URL is missing or invalid. Set the selected backend service PostgreSQL connection, not a placeholder.",
+      "INVALID_DATABASE_URL",
+    );
+  }
+  if (
+    !["postgres:", "postgresql:"].includes(url.protocol) ||
+    !url.hostname ||
+    url.pathname.length < 2
+  )
+    throw new CutoverCheckError(
+      "DATABASE_URL must identify a PostgreSQL database.",
+      "INVALID_DATABASE_URL",
+    );
+  const host = url.hostname,
     port = url.port || "5432",
     database = decodeURIComponent(url.pathname.slice(1));
   const local = ["localhost", "127.0.0.1", "[::1]"].includes(host),
@@ -124,16 +150,30 @@ export async function main(args = process.argv.slice(2)) {
       process.env.NODE_ENV === "production" ||
       process.env.APP_ENV === "production";
   if (!local && !flags.has("--allow-remote"))
-    throw Error("Remote database requires --allow-remote");
+    throw new CutoverCheckError("Remote database requires --allow-remote");
   if (production && !flags.has("--allow-production"))
-    throw Error(
+    throw new CutoverCheckError(
       "Production requires separate explicit authorization and --allow-production",
     );
   const execute = flags.has("--execute") && !flags.has("--dry-run");
   if (execute && flags.get("--confirm-database") !== database)
-    throw Error("Use --confirm-database with the exact reviewed database name");
+    throw new CutoverCheckError(
+      "Use --confirm-database with the exact reviewed database name",
+    );
+  console.log(
+    JSON.stringify({
+      tool: "clerk-cutover",
+      diagnosticsVersion: 1,
+      target: { host, port, database },
+      mode: execute ? "execute" : "dry-run",
+      execute,
+    }),
+  );
   const db = new PrismaClient();
   try {
+    phase = "connection";
+    await db.$connect();
+    phase = "schema";
     let exists = await db.$queryRaw<
       { present: boolean; catalog: boolean }[]
     >`SELECT to_regclass('public."User"') IS NOT NULL present,to_regclass('public."Sport"') IS NOT NULL catalog`;
@@ -147,7 +187,9 @@ export async function main(args = process.argv.slice(2)) {
         }),
       );
       if (!execute) return;
-      if (!flags.get("--backup-dir")) throw Error("--backup-dir is required");
+      if (!flags.get("--backup-dir"))
+        throw new CutoverCheckError("--backup-dir is required");
+      phase = "bootstrap";
       const temp = mkdtempSync(join(tmpdir(), "bvbtips-clerk-bootstrap-"));
       try {
         cpSync(resolve("prisma/schema.prisma"), join(temp, "schema.prisma"));
@@ -178,7 +220,7 @@ export async function main(args = process.argv.slice(2)) {
         { complete: boolean }[]
       >`SELECT to_regclass('public."ClerkDeletionJob"') IS NOT NULL complete`;
       if (!state.complete)
-        throw Error(
+        throw new CutoverCheckError(
           "Partial identity cutover; inspect the schema and restore procedure",
         );
       console.log(
@@ -190,14 +232,29 @@ export async function main(args = process.argv.slice(2)) {
       return;
     }
     const tables = [
-        ...new Set([
-          ...identityTables,
-          ...contentTables,
-          ...activityTables,
-          ...mixedTables,
-        ]),
-      ],
-      snapshot = await fingerprints(db, tables);
+      ...new Set([
+        ...identityTables,
+        ...contentTables,
+        ...activityTables,
+        ...mixedTables,
+      ]),
+    ];
+    const schema = await inspectCutoverSchema(db, tables);
+    console.log(JSON.stringify({ phase: "schema", ...schema }));
+    if (schema.missingTables.length)
+      throw new CutoverCheckError(
+        "Historical schema is missing required cutover tables. Inspect migration status before continuing; no reset was attempted.",
+        "MISSING_PREREQUISITE_TABLES",
+        schema,
+      );
+    if (execute && schema.failedMigrations.length)
+      throw new CutoverCheckError(
+        "Failed migrations are recorded. Inspect the original errors and confirm rollback before resolving migration history; no reset was attempted.",
+        "FAILED_MIGRATIONS",
+        schema,
+      );
+    phase = "inventory";
+    const snapshot = await fingerprints(db, tables);
     console.log(
       JSON.stringify(
         {
@@ -226,7 +283,10 @@ export async function main(args = process.argv.slice(2)) {
     if (!execute) return;
     const directory = flags.get("--backup-dir");
     if (!directory)
-      throw Error("--backup-dir is required before any destructive cutover");
+      throw new CutoverCheckError(
+        "--backup-dir is required before any destructive cutover",
+      );
+    phase = "backup";
     mkdirSync(resolve(directory), { recursive: true, mode: 0o700 });
     const prefix = join(
         resolve(directory),
@@ -253,7 +313,8 @@ export async function main(args = process.argv.slice(2)) {
         try {
           const container = flags.get("--docker-container");
           if (container) {
-            if (!local) throw Error("Container backup is local-only");
+            if (!local)
+              throw new CutoverCheckError("Container backup is local-only");
             const inspected = JSON.parse(
               execFileSync("docker", ["inspect", container], {
                 encoding: "utf8",
@@ -264,7 +325,7 @@ export async function main(args = process.argv.slice(2)) {
                 (p: { HostPort: string }) => p.HostPort === port,
               )
             )
-              throw Error(
+              throw new CutoverCheckError(
                 "Backup container does not match the selected database port",
               );
             execFileSync(
@@ -295,11 +356,12 @@ export async function main(args = process.argv.slice(2)) {
         } finally {
           closeSync(fd);
         }
+        phase = "backup-validation";
         if (
           statSync(backup).size < 100 ||
           readFileSync(backup).subarray(0, 5).toString() !== "PGDMP"
         )
-          throw Error("PostgreSQL backup validation failed");
+          throw new CutoverCheckError("PostgreSQL backup validation failed");
         // Validate the archive directory with PostgreSQL itself before issuing the destructive permit.
         const container = flags.get("--docker-container");
         const listing = container
@@ -317,7 +379,9 @@ export async function main(args = process.argv.slice(2)) {
               maxBuffer: 64 * 1024 * 1024,
             });
         if (!listing.includes("TABLE DATA"))
-          throw Error("Backup archive has no restorable table data");
+          throw new CutoverCheckError(
+            "Backup archive has no restorable table data",
+          );
         const sha256 = createHash("sha256")
           .update(readFileSync(backup))
           .digest("hex");
@@ -342,17 +406,21 @@ export async function main(args = process.argv.slice(2)) {
       { timeout: 600000, maxWait: 10000 },
     );
     console.log(JSON.stringify({ backup, manifest, backupComplete: true }));
+    phase = "migration";
     // Prisma applies a single transactional reset; its SQL checks the permit and unchanged snapshot again.
     execFileSync(
       process.execPath,
       [resolve("node_modules/prisma/build/index.js"), "migrate", "deploy"],
       { env: process.env, stdio: "inherit" },
     );
+    phase = "verification";
     const [check] = await db.$queryRaw<
       { userTableGone: boolean }[]
     >`SELECT to_regclass('public."User"') IS NULL "userTableGone"`;
     if (!check.userTableGone)
-      throw Error("Clerk cutover did not remove the User table");
+      throw new CutoverCheckError(
+        "Clerk cutover did not remove the User table",
+      );
     console.log(
       JSON.stringify({
         complete: true,
@@ -367,9 +435,14 @@ export async function main(args = process.argv.slice(2)) {
   }
 }
 if (require.main === module)
-  main().catch(() => {
+  main().catch((error) => {
     console.error(
-      "Clerk cutover failed. No automatic reset retry was attempted. Inspect the target, migration state, backup manifest and documented recovery procedure.",
+      JSON.stringify({
+        tool: "clerk-cutover",
+        status: "FAILED",
+        ...cutoverDiagnostic(error, phase),
+        automaticRetry: false,
+      }),
     );
     process.exitCode = 1;
   });
