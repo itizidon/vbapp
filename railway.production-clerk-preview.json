@@ -1,0 +1,11 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "buildCommand": "pnpm build"
+  },
+  "deploy": {
+    "preDeployCommand": [],
+    "startCommand": "pnpm clerk:cutover --dry-run --allow-remote --allow-production",
+    "restartPolicyType": "NEVER"
+  }
+}

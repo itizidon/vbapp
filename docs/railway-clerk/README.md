@@ -40,3 +40,9 @@ The existing [backup-gated cutover](../clerk-migration.md#destructive-fresh-star
 After deployment, verify signup, verified email, onboarding, login/logout, private/public history, match creation, guest feedback and approvals. Create the first administrator using trusted private metadata after onboarding. Test `user.updated` webhook delivery for a 200 response and test account deletion with an expendable QA account. Verify actual cleanup, not only webhook receipt. Production deletion testing must use an explicitly designated disposable account.
 
 [Complete QA/production guide](../clerk-qa-production.md) · [Clerk architecture and setup](../clerk-migration.md)
+
+## Read-only production inventory deployment
+
+After the QA preview succeeds, the production backend can use the separate `railway.production-clerk-preview.json` config for the same read-only inventory. Commit/push the file, select the production backend whose public domain is `vbapp-production-d5d7d619.up.railway.app`, and set its Railway Config File to `/railway.production-clerk-preview.json`. Confirm the matching production database variables before deploying. The build remains `pnpm build`; the start command runs `clerk:cutover` with `--dry-run`, `--allow-remote` and `--allow-production`. There are no pre-deploy commands and automatic restarts are disabled.
+
+This prints the target and reset/preservation inventory, then exits. It does not resolve failed migration records, reset accounts, run migrations, create a backup or serve the API. A working preview does not mean the database cutover is complete. Review the inventory before the separate backed-up cutover. Restore `/railway.backend.json` for normal API deployment after recovery/cutover. Neither preview config is a normal server start configuration.
