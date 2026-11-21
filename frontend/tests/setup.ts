@@ -20,3 +20,9 @@ vi.mock("next/image", () => ({
             : src.src,
     }),
 }));
+
+vi.mock("@clerk/nextjs",()=>({
+ useClerk:()=>({signOut:vi.fn().mockResolvedValue(undefined)}),
+ UserProfile:()=>createElement("section",{"data-testid":"clerk-user-profile"},"Clerk account settings"),
+ useUser:()=>({isLoaded:true,user:null}),
+}));

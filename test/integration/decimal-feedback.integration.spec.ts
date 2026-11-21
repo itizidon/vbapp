@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import {Prisma } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { JwtService } from "@nestjs/jwt";
@@ -44,12 +45,13 @@ const url = process.env.TEST_DATABASE_URL;
     const self = new SelfAssessmentsService(db as never);
     const users = [];
     for (let i = 0; i < 2; i++) {
-      const id = randomUUID();
+      const id = clerkId();
       const user = await db.user.create({
         data: {
           id,
           username: id,
           email: id + "@example.test",
+          emailVerifiedAt: new Date(), // Authenticated feature fixtures have completed email verification.
           passwordHash: "fixture",
           age: 25,
           heightCm: 180,
@@ -332,9 +334,7 @@ const url = process.env.TEST_DATABASE_URL;
     await app.init();
     try {
       const schema = module.get(GraphQLSchemaHost).schema,
-        token = await module
-          .get(JwtService)
-          .signAsync({ id: reviewer, sub: reviewer, username: "Fixture" });
+        token = clerkToken(reviewer);
       const run = (source: string, variables: object = {}) =>
         graphql({
           schema,

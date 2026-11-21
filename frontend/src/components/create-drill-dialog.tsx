@@ -58,6 +58,7 @@ export function CreateDrillDialog() {
   const options = useQuery({
     queryKey: ["drill-creation-options"],
     enabled: open,
+    staleTime: 0,
     queryFn: () =>
       gql<Options>(
         `query DrillCreationOptions{skillTree{nodes{id name status}}sports{slug skills{id name active}}}`,
@@ -90,7 +91,12 @@ export function CreateDrillDialog() {
       setError("Maximum players must be at least the minimum players.");
       return;
     }
-    if (skill === "new" && (!category || !newSkillName.trim() || !why.trim())) {
+    if (
+      skill === "new" &&
+      (!categories.some((c) => c.id === category) ||
+        !newSkillName.trim() ||
+        !why.trim())
+    ) {
       setError("Complete the new skill name, category and why it matters.");
       return;
     }
@@ -364,6 +370,7 @@ export function CreateDrillDialog() {
                           required
                           className={field}
                           value={category}
+                          disabled={options.isFetching || !categories.length}
                           onChange={(e) => setCategory(e.target.value)}
                         >
                           <option value="">Choose a category</option>
@@ -374,6 +381,29 @@ export function CreateDrillDialog() {
                           ))}
                         </select>
                       </label>
+                      {options.isFetching ? (
+                        <p
+                          role="status"
+                          className="text-sm text-muted-foreground"
+                        >
+                          Loading volleyball categories…
+                        </p>
+                      ) : (
+                        !categories.length && (
+                          <div className="space-y-2 text-sm">
+                            <p role="status">
+                              No active volleyball categories are available.
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              onClick={() => options.refetch()}
+                            >
+                              Reload categories
+                            </Button>
+                          </div>
+                        )
+                      )}
                       <label className="block text-sm font-medium">
                         Why this skill matters
                         <textarea
@@ -491,7 +521,14 @@ export function CreateDrillDialog() {
             </Button>
             <Button
               type="submit"
-              disabled={busy || options.isPending || !!options.error}
+              disabled={
+                busy ||
+                options.isPending ||
+                !!options.error ||
+                (skill === "new" &&
+                  (options.isFetching ||
+                    !categories.some((c) => c.id === category)))
+              }
             >
               {busy && <LoaderCircle className="size-4 animate-spin" />}
               {busy ? "Creating drill…" : "Create and publish"}

@@ -1,3 +1,4 @@
+import { clerkCoachingAllowed } from "../auth/clerk/privacy";
 import { feedbackTrust } from "../feedback/eligibility";
 import {
   Prisma,
@@ -36,7 +37,7 @@ export class FeedbackProcessingWorker {
 
   private scopeSql(alias: string) {
     const a = Prisma.raw(alias);
-    return Prisma.sql`(${this.scope.playerId ?? null}::uuid IS NULL OR ${a}."recipientId"=${this.scope.playerId ?? null}::uuid)
+    return Prisma.sql`(${this.scope.playerId ?? null}::text IS NULL OR ${a}."recipientId"=${this.scope.playerId ?? null}::text)
       AND (${this.scope.before ?? null}::timestamptz IS NULL OR ${a}."createdAt"<=${this.scope.before ?? null})`;
   }
 
@@ -85,6 +86,10 @@ export class FeedbackProcessingWorker {
         },
       });
       if (!source) return true;
+      if (!(await clerkCoachingAllowed(source.recipientId))) {
+        await this.discard(job, token);
+        return true;
+      }
       const [{ eligible }] = await this.db.$queryRaw<{ eligible: boolean }[]>`
         SELECT feedback_analysis_eligible(f) AS eligible FROM "Feedback" f WHERE id=${source.id}::uuid`;
       if (!eligible) {
@@ -175,9 +180,15 @@ export class FeedbackProcessingWorker {
           }
         }
       }
+      if (!(await clerkCoachingAllowed(source.recipientId))) {
+        await this.discard(job, token);
+        return true;
+      }
       await this.db.$transaction(async (tx) => {
         // Source writes take this same row lock before invalidating jobs and observations.
         await tx.$queryRaw`SELECT id FROM "Feedback" WHERE id=${job.feedbackId}::uuid FOR UPDATE`;
+        if (!(await clerkCoachingAllowed(source.recipientId)))
+          throw new ProcessingError("INELIGIBLE", false);
         const locked = await tx.$queryRaw<
           FeedbackAnalysisJob[]
         >`SELECT * FROM "FeedbackAnalysisJob"
@@ -261,7 +272,7 @@ export class FeedbackProcessingWorker {
             finishedAt: new Date(),
           },
         });
-        await tx.$executeRaw`SELECT invalidate_feedback_profile(${source.recipientId}::uuid,${source.sportId}::uuid)`;
+        await tx.$executeRaw`SELECT invalidate_feedback_profile(${source.recipientId}::text,${source.sportId}::uuid)`;
       });
     } catch (e) {
       const error = errorInfo(e);
@@ -430,6 +441,14 @@ export class FeedbackProcessingWorker {
         include: { skill: true, theme: true },
       });
       if (!row) return true;
+      const recipient = await this.db.feedback.findUnique({
+        where: { id: row.feedbackId },
+        select: { recipientId: true },
+      });
+      if (!recipient || !(await clerkCoachingAllowed(recipient.recipientId))) {
+        await this.db.feedbackObservation.deleteMany({ where: { id: row.id } });
+        return true;
+      }
       const document = embeddingDocument(row);
       if (hash(document) !== job.sourceHash)
         throw new ProcessingError("EMBEDDING_SOURCE_CHANGED", false);
@@ -437,8 +456,18 @@ export class FeedbackProcessingWorker {
         await this.embedder.embed(document),
         job.dimensions,
       );
+      if (!(await clerkCoachingAllowed(recipient.recipientId))) {
+        await this.db.feedbackObservation.deleteMany({ where: { id: row.id } });
+        return true;
+      }
       await this.db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Feedback" WHERE id=${row.feedbackId}::uuid FOR UPDATE`;
+        const owner = await tx.feedback.findUniqueOrThrow({
+          where: { id: row.feedbackId },
+          select: { recipientId: true },
+        });
+        if (!(await clerkCoachingAllowed(owner.recipientId)))
+          throw new ProcessingError("INELIGIBLE", false);
         const valid = await tx.$queryRaw<
           { id: string }[]
         >`SELECT o.id FROM "EligibleFeedbackObservation" o

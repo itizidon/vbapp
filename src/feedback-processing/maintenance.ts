@@ -1,3 +1,4 @@
+import {isClerkUserId}from"../auth/clerk/metadata";
 import { feedbackTrust } from "../feedback/eligibility";
 import { readFileSync } from "node:fs";
 import { parseEnv } from "node:util";
@@ -58,7 +59,7 @@ export function options(args: string[]) {
       if (!value || value.startsWith("--"))
         throw new Error(`Missing value for ${arg}`);
       if (arg === "--player-id") {
-        if (!isUUID(value)) throw new Error("Invalid player UUID");
+        if (!isClerkUserId(value)) throw new Error("Invalid Clerk player ID");
         result.playerId = value;
       }
       if (arg === "--batch-size") result.batchSize = Number(value);
@@ -133,7 +134,7 @@ export function target(o: Options, env: NodeJS.ProcessEnv) {
   };
 }
 export const scope = (o: Pick<Options, "playerId">, before: Date) => Prisma.sql`
-  (${o.playerId ?? null}::uuid IS NULL OR f."recipientId"=${o.playerId ?? null}::uuid) AND f."createdAt"<=${before}`;
+  (${o.playerId ?? null}::text IS NULL OR f."recipientId"=${o.playerId ?? null}::text) AND f."createdAt"<=${before}`;
 
 // Read-only, paged inventory. Each Feedback ID is visited once, independent of its match associations.
 export async function inventory(

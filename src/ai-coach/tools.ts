@@ -137,7 +137,7 @@ export class CoachTools {
       config.maxFeedbackSearchResults,
     );
     const query = args.query?.trim() || null;
-    const filters = Prisma.sql`f."recipientId"=${actorId}::uuid AND f."sportId"=${sportId}::uuid AND f."createdAt"<=CURRENT_TIMESTAMP
+    const filters = Prisma.sql`f."recipientId"=${actorId}::text AND f."sportId"=${sportId}::uuid AND f."createdAt"<=CURRENT_TIMESTAMP
    ${args.skill ? Prisma.sql`AND s.slug=${args.skill}` : Prisma.empty}
    ${args.theme ? Prisma.sql`AND o."themeId"=${args.theme}` : Prisma.empty}
    ${args.from ? Prisma.sql`AND f."createdAt">=${new Date(args.from)}` : Prisma.empty}
@@ -191,7 +191,7 @@ export class CoachTools {
       ObservationRow[]
     >(Prisma.sql`SELECT feedback_trust_classification(f) AS "trustClassification",o.id AS "observationId",f.id AS "feedbackId",f."createdAt" AS "submittedAt",o."themeId",t.name AS "themeName",o."skillId",o.sentiment,o.evidence
    FROM "EligibleFeedbackObservation" o JOIN "Feedback" f ON f.id=o."feedbackId" JOIN "AnalysisEligibleFeedback" a ON a.id=f.id JOIN "FeedbackTheme" t ON t.id=o."themeId"
-   WHERE f."recipientId"=${actorId}::uuid AND f."sportId"=${sportId}::uuid AND o.id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})`);
+   WHERE f."recipientId"=${actorId}::text AND f."sportId"=${sportId}::uuid AND o.id IN (${Prisma.join(ids.map((id) => Prisma.sql`${id}::uuid`))})`);
     return rows.map(mapRow);
   }
 }

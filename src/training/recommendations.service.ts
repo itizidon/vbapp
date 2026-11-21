@@ -1,3 +1,4 @@
+import { privatePlayer } from "../auth/clerk/metadata";
 import {
   Injectable,
   BadRequestException,
@@ -68,11 +69,10 @@ export class TrainingRecommendations {
   async updateProfile(actor: string, data: unknown) {
     await this.access.user(actor);
     const parsed = parse(trainingProfileSchema, data);
-    return this.db.playerTrainingProfile.upsert({
-      where: { userId: actor },
-      create: { userId: actor, data: parsed },
-      update: { data: parsed },
+    await this.access.users.updatePlayerMetadata(actor, {
+      trainingPreferences: parsed,
     });
+    return { userId: actor, data: parsed, updatedAt: new Date() };
   }
   async progress(actor: string, skillTreeNodeId: string, state: string) {
     await this.access.user(actor);
@@ -101,13 +101,24 @@ export class TrainingRecommendations {
     });
     if (!sport)
       throw new NotFoundException("Beach volleyball catalog not initialized");
+    const player = privatePlayer(
+      await this.access.users.getUserById(userId, true),
+    );
     const [training, assessment, progress, completed, cache, drills] =
       await Promise.all([
-        this.db.playerTrainingProfile.findUnique({ where: { userId } }),
-        this.db.selfAssessment.findUnique({
-          where: { userId_sportId: { userId, sportId: sport.id } },
-          include: { ratings: true },
-        }),
+        Promise.resolve(
+          player.trainingPreferences
+            ? { data: player.trainingPreferences }
+            : null,
+        ),
+        Promise.resolve(
+          player.assessment?.sportId === sport.id
+            ? {
+                overallLevel: player.assessment.overallLevel,
+                ratings: player.assessment.ratings,
+              }
+            : null,
+        ),
         this.db.playerSkillProgress.findMany({ where: { userId } }),
         this.db.drillCompletion.findMany({
           where: { userId },

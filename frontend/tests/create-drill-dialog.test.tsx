@@ -119,6 +119,88 @@ describe("coach drill creation", () => {
       },
     });
   });
+  it("renders backend category IDs and labels, excluding inactive categories and other sports", async () => {
+    const records = ["Attack", "Defense", "Passing", "Setting", "Serving"].map(
+      (name, i) => ({
+        id: `backend-category-${i}`,
+        name: `${name} from backend`,
+        active: true,
+      }),
+    );
+    api.mockResolvedValue({
+      ...options,
+      sports: [
+        {
+          slug: "beach-volleyball",
+          skills: [
+            ...records,
+            { id: "inactive", name: "Inactive category", active: false },
+          ],
+        },
+        {
+          slug: "other-sport",
+          skills: [{ id: "other", name: "Other sport category", active: true }],
+        },
+      ],
+    } as never);
+    show();
+    await fill();
+    fireEvent.change(screen.getByRole("combobox", { name: "Skill" }), {
+      target: { value: "new" },
+    });
+    const dropdown = screen.getByRole("combobox", {
+      name: "Volleyball category",
+    });
+    expect(
+      Array.from((dropdown as HTMLSelectElement).options)
+        .slice(1)
+        .map((o) => ({ id: o.value, name: o.textContent })),
+    ).toEqual(records.map((r) => ({ id: r.id, name: r.name })));
+    expect(
+      screen.queryByRole("option", { name: "Inactive category" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("option", { name: "Other sport category" }),
+    ).not.toBeInTheDocument();
+    expect(api.mock.calls[0][0]).toContain(
+      "sports{slug skills{id name active}}",
+    );
+  });
+  it("shows an empty state and reloads categories from the backend", async () => {
+    let available = false;
+    api.mockImplementation(
+      async () =>
+        ({
+          ...options,
+          sports: [
+            {
+              slug: "beach-volleyball",
+              skills: available ? options.sports[0].skills : [],
+            },
+          ],
+        }) as never,
+    );
+    show();
+    await fill();
+    fireEvent.change(screen.getByRole("combobox", { name: "Skill" }), {
+      target: { value: "new" },
+    });
+    expect(
+      screen.getByRole("combobox", { name: "Volleyball category" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByText("No active volleyball categories are available."),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create and publish" }),
+    ).toBeDisabled();
+    available = true;
+    fireEvent.click(screen.getByRole("button", { name: "Reload categories" }));
+    await screen.findByRole("option", { name: "Passing" });
+    expect(
+      screen.getByRole("combobox", { name: "Volleyball category" }),
+    ).toBeEnabled();
+  });
   it("retains entries and allows retry after a server rejection", async () => {
     let rejected = true;
     api.mockImplementation(async (query) => {

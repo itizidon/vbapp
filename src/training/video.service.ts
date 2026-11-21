@@ -241,7 +241,7 @@ export class TrainingVideoService {
         where: {
           drillId,
           ...(variantId ? { techniqueVariantId: variantId } : {}),
-          ...(!this.access.isEditor(actor)
+          ...(!(await this.access.isEditor(actor))
             ? {
                 status: "PUBLISHED" as const,
                 uploadStatus: "READY_FOR_ANALYSIS" as const,
@@ -424,7 +424,7 @@ export class TrainingVideoService {
       });
       await this.library.drill(row.drillId, actor);
       if (
-        !this.access.isEditor(actor) &&
+        !(await this.access.isEditor(actor)) &&
         (row.status !== "PUBLISHED" ||
           row.uploadStatus !== "READY_FOR_ANALYSIS")
       )
@@ -453,12 +453,28 @@ export class TrainingVideoService {
   }
   async deleteSubmission(actor: string, id: string) {
     await this.submission(actor, id, true);
+    return this.removeSubmission(id);
+  }
+  /** Retention-only entry point: no caller-controlled actor, and expiration rechecked in the transaction. */
+  async expireSubmission(id: string) {
+    return this.removeSubmission(id, true);
+  }
+  private async removeSubmission(id: string, expiredOnly = false) {
     await this.db.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${id}))`;
       const row = await tx.drillVideoSubmission.findUniqueOrThrow({
         where: { id },
       });
       if (row.deletedAt) return;
+      if (
+        expiredOnly &&
+        !(
+          row.retentionExpiresAt < new Date() ||
+          (row.status === "PENDING_UPLOAD" &&
+            row.uploadExpiresAt < new Date(Date.now() - 60000))
+        )
+      )
+        return;
       await tx.drillVideoSubmission.update({
         where: { id },
         data: { status: "DELETED", deletedAt: new Date() },

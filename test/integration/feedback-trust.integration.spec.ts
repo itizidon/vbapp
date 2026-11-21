@@ -1,4 +1,5 @@
-import { PrismaClient, Feedback, Prisma } from "@prisma/client";
+import {Feedback, Prisma } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "node:crypto";
 import { JwtService } from "@nestjs/jwt";
 import { FeedbackService } from "../../src/feedback/feedback.service";
@@ -61,7 +62,7 @@ const url = process.env.TEST_DATABASE_URL;
     beforeEach(async () => {
       const ids = [];
       for (let i = 0; i < 2; i++) {
-        const id = randomUUID();
+        const id = clerkId();
         await db.user.create({
           data: {
             id,

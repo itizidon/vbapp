@@ -1,4 +1,5 @@
-import { PrismaClient, Feedback, Prisma } from "@prisma/client";
+import {Feedback, Prisma } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "node:crypto";
 import {
   rebuildOneProfile,
@@ -43,7 +44,7 @@ const url = process.env.TEST_DATABASE_URL;
       ).id;
   });
   const user = async () => {
-    const id = randomUUID();
+    const id = clerkId();
     testUsers.push(id);
     return (
       await db.user.create({
@@ -51,6 +52,7 @@ const url = process.env.TEST_DATABASE_URL;
           id,
           username: id,
           email: id + "@example.test",
+          emailVerifiedAt: new Date(), // Authenticated feature fixtures have completed email verification.
           passwordHash: "test-only",
           age: 25,
           heightCm: 180,
@@ -591,9 +593,7 @@ const url = process.env.TEST_DATABASE_URL;
       const source = `query($sport:ID!) { myFeedbackAnalysisProfile(sportId:$sport) { state profile { playerId totalEligibleFeedbackCount } } mySkillAnalysis(sportId:$sport) { state skills { skillId peer {count average} } } myThemeTrends(sportId:$sport) { state themes {themeId} } myTopWeaknesses(sportId:$sport) {state weaknesses {themeId}} }`;
       const execute = async (actor?: string) => {
         const token = actor
-          ? await module
-              .get(JwtService)
-              .signAsync({ id: actor, sub: actor, username: "fixture" })
+          ? clerkToken(actor)
           : undefined;
         return graphql({
           schema,

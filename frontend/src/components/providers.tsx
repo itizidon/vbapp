@@ -1,4 +1,5 @@
 "use client";
+import { useAuth } from "@clerk/nextjs";
 import { useState, useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { watchAuthChanges } from "@/lib/auth-session";
@@ -27,4 +28,16 @@ export function Providers({ children }: { children: React.ReactNode }) {
       <QueryClientProvider client={client}>{children}</QueryClientProvider>
     </ThemeProvider>
   );
+}
+
+/** Remount the query cache on Clerk account changes, including sign-out in another tab. */
+export function ClerkProviders({ children }: { children: React.ReactNode }) {
+  const { isLoaded, userId } = useAuth();
+  if (!isLoaded)
+    return (
+      <p role="status" className="p-6 text-center">
+        Loading your session…
+      </p>
+    );
+  return <Providers key={userId ?? "anonymous"}>{children}</Providers>;
 }

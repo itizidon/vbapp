@@ -1,22 +1,29 @@
-import { cookies } from "next/headers";
+import { auth } from "@clerk/nextjs/server";
 import type { User } from "./types";
 export async function getCurrentUser(): Promise<User | null> {
-  const token = (await cookies()).get("courtside_session")?.value;
-  if (!token) return null;
+  if (
+    !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ||
+    !process.env.CLERK_SECRET_KEY
+  )
+    return null;
   try {
+    const token = await (await auth()).getToken();
+    if (!token) return null;
     const response = await fetch(
       process.env.GRAPHQL_API_URL ?? "http://localhost:3000/graphql",
       {
         method: "POST",
+        redirect: "error",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          query: "query CurrentUser {me{id username email createdAt isPublic}}",
+          query:
+            "{me{id username email createdAt isPublic onboardingComplete}}",
         }),
         cache: "no-store",
-        signal: AbortSignal.timeout(5000),
+        signal: AbortSignal.timeout(10000),
       },
     );
     const result = await response.json();

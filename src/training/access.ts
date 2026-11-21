@@ -4,36 +4,28 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
-import { isUUID } from "class-validator";
+import { ClerkUserService } from "../auth/clerk/users";
+import { isClerkUserId } from "../auth/clerk/metadata";
 @Injectable()
 export class TrainingAccess {
-  constructor(private db: PrismaService) {}
+  constructor(
+    private db: PrismaService,
+    readonly users: ClerkUserService = new ClerkUserService(db),
+  ) {}
   async user(actor?: string) {
-    if (
-      !actor ||
-      !isUUID(actor) ||
-      !(await this.db.user.findUnique({
-        where: { id: actor },
-        select: { id: true },
-      }))
-    )
-      throw new UnauthorizedException();
+    if (!isClerkUserId(actor)) throw new UnauthorizedException();
+    await this.users.getUserById(actor, true);
     return actor;
   }
-  isEditor(actor?: string) {
-    return (
-      !!actor &&
-      (process.env.TRAINING_EDITOR_IDS ?? "")
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .includes(actor)
-    );
+  async isEditor(actor?: string) {
+    return actor ? this.users.isCoach(actor) : false;
   }
   async editor(actor?: string) {
     await this.user(actor);
-    if (!this.isEditor(actor))
-      throw new ForbiddenException("Training content editor access required");
+    if (!(await this.isEditor(actor)))
+      throw new ForbiddenException(
+        "Coach or administrator editor access required",
+      );
     return actor!;
   }
   async owner(actor: string, owner: string) {

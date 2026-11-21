@@ -1,3 +1,5 @@
+> Account authentication now uses Clerk. Historical custom-login and live smoke scripts below are obsolete; use [Clerk setup and verification](../docs/clerk-migration.md).
+
 # bvbtips — Matches, Feedback, Account
 
 Beach Volleyball frontend for the existing NestJS GraphQL backend. This refactors the existing Next.js App Router app, retaining its authentication, typed GraphQL proxy, TanStack Query state, React Hook Form/Zod forms, Tailwind tokens, and reusable shadcn/Radix controls.
@@ -29,7 +31,7 @@ There are four primary tabs: **Matches**, **Feedback**, **Analytics**, **Account
 - `/account`: private player profile, editable self-assessment, feedback link creation, theme preferences, privacy information, and sign out.
 - `/f/[token]`: public feedback flow. Guests enter a name, rate at least one dynamic category using the backend's integer 1–5 scale, optionally add comments, and submit without signing up. Duplicate clicks are guarded. Confirmation never requires registration.
 - `/give-feedback/[userId]?match=...`: registered reviewer flow from a match participant. Offers matches visible to the reviewer in which the recipient participates, plus **No match — General Feedback**.
-- `/login`, `/signup`: existing JWT mechanism, entering `/matches` on success. Authenticated visits to `/` are verified server-side and redirected to `/matches`.
+- `/login`, `/signup`: Clerk-hosted components, verified sessions and onboarding. See [Clerk setup](../docs/clerk-migration.md). Authenticated visits to `/` are verified server-side and redirected to `/matches`.
 
 Old dashboard/insights URLs redirect to Matches or Feedback; profile/settings redirect to Account. Previously generated `/feedback/[userId]?token=...` links redirect to `/f/[token]` before authentication. The Analytics tab is available at `/analytics`.
 

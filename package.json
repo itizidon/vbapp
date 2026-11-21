@@ -32,13 +32,16 @@
     "video:worker": "node dist/src/training/motion-worker.js",
     "video:health": "node dist/src/training/motion-worker.js health",
     "test:video:python": ".venv-video/bin/python -m unittest discover -s video-worker/tests -v",
-    "test:video:smoke": "tsc -p tsconfig.video-smoke.json && node dist/video-worker/smoke.js"
+    "test:video:smoke": "tsc -p tsconfig.video-smoke.json && node dist/video-worker/smoke.js",
+    "clerk:cutover": "node dist/src/auth/clerk/cutover.js",
+    "clerk:deletions": "node dist/src/auth/clerk/deletions-cli.js"
   },
   "dependencies": {
     "@apollo/server": "^5.1.0",
     "@as-integrations/express5": "^1.1.2",
     "@aws-sdk/client-s3": "^3.1172.0",
     "@aws-sdk/s3-request-presigner": "^3.1172.0",
+    "@clerk/backend": "3.31.3",
     "@nestjs/apollo": "^13.2.0",
     "@nestjs/common": "^11.1.9",
     "@nestjs/config": "^4.0.2",
@@ -48,7 +51,6 @@
     "@nestjs/platform-express": "^11.1.9",
     "@nestjs/throttler": "^6.4.0",
     "@prisma/client": "^6.19.0",
-    "argon2": "^0.44.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "graphql": "^16.11.0",
@@ -77,8 +79,10 @@
       "@prisma/client",
       "@prisma/engines",
       "prisma",
-      "argon2",
       "esbuild"
     ]
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

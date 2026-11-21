@@ -1,3 +1,5 @@
+import{clerkCoachingAllowed}from"../auth/clerk/privacy";
+import{ForbiddenException}from"@nestjs/common";
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { isUUID } from "class-validator";
 import { PrismaService } from "../prisma/prisma.service";
@@ -25,6 +27,7 @@ export class FeedbackAnalysisService {
     actorId: string,
     sportId: string,
   ): Promise<FeedbackAnalysisResult> {
+    if(!await clerkCoachingAllowed(actorId))throw new ForbiddenException("Private AI coaching is disabled in your account privacy settings");
     const sport = await this.db.sport.findFirst({
       where: { id: sportId, slug: { in: ["volleyball", "beach-volleyball"] } },
       select: { id: true },

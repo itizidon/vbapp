@@ -1,4 +1,6 @@
 "use client";
+import { UserProfile } from "@clerk/nextjs";
+
 import { AccountProcessingPrivacy } from "./feedback-privacy-controls";
 import Link from "next/link";
 import { usePendingApprovalCount } from "@/lib/approvals";
@@ -42,10 +44,28 @@ export function AccountPage() {
             Member since {new Date(me.createdAt).toLocaleDateString()}
           </p>
           <p className="subtle text-sm">
-            Name, email, and photo editing are not available yet.
+            Manage your name, email, photo and account security below.
           </p>
         </section>
         <AccountMenu />
+        <Link
+          href="/onboarding"
+          className="font-semibold text-primary underline"
+        >
+          Edit volleyball profile
+        </Link>
+        <section className="panel overflow-x-auto">
+          <UserProfile
+            routing="hash"
+            appearance={{
+              elements: {
+                rootBox: "w-full",
+                cardBox: "w-full max-w-full shadow-none",
+              },
+            }}
+          />
+        </section>
+
         <section id="feedback-links" className="panel space-y-4">
           <h2>Feedback links</h2>
           <p className="subtle text-sm">

@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import {Prisma } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "crypto";
 import { JwtService } from "@nestjs/jwt";
 import { FeedbackService } from "../../src/feedback/feedback.service";
@@ -39,7 +40,7 @@ const url = process.env.TEST_DATABASE_URL;
       });
       const users = await Promise.all(
         [3, 5, 2].map(async (rating) => {
-          const id = randomUUID();
+          const id = clerkId();
           const user = await db.user.create({
             data: {
               username: id,
@@ -120,7 +121,7 @@ const url = process.env.TEST_DATABASE_URL;
           undefined,
           randomUUID(),
         ),
-      ).rejects.toThrow("Reviewer not found");
+      ).rejects.toThrow();
       await expect(
         service.invite(f.other.id, f.recipient.id, f.sport.id),
       ).rejects.toThrow("themselves");
@@ -182,7 +183,7 @@ const url = process.env.TEST_DATABASE_URL;
         ),
       ).toBe(true);
     });
-    it("continues to accept existing unassigned signed invitations", async () => {
+    it("rejects retired signed invitations after the fresh start", async () => {
       const f = await fixture();
       const token = await jwt.signAsync(
         {
@@ -193,10 +194,8 @@ const url = process.env.TEST_DATABASE_URL;
         },
         { expiresIn: "24h" },
       );
-      expect((await service.invitation(token)).assignedReviewer).toBeNull();
-      expect((await service.submitGuest({ ...f.input, token })).status).toBe(
-        "PUBLISHED",
-      );
+      await expect(service.invitation(token)).rejects.toThrow('Invalid or expired');
+      await expect(service.submitGuest({ ...f.input, token })).rejects.toThrow('Invalid or expired');
     });
     it("saves assigned drafts with submitter and guest identity without any rating contribution or event", async () => {
       const f = await fixture();
@@ -281,7 +280,7 @@ const url = process.env.TEST_DATABASE_URL;
       expect(page.totalCount).toBe(12);
       expect(page.items).toHaveLength(10);
       expect(page.items[0]).toMatchObject({
-        recipientUsername: f.recipient.username,
+        recipientId: f.recipient.id,
         status: "PENDING",
       });
       expect(page.items[0].ratings[0].skillName).toBe("Passing");
@@ -743,7 +742,7 @@ const url = process.env.TEST_DATABASE_URL;
           token: link.token,
           assignedReviewerId: randomUUID(),
         }),
-      ).rejects.toThrow("Reviewer not found");
+      ).rejects.toThrow();
       await expect(
         service.submitGuest({
           ...f.input,
@@ -755,17 +754,9 @@ const url = process.env.TEST_DATABASE_URL;
         await db.feedback.count({ where: { recipientId: f.recipient.id } }),
       ).toBe(0);
     });
-    it("supports selecting an approver on legacy signed invitations", async () => {
+    it("supports selecting an approver on an unassigned opaque invitation", async () => {
       const f = await fixture();
-      const token = await jwt.signAsync(
-        {
-          kind: "guest-feedback",
-          nonce: randomUUID(),
-          recipientId: f.recipient.id,
-          sportId: f.sport.id,
-        },
-        { expiresIn: "24h" },
-      );
+      const {token} = await service.invite(f.recipient.id,f.recipient.id,f.sport.id);
       const draft = await service.submitGuest({
         ...f.input,
         token,

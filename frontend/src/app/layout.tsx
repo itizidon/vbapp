@@ -1,5 +1,6 @@
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
-import { Providers } from "@/components/providers";
+import { Providers, ClerkProviders } from "@/components/providers";
 import "./globals.css";
 export const metadata: Metadata = {
   title: {
@@ -17,7 +18,18 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Providers>{children}</Providers>
+        {process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ? (
+          <ClerkProvider
+            signInUrl="/login"
+            signUpUrl="/signup"
+            signInFallbackRedirectUrl="/matches"
+            signUpFallbackRedirectUrl="/onboarding"
+          >
+            <ClerkProviders>{children}</ClerkProviders>
+          </ClerkProvider>
+        ) : (
+          <Providers>{children}</Providers>
+        )}
       </body>
     </html>
   );

@@ -11,13 +11,13 @@ describe("historical feedback command safety", () => {
         "--batch-size",
         "25",
         "--player-id",
-        "00000000-0000-4000-8000-000000000001",
+        "user_fixtureplayer00000001",
       ]),
     ).toMatchObject({
       dryRun: true,
       all: true,
       batchSize: 25,
-      playerId: "00000000-0000-4000-8000-000000000001",
+      playerId: "user_fixtureplayer00000001",
     });
     for (const args of [
       ["work", "--dry-run", "--execute"],

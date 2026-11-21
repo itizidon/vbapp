@@ -1,3 +1,4 @@
+import { ClerkUserService } from "../auth/clerk/users";
 import {
   BadRequestException,
   ForbiddenException,
@@ -289,6 +290,7 @@ export class FeedbackPrivacyResolver {
   constructor(
     private service: FeedbackPrivacyService,
     private db: PrismaService,
+    private users: ClerkUserService,
   ) {}
   @UseGuards(GqlAuthGuard) @Mutation(() => FeedbackModel) updateFeedbackPrivacy(
     @CurrentUser() u: AuthUser,
@@ -309,9 +311,48 @@ export class FeedbackPrivacyResolver {
     @CurrentUser() u: AuthUser,
     @Args("enabled") enabled: boolean,
   ) {
-    return this.db.user.update({
-      where: { id: u.id },
-      data: { aiCoachingEnabled: enabled },
-    });
+    return this.updateCoachingPreference(u.id, enabled);
+  }
+  private async updateCoachingPreference(id: string, enabled: boolean) {
+    await this.users.updatePlayerMetadata(id, { aiCoachingEnabled: enabled });
+    if (!enabled)
+      await this.db.$transaction(async (tx) => {
+        const sources = await tx.$queryRaw<
+          { id: string }[]
+        >`SELECT id FROM "Feedback" WHERE "recipientId"=${id}::text ORDER BY id FOR UPDATE`;
+        await tx.feedbackObservation.deleteMany({
+          where: { feedbackId: { in: sources.map((f) => f.id) } },
+        });
+        await tx.feedbackAnalysisJob.updateMany({
+          where: { feedback: { recipientId: id } },
+          data: {
+            status: "SKIPPED",
+            generation: { increment: 1 },
+            leaseToken: null,
+            leaseUntil: null,
+          },
+        });
+        await tx.playerFeedbackAnalysisProfile.updateMany({
+          where: { userId: id },
+          data: { data: {}, stale: true, revision: { increment: 1 } },
+        });
+        await tx.aiCoachTurn.updateMany({
+          where: { userId: id },
+          data: {
+            response: Prisma.DbNull,
+            errorCode: "OUTDATED",
+            status: "FAILED",
+          },
+        });
+      });
+    if (enabled)
+      await this.db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT count(queue_feedback_analysis(f.id))::int FROM "Feedback" f LEFT JOIN "FeedbackAnalysisJob" j ON j."feedbackId"=f.id WHERE f."recipientId"=${id}::text AND feedback_analysis_eligible(f) AND (j.status='SKIPPED' OR j."feedbackId" IS NULL) AND (NULLIF(btrim(f."overallComment"),'') IS NOT NULL OR EXISTS(SELECT 1 FROM "FeedbackRating" r WHERE r."feedbackId"=f.id AND NULLIF(btrim(r.comment),'') IS NOT NULL))`;
+        await tx.playerFeedbackAnalysisProfile.updateMany({
+          where: { userId: id },
+          data: { stale: true, revision: { increment: 1 } },
+        });
+      });
+    return this.users.getCurrentUser(id);
   }
 }

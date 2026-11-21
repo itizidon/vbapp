@@ -1,1 +1,12 @@
-module.exports={moduleFileExtensions:['js','json','ts'],rootDir:'.',roots:['<rootDir>/test'],testRegex:'.*\\.spec\\.ts$',transform:{'^.+\\.(t|j)s$':['ts-jest',{tsconfig:'tsconfig.json'}]},collectCoverageFrom:['src/**/*.(t|j)s'],coverageDirectory:'coverage',testEnvironment:'node'};
+module.exports = {
+  moduleFileExtensions: ["js", "json", "ts"],
+  rootDir: ".",
+  roots: ["<rootDir>/test"],
+  testRegex: ".*\\.spec\\.ts$",
+  transform: { "^.+\\.(t|j)s$": ["ts-jest", { tsconfig: "tsconfig.json" }] },
+  collectCoverageFrom: ["src/**/*.(t|j)s"],
+  coverageDirectory: "coverage",
+  testEnvironment: "node",
+  setupFilesAfterEnv:["<rootDir>/test/setup-clerk.ts"],
+  testTimeout: 30000,
+};

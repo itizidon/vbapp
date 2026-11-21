@@ -1,3 +1,4 @@
+import {SelfAssessmentsService}from"../self-assessments/self-assessments.service";
 import { privateAnalyticsWhere } from "../feedback/private-eligibility";
 import { Args, ID, Query, Resolver } from "@nestjs/graphql";
 import { UseGuards } from "@nestjs/common";
@@ -15,7 +16,7 @@ import {
 @UseGuards(GqlAuthGuard)
 @Resolver()
 export class AnalyticsResolver {
-  constructor(private db: PrismaService) {}
+  constructor(private db: PrismaService,private assessments:SelfAssessmentsService = new SelfAssessmentsService(db)) {}
   @Query(() => AverageSkillRating, { nullable: true }) async averageSkillRating(
     @Args("skillId", { type: () => ID }) skillId: string,
   ) {
@@ -78,17 +79,14 @@ export class AnalyticsResolver {
   ) {
     const rows = await this.db.$queryRaw<
       { period: Date; average: number; count: bigint }[]
-    >`SELECT date_trunc('month',f."createdAt") period,avg(r.rating)::float average,count(*) count FROM "FeedbackRating" r JOIN "PrivateAnalyticsEligibleFeedback" f ON f.id=r."feedbackId" WHERE r."skillId"=${skillId}::uuid AND f."recipientId"=${u.id}::uuid AND f.status='PUBLISHED' GROUP BY 1 ORDER BY 1`;
+    >`SELECT date_trunc('month',f."createdAt") period,avg(r.rating)::float average,count(*) count FROM "FeedbackRating" r JOIN "PrivateAnalyticsEligibleFeedback" f ON f.id=r."feedbackId" WHERE r."skillId"=${skillId}::uuid AND f."recipientId"=${u.id}::text AND f.status='PUBLISHED' GROUP BY 1 ORDER BY 1`;
     return rows.map((r) => ({ ...r, skillId, count: Number(r.count) }));
   }
   @Query(() => [SelfVsPeerRating]) async selfVsPeerRatings(
     @CurrentUser() u: AuthUser,
     @Args("sportId", { type: () => ID }) sportId: string,
   ) {
-    const a = await this.db.selfAssessment.findUnique({
-      where: { userId_sportId: { userId: u.id, sportId } },
-      include: { ratings: true },
-    });
+    const a=await this.assessments.get(u.id,u.id,sportId);
     if (!a) return [];
     const peer = await this.db.feedbackRating.groupBy({
       by: ["skillId"],
@@ -109,7 +107,7 @@ export class AnalyticsResolver {
   ) {
     const rows = await this.db.$queryRaw<
       { sportId: string; feedbackCount: bigint; averageRating: number }[]
-    >`SELECT f."sportId",count(DISTINCT f.id) "feedbackCount",avg(r.rating)::float "averageRating" FROM "PrivateAnalyticsEligibleFeedback" f JOIN "FeedbackRating" r ON r."feedbackId"=f.id WHERE f."recipientId"=${u.id}::uuid AND f.status='PUBLISHED' GROUP BY f."sportId"`;
+    >`SELECT f."sportId",count(DISTINCT f.id) "feedbackCount",avg(r.rating)::float "averageRating" FROM "PrivateAnalyticsEligibleFeedback" f JOIN "FeedbackRating" r ON r."feedbackId"=f.id WHERE f."recipientId"=${u.id}::text AND f.status='PUBLISHED' GROUP BY f."sportId"`;
     return rows.map((r) => ({ ...r, feedbackCount: Number(r.feedbackCount) }));
   }
   @Query(() => [MatchModel]) userMatchHistory(@CurrentUser() u: AuthUser) {

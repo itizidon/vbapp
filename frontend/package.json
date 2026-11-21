@@ -10,9 +10,10 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "playwright test",
-    "test:live": "node --env-file=../.env scripts/live-smoke.mjs"
+    "test:live": "node --env-file=.env.local scripts/live-smoke.mjs"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.10.6",
     "@hookform/resolvers": "latest",
     "@radix-ui/react-dialog": "latest",
     "@radix-ui/react-slot": "latest",

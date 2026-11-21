@@ -1,3 +1,5 @@
+import {ClerkUserService}from"../auth/clerk/users";
+import {privatePlayer}from"../auth/clerk/metadata";
 import {
   BadRequestException,
   ForbiddenException,
@@ -47,6 +49,7 @@ export class AiCoachService {
     private readonly engine: CoachEngine,
     private readonly api: CoachOpenAI,
     private readonly tools: CoachTools,
+    private readonly users:ClerkUserService = new ClerkUserService(),
   ) {}
   private config() {
     try {
@@ -98,7 +101,7 @@ export class AiCoachService {
     }
     const authorized = ids.size
       ? await this.db.$queryRaw<{ id: string }[]>(
-          Prisma.sql`SELECT id FROM "AnalysisEligibleFeedback" WHERE "recipientId"=${actorId}::uuid AND "sportId"=${sportId}::uuid AND id IN (${Prisma.join([...ids].map((id) => Prisma.sql`${id}::uuid`))})`,
+          Prisma.sql`SELECT id FROM "AnalysisEligibleFeedback" WHERE "recipientId"=${actorId}::text AND "sportId"=${sportId}::uuid AND id IN (${Prisma.join([...ids].map((id) => Prisma.sql`${id}::uuid`))})`,
         )
       : [];
     const allowed = new Set(authorized.map((row) => row.id));
@@ -340,10 +343,7 @@ export class AiCoachService {
           " characters.",
       );
     input = { ...input, question: input.question.trim() };
-    const owner = await this.db.user.findUnique({
-      where: { id: actorId },
-      select: { aiCoachingEnabled: true },
-    });
+    const owner=privatePlayer(await this.users.getUserById(actorId,true));
     if (!owner?.aiCoachingEnabled)
       throw new ForbiddenException(
         "Private AI coaching is disabled in your account privacy settings",
@@ -482,7 +482,7 @@ export class AiCoachService {
           const [locked] = await tx.$queryRaw<
             PlayerFeedbackAnalysisProfile[]
           >`SELECT * FROM "PlayerFeedbackAnalysisProfile"
-            WHERE "userId"=${actorId}::uuid AND "sportId"=${input.sportId}::uuid FOR SHARE`;
+            WHERE "userId"=${actorId}::text AND "sportId"=${input.sportId}::uuid FOR SHARE`;
           if (
             !locked ||
             !cachedProfileReady(locked) ||

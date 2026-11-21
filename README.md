@@ -1,85 +1,38 @@
-# Multi-Sport Feedback Backend
+# BVBTips backend
 
-Production-oriented modular monolith for self-assessments, flexible match tracking, peer/guest feedback, and immutable historical reviewer snapshots. It uses NestJS, code-first GraphQL/Apollo, Prisma, PostgreSQL, JWT, Argon2id, and Jest.
+NestJS, GraphQL, Prisma and PostgreSQL application-domain storage, with Clerk as the only account, session and current player-profile authority. PostgreSQL has no User table or copied player directory.
 
-## Frontend
+## Run locally
 
-The responsive Next.js app is in [`frontend/`](frontend/README.md). With this backend running, use `cd frontend && npm ci && npm run dev` and open http://localhost:3001.
-
-## Start locally
+Configure a Clerk development application and both environment files as described in [Clerk setup and migration](docs/clerk-migration.md). Existing installations require an explicitly reviewed, backed-up fresh-start cutover before this release can run. See the [completed local verification report](docs/clerk-verification.md) for this workspace.
 
 ```bash
-cp .env.example .env
-docker compose up -d postgres
 corepack enable
-pnpm install
-pnpm prisma:generate
-pnpm prisma:deploy
+pnpm install --frozen-lockfile
+pnpm build
+docker compose up -d postgres
+# Preview first; see the guide for backup-gated execution.
+pnpm clerk:cutover --env-file=.env --dry-run
+# After cutover:
 pnpm prisma:seed
 pnpm start:dev
 ```
 
-GraphQL is served at `http://localhost:3000/graphql`. The development explorer and introspection are disabled in production. Set `SEED_DEMO_DATA=true` before seeding to add two demonstration users, current volleyball assessments, feedback, and a historical snapshot. The demo password is `DemoPassword!2026`; never enable demo data in production.
+In another terminal, run `cd frontend && npm ci && npm run dev`. Open http://localhost:3001; GraphQL listens at http://localhost:3000/graphql.
 
-Run `pnpm build`, `pnpm test:unit`, and—against a disposable migrated PostgreSQL database—`TEST_DATABASE_URL=postgresql://... pnpm test:integration`. A typical integration setup is:
+Clerk handles email/password, Google, Facebook, verification, password recovery and account deletion. The frontend forwards verified Clerk session tokens to NestJS over the server-side GraphQL proxy; the API checks signature, issuer, authorized party, verified email and live session/account status. No legacy login mutations, account JWTs, password hashes or auth cookies remain. Independent signed capabilities remain solely for narrowly scoped guest feedback followups.
 
-```bash
-DATABASE_URL="$TEST_DATABASE_URL" pnpm prisma:deploy
-TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm test:integration
-```
+## Data and identity
 
-## Data model
+Matches, feedback, rating ledgers, AI analyses and training activity reference Clerk `user_...` IDs as text. Current self-assessment, age, height, privacy preferences and trusted roles live in Clerk metadata. Immutable self-rating events, reviewer snapshots and calculated internal ratings remain application-domain history. Public labels are batched from Clerk with bounded memory caching; public responses exclude email and private metadata.
 
-The schema contains 13 domain models:
+`me`, `completePlayerOnboarding`, `updateAccountVisibility` and the existing assessment operations use the verified actor. `setPlayerRole` requires a trusted ADMIN. Guests continue to use opaque, expiring feedback links. Existing ownership and approval restrictions apply to domain operations.
 
-- `User` owns current self-assessments, creates/participates in matches, and sends/receives feedback. Username and email use PostgreSQL `citext` uniqueness. Age and height have no public GraphQL fields. Because age is stored as an integer rather than date of birth, an application process must refresh it as users get older.
-- `Sport` configures independent sports without migrations; `Skill` belongs to one sport and marks mandatory signup ratings.
-- `Match` has an organizer and optional sport, date, description, teams, participants, scores, and feedback. `MatchTeam` allows any team count and distinguishes `NULL` from score zero. `MatchParticipant` has exactly one registered/guest identity; its composite foreign key guarantees an assigned team belongs to the same match.
-- `Feedback` belongs to a recipient and sport, with optional reviewer/match and immutable copied reviewer metadata. `FeedbackRating` stores the reviewer's assessment of the recipient.
-- `SelfAssessment` and `SelfAssessmentRating` hold one mutable current self-report per user/sport.
-- `FeedbackReviewerSkillSnapshot` stores the registered reviewer's own individual ratings at submission. It is deliberately separate from `FeedbackRating`.
-
-The initial migration enables `citext`, creates enums/tables/indexes/checks, enforces cross-sport rating integrity with triggers, touches the parent assessment when a rating changes, and rejects updates to historical snapshot columns/rows. Match deletion sets independent feedback's `matchId` to null. Feedback deletion is a soft-delete by default; physical retention deletion cascades ratings and snapshots.
-
-## GraphQL operations
-
-- Authentication: `register`, `login`, `me`
-- Catalog: `sports`, `sport`, `skills`
-- Matches: `createMatch`, `updateMatch`, `deleteMatch`, `match`, `userMatches`, `createMatchTeam`, `updateMatchTeam`, `removeMatchTeam`, `addMatchParticipant`, `addGuestMatchParticipant`, `assignParticipantToTeam`, `moveParticipantToTeam`, `removeMatchParticipant`, `updateTeamScore`
-- Feedback: `submitFeedback`, `submitGuestFeedback`, `createGuestFeedbackInvite`, `updateFeedback`, `deleteFeedback`, `feedback`, `receivedFeedback`, `submittedFeedback`
-- Self-assessments: `mySelfAssessments`, `userSelfAssessment`, `createSelfAssessment`, `updateSelfAssessment`, `updateSelfAssessmentRatings`
-- Analytics: `myAnalytics`, `averageSkillRating`, `userSkillRatings`, `feedbackCount`, `skillRatingTrends`, `selfVsPeerRatings`, `userSportFeedbackSummary`, `userMatchHistory`, `matchResults`
-
-`createMatch(input: null)` and `createMatch` both create a draft with server-generated metadata. List operations use stable `(createdAt, id)` ordering and accept an opaque ID cursor; production clients should request at most 50 records and treat the 51st as a next-page sentinel.
-
-## Snapshot consistency and privacy
-
-Registered feedback submission is one PostgreSQL `SERIALIZABLE` transaction. It validates recipient/sport/skills/match participation, takes a shared lock on the relevant current `SelfAssessment`, reads its ratings, and atomically inserts feedback, recipient ratings, copied overall metadata, and individual reviewer snapshots. Assessment writers take an exclusive lock on the same row. This prevents an overall level from one assessment version being combined with ratings from another. Serialization failures can occur under contention and callers should retry the whole mutation with bounded backoff.
-
-No-assessment and guest submissions create no snapshot. A guest invite is a signed, expiring JWT containing a random nonce and fixed recipient/sport/match scope; the nonce is retained on each submission for auditing, and multiple submissions may reuse the invite until its 24-hour expiration. Snapshot fields never appear in inputs. Database triggers reject later edits, and ordinary feedback editing never refreshes them. A later submission takes a new snapshot.
-
-Raw snapshots are private: only the registered reviewer sees their snapshot on authorized feedback reads. Recipients receive feedback with snapshot fields redacted. Public analytics only use rows explicitly marked `analyticsAllowed`; user-specific analytics require the subject's token. This is intentionally conservative and can later be replaced by an explicit sharing policy or administrator role.
-
-## Feedback ratings
-
-Displayed skill averages are calculated directly from published `FeedbackRating` rows. The unused calculated-rating storage models and their `playerSkillRatings`, `playerSportRating`, and `playerRatingProfile` GraphQL queries have been removed. The pending removal migration archives `PlayerSkillRating` and `PlayerSportRating` as `LegacyPlayerSkillRating` and `LegacyPlayerSportRating` rather than dropping their rows. Feedback, self-assessments, and reviewer snapshots remain intact. Existing migration history is preserved.
-
-## Security and operations
-
-Passwords use Argon2id and never enter GraphQL output types. JWTs default to 15 minutes. Inputs are transformed, validated, allow-listed, and rejected for unknown fields. The API applies request throttling, a maximum GraphQL depth of 10, maximum query complexity of 1,000, Helmet, configured CORS origins, and resource-level ownership checks. Rotate `JWT_SECRET`, terminate TLS at the edge, redact authorization headers in infrastructure logs, and apply per-account/IP rate limits at the gateway in production.
-
-## Current limitations
-
-- No embeddings, RAG, set-by-set scoring, guest account claiming, moderator/admin workflow, refresh tokens, or object storage is implemented.
-- The simple in-process rate limiter is per application instance; a shared gateway policy is needed when horizontally scaled.
-- Guest invite TTL is currently 24 hours in the service. Make it configuration-driven if products need multiple invite policies.
-- Analytics are baseline SQL queries. Benchmark them on production-like volume before adding targeted indexes, materialized views, or partitions.
-- `deleteFeedback` performs privacy-preserving soft deletion; a separate audited retention job must perform physical deletion where policy requires it.
-- PostgreSQL integration tests are intentionally opt-in through `TEST_DATABASE_URL` so they never fall back to an in-memory database. CI should always provide that database and run migrations first.
+Run `pnpm test:unit`. For database regression checks, explicitly set `TEST_DATABASE_URL` to an isolated database prepared through the cutover CLI, then run `pnpm test:integration`. Tests use a fake Clerk transport with real signed token fixtures and do not create a local identity table. Never point integration tests at application or production data.
 
 ## Account visibility and player histories
 
-Accounts default to private (`User.isPublic = false`). Apply migrations with `pnpm prisma:deploy` and regenerate the client with `pnpm prisma:generate` before starting the updated backend.
+Accounts default to private (Clerk public metadata `bvbtips.isPublic = false`). Apply migrations with `pnpm prisma:deploy` and regenerate the client with `pnpm prisma:generate` before starting the updated backend.
 
 Authenticated users can change their own visibility with `updateAccountVisibility(isPublic: Boolean!)`. Public directory queries `searchPlayers(search: String!, cursor: String)` and `playerProfile(id: ID!)` expose only ID, username, and visibility. Private players remain searchable. `playerMatches(userId: ID!, cursor: String)` returns public players' organized/participated matches, teams, scores, and rosters in pages of 10 plus a lookahead row. It rejects private accounts on every request. Existing `userMatches` and organizer-only mutations retain their permissions; public profiles do not expose feedback or personal account information.
 
@@ -91,26 +44,16 @@ Match/feedback arrays now return at most 11 rows (10 results plus lookahead). `u
 
 ## Railway QA build and access
 
-Backend `pnpm build` explicitly generates Prisma Client before Nest compilation. Prisma and `@prisma/client` remain on the existing compatible 6.19.x versions, with the `prisma-client-js` generator and imports from `@prisma/client`. Build dependencies, including Prisma CLI and Nest CLI, must be installed during the build stage. Run `pnpm install --frozen-lockfile`, then `pnpm build`, from the backend directory. The build does not execute migrations or seed data; `pnpm start:prod` runs `dist/src/main.js`. The seed remains separately available through `pnpm prisma:seed` and optional demo data still requires `SEED_DEMO_DATA=true`.
+Backend `pnpm build` explicitly generates Prisma Client before Nest compilation. Prisma and `@prisma/client` remain on the existing compatible 6.19.x versions, with the `prisma-client-js` generator and imports from `@prisma/client`. Build dependencies, including Prisma CLI and Nest CLI, must be installed during the build stage. Run `pnpm install --frozen-lockfile`, then `pnpm build`, from the backend directory. The build does not execute migrations or seed data; `pnpm start:prod` runs `dist/src/main.js`. The seed remains separately available through `pnpm prisma:seed` and creates catalog content only.
 
 The current app permits public registration and has deliberately public player-profile and guest-feedback endpoints. `APP_ENV=qa`, CORS, and hidden signup links do not restrict access to approved testers. Protect the entire QA frontend with an identity-aware access gateway (such as Cloudflare Access restricted to tester email addresses), covering `/api/graphql` and `/f/*` as well as pages. Ensure the Railway origin domain cannot bypass this gate. Keep the backend and PostgreSQL private inside Railway; the Next.js server can call the backend over its internal hostname. A QA-only HTTP Basic Auth gateway is an alternative for a small tester group, provided every route and alternate origin is covered.
 
-Use a separate QA database and JWT secret, keep `NODE_ENV=production`, and provision `DATABASE_URL` from the PostgreSQL service. Migrations are a separate deployment operation (`pnpm prisma:deploy`) against the intended environment, and are never run by the build command. QA access protection also applies to guest QR/feedback links; recipients must be approved QA testers unless a deliberate exception is configured.
+Use a separate QA database, Clerk instance and guest capability secret, keep `NODE_ENV=production`, and provision `DATABASE_URL` from the PostgreSQL service. Migrations are a separate deployment operation (`pnpm prisma:deploy`) against the intended environment, and are never run by the build command. QA access protection also applies to guest QR/feedback links; recipients must be approved QA testers unless a deliberate exception is configured.
 
 
-### Initialize the Railway QA database
+### Initialize a database
 
-The backend-only configuration is checked in as `railway.backend.json`. In the backend Railway service, set **Railway Config File** to `/railway.backend.json` (relative to the repository root), then deploy that commit. This applies the build and start commands, and explicitly clears automatic pre-deploy commands. Use this configuration only for the backend service. The internal-rating rollout now clears automatic pre-deploy commands; run reviewed migrations manually before starting the new release. Check the explicit migration job logs for successful application or no pending migrations.
-
-`The table public.Sport does not exist` means the target database is missing schema tables; seeds cannot create them. Keep `DATABASE_URL` pointed at the QA PostgreSQL service. After `pnpm build`, explicitly run `pnpm db:deploy` in the selected release environment and use **Start Command** `pnpm start:prod`. Do not configure automatic production migration or backfill execution. The explicit `db:deploy` command applies the existing migrations, then runs the compiled seed using Railway environment variables (no `.env` file is required). Ensure Prisma CLI is installed in the deployment image so migrations can run. Build alone does not connect to or initialize the database.
-
-`pnpm db:deploy` preserves the Sport table and upserts all existing sport/skill catalog entries, including Beach Volleyball. Keep `SEED_DEMO_DATA=false` to avoid creating demonstration accounts. The standalone `pnpm prisma:seed:deploy` command only seeds an already migrated database. These commands run against whichever database `DATABASE_URL` selects; they do not reset or drop the database. Signup automatically uses Beach Volleyball without a sport selector, retaining the backend sport association and required skill self-assessment.
-
-If the missing-table error persists, inspect the latest backend migration job logs rather than rebuilding the frontend. A successful migration against a different database will not fix the running backend: verify that `DATABASE_URL` references the intended QA PostgreSQL service and that the frontend's `GRAPHQL_API_URL` points at this same QA backend. Share migration error output for diagnosis, but never share the database connection string.
-
-
-Volleyball and Beach Volleyball use five active feedback categories: Attack, Defense, Passing, Setting, and Serving. Deploy migrations (`pnpm prisma:deploy`) and seed (`pnpm prisma:seed`, or `pnpm db:deploy` after building on Railway) to update existing databases. Equivalent old skills are renamed in place where possible, preserving their rating links; any remaining previous categories are inactive and excluded from the active catalog. Other sports are unchanged.
-
+The Clerk fresh-start migration intentionally refuses ordinary unreviewed migration deployment. Use the backup-gated cutover procedure in [Clerk migration and operations](docs/clerk-migration.md) for both existing and empty databases. Builds never migrate or reset data. After cutover, `pnpm prisma:seed` upserts the five volleyball categories without creating accounts.
 
 ## Internal player ratings V1
 
@@ -145,3 +88,7 @@ AI evidence eligibility is separate from verified internal ratings. See [trust c
 Backend training library, deterministic drill targeting, and private video infrastructure: see [setup, GraphQL examples, worker contracts and deployment notes](docs/training-backend.md). Video analysis providers are intentionally unconfigured; no CV results are fabricated.
 
 See [coach video uploads and real movement comparison](docs/video-technique-comparison.md) for the CPU worker, private storage, training UI, tests and deployment instructions.
+
+Google/Facebook sign-in, account linking, verified-email onboarding and password recovery setup: [Social authentication](docs/social-auth.md). Provider credentials and rollout steps are required before enabling either provider.
+
+Email verification for new accounts: [flow, local testing, Resend/Cloudflare/Railway setup](docs/email-verification.md).

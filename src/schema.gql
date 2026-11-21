@@ -65,11 +65,6 @@ input AssessmentRatingInput {
   skillId: ID!
 }
 
-type AuthPayload {
-  accessToken: String!
-  user: UserModel!
-}
-
 type AverageSkillRating {
   average: Float!
   count: Int!
@@ -660,11 +655,6 @@ type InvitedTeamModel {
   teamNumber: Int!
 }
 
-input LoginInput {
-  login: String!
-  password: String!
-}
-
 input MatchCreationTeamInput {
   guestNames: [String!]
   memberIds: [ID!]
@@ -736,6 +726,7 @@ type Mutation {
   archiveSkillTreeNode(id: ID!): SkillTreeNodeModel!
   askAiCoach(input: AskAiCoachInput!): CoachMessageModel!
   assignParticipantToTeam(participantId: ID!, teamId: ID): MatchParticipantModel!
+  completePlayerOnboarding(input: PlayerOnboardingInput!): UserModel!
   configureDrillMotion(config: TrainingJSON!, drillId: ID!): Boolean!
   configureReferenceCoverage(config: TrainingJSON!, id: ID!): Boolean!
   createCoachingSituation(input: CreateCoachingSituationInput!): CoachingSituationModel!
@@ -757,10 +748,8 @@ type Mutation {
   deleteReferenceVideo(id: ID!): Boolean!
   finalizeDrillVideoUpload(id: ID!): DrillVideoSubmissionModel!
   finalizeReferenceVideoUpload(id: ID!): DrillReferenceVideoModel!
-  login(input: LoginInput!): AuthPayload!
   moveParticipantToTeam(participantId: ID!, teamId: ID!): MatchParticipantModel!
   recordDrillCompletion(drillId: ID!): Boolean!
-  register(input: RegisterInput!): AuthPayload!
   rejectFeedback(feedbackId: ID!, reason: String): FeedbackModel!
   removeMatchParticipant(id: ID!): MatchParticipantModel!
   removeMatchTeam(id: ID!): MatchTeamModel!
@@ -770,6 +759,7 @@ type Mutation {
   revokeFeedbackLink(linkId: ID!): Boolean!
   setDrillSkills(id: ID!, skills: [TrainingSkillLinkInput!]!): [DrillSkillModel!]!
   setDrillSteps(id: ID!, steps: [TrainingStepInput!]!): [DrillStepModel!]!
+  setPlayerRole(role: String!, userId: ID!): Boolean!
   setSkillPrerequisites(id: ID!, prerequisites: [PrerequisiteInput!]!): [SkillPrerequisiteModel!]!
   startGuestReviewSession(completedSubmissionId: ID!, token: String!): GuestInvitePayload!
   submitFeedback(input: SubmitFeedbackInput!): FeedbackModel!
@@ -850,6 +840,14 @@ type PlayerDirectoryModel {
   id: ID!
   isPublic: Boolean!
   username: String!
+}
+
+input PlayerOnboardingInput {
+  age: Int!
+  heightCm: Int!
+  overallLevel: String!
+  ratings: [AssessmentRatingInput!]!
+  sportId: ID!
 }
 
 input PrerequisiteInput {
@@ -981,17 +979,6 @@ input ReferenceVideoUploadInput {
   replacesReferenceId: ID
   techniqueVariantId: ID
   title: String!
-}
-
-input RegisterInput {
-  age: Int!
-  email: String!
-  heightCm: Int!
-  overallLevel: String!
-  password: String!
-  ratings: [AssessmentRatingInput!]!
-  sportId: ID!
-  username: String!
 }
 
 type ReviewerSnapshotModel {
@@ -1350,11 +1337,16 @@ input UpdateTechniqueCheckpointInput {
 }
 
 type UserModel {
+  age: Int
   aiCoachingEnabled: Boolean!
   createdAt: DateTime!
   email: String!
+  emailVerified: Boolean!
+  heightCm: Int
   id: ID!
+  imageUrl: String
   isPublic: Boolean!
+  onboardingComplete: Boolean!
   updatedAt: DateTime!
   username: String!
 }

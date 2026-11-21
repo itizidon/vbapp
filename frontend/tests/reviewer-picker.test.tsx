@@ -105,6 +105,7 @@ it("shows loading and an honest empty result without accepting arbitrary usernam
   const { search } = mount(selected);
   fireEvent.change(search, { target: { value: "NoSuchUser" } });
   await screen.findByText("Searching…");
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
   await act(async () => resolve(reply([])));
   await screen.findByText("No matching reviewers.");
   fireEvent.keyDown(search, { key: "Enter" });

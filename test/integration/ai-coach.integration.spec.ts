@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import {Prisma } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "node:crypto";
 import { AiCoachService } from "../../src/ai-coach/service";
 import { CoachEngine } from "../../src/ai-coach/engine";
@@ -40,13 +41,14 @@ const url = process.env.TEST_DATABASE_URL;
       skillId = skill.id;
     });
     const makeUser = async () => {
-      const id = randomUUID();
+      const id = clerkId();
       users.push(id);
       await db.user.create({
         data: {
           id,
           username: id,
           email: id + "@example.test",
+          emailVerifiedAt: new Date(), // Authenticated feature fixtures have completed email verification.
           passwordHash: "test-only",
           age: 24,
           heightCm: 180,
@@ -522,13 +524,7 @@ const url = process.env.TEST_DATABASE_URL;
                   ? {
                       authorization:
                         "Bearer " +
-                        (await module
-                          .get(JwtService)
-                          .signAsync({
-                            id: who,
-                            sub: who,
-                            username: "fixture",
-                          })),
+                        (clerkToken(who)),
                     }
                   : {},
                 ip: "127.0.0.1",

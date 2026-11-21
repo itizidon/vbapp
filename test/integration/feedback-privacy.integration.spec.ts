@@ -1,4 +1,7 @@
-import { PrismaClient, Feedback, Prisma } from "@prisma/client";
+import {FeedbackPrivacyResolver}from'../../src/feedback/privacy';
+import{ClerkUserService}from'../../src/auth/clerk/users';
+import {Feedback, Prisma } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "node:crypto";
 import { JwtService } from "@nestjs/jwt";
 import {
@@ -102,7 +105,7 @@ const url = process.env.TEST_DATABASE_URL;
   beforeEach(async () => {
     const users = await Promise.all(
       [0, 1].map(() => {
-        const id = randomUUID();
+        const id = clerkId();
         return db.user.create({
           data: {
             username: id,
@@ -351,11 +354,8 @@ const url = process.env.TEST_DATABASE_URL;
     const { w } = worker();
     await w.extractOne();
     await w.embedOne();
-    await db.user.update({
-      where: { id: recipient },
-      data: { aiCoachingEnabled: false },
-    });
-    expect(await eligible(f.id)).toEqual({ analytics: true, coaching: false });
+    await new FeedbackPrivacyResolver(service,db as never,new ClerkUserService(db as never)).updatePrivateCoachingPreference({id:recipient,clerkUserId:recipient},false);
+    expect(await eligible(f.id)).toEqual({ analytics: true, coaching: true }); // SQL retains per-feedback consent; the application checks Clerk opt-in.
     expect(
       await db.feedbackObservation.count({ where: { feedbackId: f.id } }),
     ).toBe(0);
@@ -363,10 +363,7 @@ const url = process.env.TEST_DATABASE_URL;
       feedbackId: f.id,
       privateCoachingAllowed: false,
     });
-    await db.user.update({
-      where: { id: recipient },
-      data: { aiCoachingEnabled: true },
-    });
+    await new FeedbackPrivacyResolver(service,db as never,new ClerkUserService(db as never)).updatePrivateCoachingPreference({id:recipient,clerkUserId:recipient},true);
     expect((await eligible(f.id)).coaching).toBe(false);
     expect(await w.extractOne()).toBe(false);
   });

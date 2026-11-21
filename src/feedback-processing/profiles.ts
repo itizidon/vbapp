@@ -1,3 +1,4 @@
+import { clerkCoachingAllowed } from "../auth/clerk/privacy";
 import { Prisma, PrismaClient } from "@prisma/client";
 import {
   ANALYSIS_CONFIG as C,
@@ -73,6 +74,8 @@ export async function readOwnAnalysisProfile(
   actorId: string,
   sportId: string,
 ) {
+  if (!(await clerkCoachingAllowed(actorId)))
+    return { state: "STALE" as const, data: null };
   const row = await db.playerFeedbackAnalysisProfile.findUnique({
     where: { userId_sportId: { userId: actorId, sportId } },
   });
@@ -87,6 +90,7 @@ export async function rebuildOneProfile(
   asOf = new Date(),
   force = true,
 ): Promise<boolean> {
+  if (!(await clerkCoachingAllowed(userId))) return false;
   if (!Number.isFinite(asOf.getTime()))
     throw new Error("Invalid analysis timestamp");
   await db.playerFeedbackAnalysisProfile.upsert({

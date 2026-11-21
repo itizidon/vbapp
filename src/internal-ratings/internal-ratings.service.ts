@@ -1,3 +1,4 @@
+import {isClerkUserId}from"../auth/clerk/metadata";
 import { isEligibleForInternalRating } from "../feedback/eligibility";
 import {
   BadRequestException,
@@ -391,7 +392,7 @@ export class InternalRatingsService {
   private authorize(actor: string, userId: string) {
     if (actor !== userId)
       throw new ForbiddenException("Rating histories are private");
-    if (!isUUID(userId)) throw new BadRequestException("Invalid user ID");
+    if (!isClerkUserId(userId)) throw new BadRequestException("Invalid user ID");
   }
   async current(actor: string, userId: string, sportId: string) {
     this.authorize(actor, userId);
@@ -471,26 +472,7 @@ export class InternalRatingsService {
         const current = await tx.playerInternalRating.findMany({
           where: { userId, skill: { sportId, active: true } },
         });
-        const self = asOf
-          ? await tx.selfAssessmentRatingEvent.findMany({
-              where: {
-                userId,
-                skill: { sportId, active: true },
-                createdAt: { lte: asOf },
-              },
-              orderBy: [
-                { skillId: "asc" },
-                { createdAt: "desc" },
-                { sequence: "desc" },
-              ],
-              distinct: ["skillId"],
-            })
-          : await tx.selfAssessmentRating.findMany({
-              where: {
-                selfAssessment: { userId, sportId },
-                skill: { active: true },
-              },
-            });
+        const self=await tx.selfAssessmentRatingEvent.findMany({where:{userId,skill:{sportId,active:true},...(asOf?{createdAt:{lte:asOf}}:{})},orderBy:[{skillId:'asc'},{createdAt:'desc'},{sequence:'desc'}],distinct:['skillId']});
         const historical =
           asOf && current.length
             ? await tx.playerInternalRatingEvent.findMany({
@@ -537,11 +519,7 @@ export class InternalRatingsService {
               skillId: skill.id,
               skillName: skill.name,
               skillSlug: skill.slug,
-              selfRating: own
-                ? "newRating" in own
-                  ? own.newRating
-                  : own.rating
-                : null,
+              selfRating: own?.newRating ?? null,
               internalRating: internal?.toNumber() ?? null,
               averageFeedbackRating:
                 average?._avg.rating == null
@@ -680,108 +658,13 @@ export class InternalRatingsService {
     };
   }
 
-  async backfill(dryRun: boolean) {
-    const report = {
-      examined: 0,
-      internalRatings: 0,
-      selfBaselines: 0,
-      initializationEvents: 0,
-      dryRun,
-    };
-    let cursor:
-      | {
-          selfAssessmentId_skillId: {
-            selfAssessmentId: string;
-            skillId: string;
-          };
-        }
-      | undefined;
-    for (;;) {
-      const rows = await this.db.selfAssessmentRating.findMany({
-        take: 200,
-        ...(cursor ? { cursor, skip: 1 } : {}),
-        orderBy: [{ selfAssessmentId: "asc" }, { skillId: "asc" }],
-        include: { selfAssessment: true },
-      });
-      if (!rows.length) break;
-      for (const row of rows) {
-        await ratingTransaction(this.db, async (tx) => {
-          const fresh = await tx.selfAssessmentRating.findUniqueOrThrow({
-            where: {
-              selfAssessmentId_skillId: {
-                selfAssessmentId: row.selfAssessmentId,
-                skillId: row.skillId,
-              },
-            },
-            include: { selfAssessment: true },
-          });
-          const userId = fresh.selfAssessment.userId,
-            skillId = fresh.skillId;
-          report.examined++;
-          const history = await tx.selfAssessmentRatingEvent.findFirst({
-            where: {
-              userId,
-              skillId,
-              selfAssessmentId: fresh.selfAssessmentId,
-            },
-          });
-          if (!history) {
-            report.selfBaselines++;
-            if (!dryRun)
-              await tx.selfAssessmentRatingEvent.create({
-                data: {
-                  userId,
-                  skillId,
-                  selfAssessmentId: fresh.selfAssessmentId,
-                  newRating: fresh.rating,
-                  type: "BASELINE",
-                },
-              });
-          }
-          let current = await tx.playerInternalRating.findUnique({
-            where: { userId_skillId: { userId, skillId } },
-          });
-          if (!current) {
-            report.internalRatings++;
-            if (!dryRun)
-              current = await tx.playerInternalRating.create({
-                data: {
-                  userId,
-                  skillId,
-                  initialRating: fresh.rating,
-                  currentRating: fresh.rating,
-                },
-              });
-          }
-          const initialized = await tx.playerInternalRatingEvent.findUnique({
-            where: { sourceKey: `init:${userId}:${skillId}` },
-          });
-          if (!initialized) {
-            report.initializationEvents++;
-            if (!dryRun && current)
-              await tx.playerInternalRatingEvent.create({
-                data: {
-                  userId,
-                  skillId,
-                  sourceKey: `init:${userId}:${skillId}`,
-                  type: "INITIALIZED",
-                  previousRating: current.initialRating,
-                  newRating: current.initialRating,
-                  delta: 0,
-                  effectiveAt: current.createdAt,
-                },
-              });
-          }
-        });
-      }
-      const last = rows[rows.length - 1];
-      cursor = {
-        selfAssessmentId_skillId: {
-          selfAssessmentId: last.selfAssessmentId,
-          skillId: last.skillId,
-        },
-      };
-    }
-    return report;
-  }
+  async backfill(dryRun:boolean){
+ const rows=await this.db.selfAssessmentRatingEvent.findMany({orderBy:[{createdAt:'asc'},{sequence:'asc'}],distinct:['userId','skillId']});
+ const report={examined:rows.length,selfBaselines:0,internalRatings:0,initializationEvents:0};
+ for(const row of rows)await ratingTransaction(this.db,async tx=>{
+ let current=await tx.playerInternalRating.findUnique({where:{userId_skillId:{userId:row.userId,skillId:row.skillId}}});
+ if(!current){report.internalRatings++;if(!dryRun)current=await tx.playerInternalRating.create({data:{userId:row.userId,skillId:row.skillId,initialRating:row.newRating,currentRating:row.newRating}});}
+ if(!await tx.playerInternalRatingEvent.findUnique({where:{sourceKey:`init:${row.userId}:${row.skillId}`}})){report.initializationEvents++;if(!dryRun)await tx.playerInternalRatingEvent.create({data:{userId:row.userId,skillId:row.skillId,type:'INITIALIZED',previousRating:row.newRating,newRating:row.newRating,delta:0,sourceKey:`init:${row.userId}:${row.skillId}`,effectiveAt:row.createdAt}});}
+ });return report;
+ }
 }

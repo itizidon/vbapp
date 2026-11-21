@@ -1,4 +1,9 @@
-import { isFeedbackRating, ensureDecimalFeedbackStorage } from "../common/feedback-rating";
+import { ClerkUserService } from "../auth/clerk/users";
+import { privatePlayer, isClerkUserId } from "../auth/clerk/metadata";
+import {
+  isFeedbackRating,
+  ensureDecimalFeedbackStorage,
+} from "../common/feedback-rating";
 import { FeedbackPrivacyService, privacyGrant, privacyEvents } from "./privacy";
 import { isUUID } from "class-validator";
 import { InternalRatingsService } from "../internal-ratings/internal-ratings.service";
@@ -43,6 +48,7 @@ export class FeedbackService {
       db,
       jwt,
     ),
+    private users: ClerkUserService = new ClerkUserService(),
   ) {}
   async invite(
     actor: string,
@@ -79,18 +85,15 @@ export class FeedbackService {
       );
       matchId = matchIds.length === 1 ? matchIds[0] : undefined;
     }
-
     if (assignedReviewerId) {
-      if (!isUUID(assignedReviewerId) || assignedReviewerId === recipientId)
+      if (
+        !isClerkUserId(assignedReviewerId) ||
+        assignedReviewerId === recipientId
+      )
         throw new BadRequestException(
           "Choose a reviewer other than the recipient",
         );
-      if (
-        !(await this.db.user.findUnique({
-          where: { id: assignedReviewerId },
-          select: { id: true },
-        }))
-      )
+      if (!(await this.users.getUserById(assignedReviewerId)))
         throw new NotFoundException("Reviewer not found");
     }
     const token = randomBytes(32).toString("hex");
@@ -133,7 +136,6 @@ export class FeedbackService {
       return true;
     });
   }
-
   async reviewerSuggestions(
     actor: string | undefined,
     search: string,
@@ -145,7 +147,7 @@ export class FeedbackService {
       throw new UnauthorizedException("Sign in or open a feedback invitation");
     if (invitation?.guestSession) return [];
     const recipient = invitation?.recipientId ?? recipientId;
-    if (!recipient || !isUUID(recipient))
+    if (!recipient || !isClerkUserId(recipient))
       throw new BadRequestException("A valid recipient is required");
     if (invitation && recipientId && recipientId !== invitation.recipientId)
       throw new UnauthorizedException("Invitation does not match recipient");
@@ -153,15 +155,15 @@ export class FeedbackService {
     if (query.length > 40)
       throw new BadRequestException("Search must be at most 40 characters");
     if (query.length < 2) return [];
-    return this.db.user.findMany({
-      where: {
-        id: invitation?.assignedReviewerId ?? { not: recipient },
-        username: { contains: query, mode: "insensitive" },
-      },
-      select: { id: true, username: true },
-      orderBy: { username: "asc" },
-      take: 10,
-    });
+    const found = await this.users.search(query, 10);
+    return found
+      .filter(
+        (p) =>
+          p.id !== recipient &&
+          (!invitation?.assignedReviewerId ||
+            p.id === invitation.assignedReviewerId),
+      )
+      .map((p) => ({ id: p.id, username: p.username }));
   }
   async submit(reviewerId: string, input: SubmitFeedbackInput) {
     return this.create(input, { reviewerId });
@@ -169,7 +171,11 @@ export class FeedbackService {
   private async verifyInvitation(
     token: string,
     tx: Prisma.TransactionClient | PrismaService = this.db,
-  ): Promise<Invite & { exp: number }> {
+  ): Promise<
+    Invite & {
+      exp: number;
+    }
+  > {
     try {
       if (typeof token !== "string" || token.length > 8192) throw new Error();
       if (/^[a-f0-9]{64}$/.test(token)) {
@@ -240,40 +246,14 @@ export class FeedbackService {
           exp: claims.exp,
         };
       }
-      const payload = claims as Invite & { exp: number };
-      if (
-        payload.kind !== "guest-feedback" ||
-        !isUUID(payload.nonce) ||
-        !isUUID(payload.recipientId) ||
-        !isUUID(payload.sportId) ||
-        (payload.matchId != null && !isUUID(payload.matchId)) ||
-        !Number.isInteger(payload.exp) ||
-        payload.exp * 1000 <= Date.now()
-      )
-        throw new Error();
-      const stored = await tx.feedbackLink.findUnique({
-        where: { tokenHash: this.tokenHash(token) },
-      });
-      if (
-        stored &&
-        (stored.revokedAt || stored.expiresAt.getTime() <= Date.now())
-      )
-        throw new Error();
-      return {
-        ...payload,
-        linkId: stored?.id,
-        assignedReviewerId: stored?.assignedReviewerId ?? undefined,
-      };
+      throw new Error("Retired invitation format");
     } catch {
       throw new UnauthorizedException("Invalid or expired guest invitation");
     }
   }
   async invitation(token: string) {
     const payload = await this.verifyInvitation(token);
-    const recipient = await this.db.user.findUnique({
-      where: { id: payload.recipientId },
-      select: { username: true },
-    });
+    const recipient = await this.users.getUserById(payload.recipientId);
     if (!recipient) throw new NotFoundException("Player not found");
     const sport = await this.db.sport.findUnique({
       where: { id: payload.sportId },
@@ -302,21 +282,30 @@ export class FeedbackService {
               participants: {
                 select: {
                   guestName: true,
-                  user: { select: { username: true } },
+                  userId: true,
                 },
               },
             },
           },
           participants: {
             where: { teamId: null },
-            select: { guestName: true, user: { select: { username: true } } },
+            select: { guestName: true, userId: true },
           },
         },
       });
+      const names = await this.users.getUsersByIds(
+        [
+          ...source.teams.flatMap((t) => t.participants),
+          ...source.participants,
+        ].flatMap((p) => (p.userId ? [p.userId] : [])),
+      );
       const name = (player: {
         guestName: string | null;
-        user: { username: string } | null;
-      }) => player.user?.username ?? player.guestName ?? "Player";
+        userId: string | null;
+      }) =>
+        player.userId
+          ? (names.get(player.userId)?.username ?? "Deleted player")
+          : (player.guestName ?? "Guest");
       match = {
         id: source.id,
         playedAt: source.playedAt,
@@ -340,12 +329,11 @@ export class FeedbackService {
       reviewMode: payload.reviewMode ?? FeedbackReviewMode.INDIVIDUAL_MATCHES,
       matches: requestMatches,
       recipientId: payload.recipientId,
-      recipientUsername: recipient.username,
+      recipientUsername: recipient.username ?? "Player",
       assignedReviewer: payload.assignedReviewerId
-        ? await this.db.user.findUnique({
-            where: { id: payload.assignedReviewerId },
-            select: { id: true, username: true },
-          })
+        ? ((p) => ({ id: p.id, username: p.username }))(
+            await this.users.getPublicPlayerProfile(payload.assignedReviewerId),
+          )
         : null,
       approvalRequired: !!payload.assignedReviewerId,
       sport,
@@ -370,7 +358,6 @@ export class FeedbackService {
       }),
     );
   }
-
   private async create(
     input: SubmitFeedbackInput,
     identity: {
@@ -387,12 +374,15 @@ export class FeedbackService {
   ) {
     if (identity.reviewerId === input.recipientId && !input.assignedReviewerId)
       throw new BadRequestException("Self-feedback is not allowed");
-    if(input.ratings.some(r=>!isFeedbackRating(r.rating))) throw new BadRequestException("Ratings must be from 1.0 to 5.0 in increments of 0.1");
+    if (input.ratings.some((r) => !isFeedbackRating(r.rating)))
+      throw new BadRequestException(
+        "Ratings must be from 1.0 to 5.0 in increments of 0.1",
+      );
     const skillIds = input.ratings.map((r) => r.skillId);
     if (new Set(skillIds).size !== skillIds.length)
       throw new BadRequestException("Duplicate skill rating");
     const work = async (tx: Prisma.TransactionClient) => {
-      await ensureDecimalFeedbackStorage(tx,input.ratings);
+      await ensureDecimalFeedbackStorage(tx, input.ratings);
       const invitation = identity.linkToken
         ? await this.verifyInvitation(identity.linkToken, tx)
         : null;
@@ -422,11 +412,8 @@ export class FeedbackService {
       const approvalRequired = !!assignedReviewerId;
       if (
         assignedReviewerId &&
-        (!isUUID(assignedReviewerId) ||
-          !(await tx.user.findUnique({
-            where: { id: assignedReviewerId },
-            select: { id: true },
-          })))
+        (!isClerkUserId(assignedReviewerId) ||
+          !(await this.users.getUserById(assignedReviewerId)))
       )
         throw new NotFoundException("Reviewer not found");
       if (assignedReviewerId === input.recipientId)
@@ -451,10 +438,7 @@ export class FeedbackService {
         feedbackLinkId = legacyLink.id;
       }
       const [recipient, sport, skills] = await Promise.all([
-        tx.user.findUnique({
-          where: { id: input.recipientId },
-          select: { id: true },
-        }),
+        this.users.getUserById(input.recipientId),
         tx.sport.findUnique({
           where: { id: input.sportId },
           select: { id: true },
@@ -481,19 +465,25 @@ export class FeedbackService {
         id: string;
         overallLevel: string;
         updatedAt: Date;
-        ratings: { skillId: string; rating: number; updatedAt: Date }[];
+        ratings: {
+          skillId: string;
+          rating: number;
+          updatedAt: Date;
+        }[];
       } = null;
       if (identity.reviewerId && !approvalRequired) {
-        // Serialize self-assessment rating writers with snapshot readers. PostgreSQL's row lock plus
-        // the SERIALIZABLE transaction prevents a mixed overall/rating version.
-        const rows = await tx.$queryRaw<
-          { id: string }[]
-        >`SELECT id FROM "SelfAssessment" WHERE "userId"=${identity.reviewerId}::uuid AND "sportId"=${input.sportId}::uuid FOR SHARE`;
-        if (rows[0])
-          assessment = await tx.selfAssessment.findUnique({
-            where: { id: rows[0].id },
-            include: { ratings: true },
-          });
+        const a = privatePlayer(
+          await this.users.getUserById(identity.reviewerId, true),
+        ).assessment;
+        if (a && a.sportId === input.sportId) {
+          const updatedAt = new Date(a.updatedAt);
+          assessment = {
+            id: a.id,
+            overallLevel: a.overallLevel,
+            updatedAt,
+            ratings: a.ratings.map((r) => ({ ...r, updatedAt })),
+          };
+        }
       }
       const feedback = await tx.feedback.create({
         data: {
@@ -513,7 +503,9 @@ export class FeedbackService {
           feedbackLinkId,
           submittedById: identity.submittedById ?? identity.reviewerId,
           approvalRequired,
-          ...(!approvalRequired && identity.reviewerId ? { approvedAt: new Date(), approvedById: identity.reviewerId } : {}),
+          ...(!approvalRequired && identity.reviewerId
+            ? { approvedAt: new Date(), approvedById: identity.reviewerId }
+            : {}),
           status: approvalRequired ? "PENDING" : "PUBLISHED",
           ...(assessment
             ? {
@@ -615,12 +607,12 @@ export class FeedbackService {
         teams: {
           orderBy: { teamNumber: "asc" },
           include: {
-            participants: { include: { user: { select: { username: true } } } },
+            participants: { include: {} },
           },
         },
         participants: {
           where: { teamId: null },
-          include: { user: { select: { username: true } } },
+          include: {},
         },
       },
     });
@@ -628,10 +620,18 @@ export class FeedbackService {
       throw new BadRequestException(
         "A requested match is no longer available to this recipient",
       );
-    const name = (p: {
-      guestName: string | null;
-      user: { username: string } | null;
-    }) => p.user?.username ?? p.guestName ?? "Player";
+    const names = await this.users.getUsersByIds(
+      rows
+        .flatMap((m) => [
+          ...m.teams.flatMap((t) => t.participants),
+          ...m.participants,
+        ])
+        .flatMap((p) => (p.userId ? [p.userId] : [])),
+    );
+    const name = (p: { guestName: string | null; userId: string | null }) =>
+      p.userId
+        ? (names.get(p.userId)?.username ?? "Deleted player")
+        : (p.guestName ?? "Guest");
     return ids.map((id) => {
       const row = rows.find((r) => r.id === id)!;
       return {
@@ -691,7 +691,6 @@ export class FeedbackService {
     );
     return { token: followup, expiresAt: new Date(invitation.exp * 1000) };
   }
-
   async submitRequest(
     input: SubmitFeedbackRequestInput,
     submittedById?: string,
@@ -848,7 +847,6 @@ export class FeedbackService {
     });
     return Promise.all(rows.map((row) => this.privacy.guestReceipt(row)));
   }
-
   private async validateMatch(
     recipientId: string,
     sportId: string,
@@ -890,7 +888,7 @@ export class FeedbackService {
           id: true,
           status: true,
           createdAt: true,
-          recipient: { select: { username: true } },
+          recipientId: true,
           match: { select: { id: true, playedAt: true, description: true } },
           associatedMatches: {
             orderBy: [{ match: { playedAt: "desc" } }, { matchId: "desc" }],
@@ -909,7 +907,8 @@ export class FeedbackService {
           id: row.id,
           status: row.status,
           createdAt: row.createdAt,
-          recipientUsername: row.recipient.username,
+          recipientUsername: "Player",
+          recipientId: row.recipientId,
           ratedSkillCount: row._count.ratings,
           matchCount: row.match ? 1 : row._count.associatedMatches,
           match: row.match ?? row.associatedMatches[0]?.match ?? null,
@@ -973,7 +972,6 @@ export class FeedbackService {
             take: 11,
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
             include: {
-              recipient: { select: { username: true } },
               match: {
                 select: { id: true, playedAt: true, description: true },
               },
@@ -992,19 +990,18 @@ export class FeedbackService {
             },
           }),
         ]);
-        const items = rows
-          .slice(0, 10)
-          .map((row) => ({
-            ...row,
-            recipientUsername: row.recipient.username,
-            matches: row.match
-              ? [row.match]
-              : row.associatedMatches.map((r) => r.match),
-            ratings: row.ratings.map((r) => ({
-              ...r,
-              skillName: r.skill.name,
-            })),
-          }));
+        const items = rows.slice(0, 10).map((row) => ({
+          ...row,
+          recipientUsername: "Player",
+          recipientId: row.recipientId,
+          matches: row.match
+            ? [row.match]
+            : row.associatedMatches.map((r) => r.match),
+          ratings: row.ratings.map((r) => ({
+            ...r,
+            skillName: r.skill.name,
+          })),
+        }));
         return {
           totalCount,
           items,
@@ -1014,7 +1011,6 @@ export class FeedbackService {
       { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
     );
   }
-
   async pendingApprovals(actor: string, cursor?: string) {
     const where: Prisma.FeedbackWhereInput = {
       reviewerId: actor,
@@ -1031,7 +1027,6 @@ export class FeedbackService {
             take: 11,
             ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
             include: {
-              recipient: { select: { username: true } },
               match: {
                 select: { id: true, playedAt: true, description: true },
               },
@@ -1051,7 +1046,8 @@ export class FeedbackService {
     const hasMore = rows.length > 10;
     const items = rows.slice(0, 10).map((row) => ({
       ...row,
-      recipientUsername: row.recipient.username,
+      recipientUsername: "Player",
+      recipientId: row.recipientId,
       matches: row.match
         ? [row.match]
         : row.associatedMatches.map((r) => r.match),
@@ -1114,7 +1110,10 @@ export class FeedbackService {
         throw new BadRequestException(
           "Feedback has no matching reviewer assignment",
         );
-      if (!feedback.submittedAt) throw new BadRequestException("Only submitted reviews can be approved or rejected");
+      if (!feedback.submittedAt)
+        throw new BadRequestException(
+          "Only submitted reviews can be approved or rejected",
+        );
       const target = approve ? "PUBLISHED" : "REJECTED";
       if (
         (approve &&
@@ -1176,9 +1175,12 @@ export class FeedbackService {
     });
   }
   async update(actor: string, input: UpdateFeedbackInput) {
-    if(input.ratings?.some(r=>!isFeedbackRating(r.rating))) throw new BadRequestException("Ratings must be from 1.0 to 5.0 in increments of 0.1");
+    if (input.ratings?.some((r) => !isFeedbackRating(r.rating)))
+      throw new BadRequestException(
+        "Ratings must be from 1.0 to 5.0 in increments of 0.1",
+      );
     return ratingTransaction(this.db, async (tx) => {
-      if(input.ratings) await ensureDecimalFeedbackStorage(tx,input.ratings);
+      if (input.ratings) await ensureDecimalFeedbackStorage(tx, input.ratings);
       const old = await tx.feedback.findUnique({
         where: { id: input.id },
         include: { ratings: true },
@@ -1306,7 +1308,6 @@ export class FeedbackService {
             match: { select: { id: true, description: true, playedAt: true } },
           },
         },
-        reviewer: { select: { username: true } },
       },
     });
     if (!f) throw new NotFoundException();
@@ -1391,7 +1392,6 @@ export class FeedbackService {
             match: { select: { id: true, description: true, playedAt: true } },
           },
         },
-        reviewer: { select: { username: true } },
       },
       take: 11,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
@@ -1402,13 +1402,15 @@ export class FeedbackService {
   private privateView<
     T extends {
       reviewerId: string | null;
-      reviewer?: { username: string } | null;
+      reviewer?: {
+        username: string;
+      } | null;
       reviewerSkillSnapshots: any[];
       reviewerOverallLevelAtSubmission: string | null;
       reviewerSnapshotCapturedAt: Date | null;
     },
   >(f: T, actor: string): T {
-    const view = { ...f, reviewerUsername: f.reviewer?.username ?? null };
+    const view = { ...f, reviewerUsername: null };
     if (f.reviewerId === actor) return view;
     return {
       ...view,

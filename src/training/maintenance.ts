@@ -22,7 +22,7 @@ export async function sweepTrainingVideos(
     take: limit,
     orderBy: { id: "asc" },
   });
-  for (const row of players) await videos.deleteSubmission(row.userId, row.id);
+  for (const row of players) await videos.expireSubmission(row.id);
   const references = await db.drillReferenceVideo.findMany({
     where: {
       uploadStatus: "PENDING_UPLOAD",

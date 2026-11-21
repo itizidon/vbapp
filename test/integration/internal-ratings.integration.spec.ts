@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import {Prisma } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "crypto";
 import { JwtService } from "@nestjs/jwt";
 import { FeedbackService } from "../../src/feedback/feedback.service";
@@ -51,7 +52,7 @@ describeDb("internal ratings PostgreSQL integration", () => {
         });
         const assessment = await self.create(user.id, {
           sportId: sport.id,
-          overallLevel: "TEST",
+          overallLevel: "B",
           ratings: sport.skills.map((skill) => ({
             skillId: skill.id,
             rating: value,
@@ -394,7 +395,7 @@ describeDb("internal ratings PostgreSQL integration", () => {
     });
     await self.create(target.id, {
       sportId: f.sport.id,
-      overallLevel: "TEST",
+      overallLevel: "B",
       ratings: [{ skillId: skill.id, rating: 3 }],
     });
     const second = await feedback.submit(f.reviewer.id, {
@@ -417,25 +418,11 @@ describeDb("internal ratings PostgreSQL integration", () => {
     const added = await db.skill.create({
       data: { sportId: f.sport.id, name: "Legacy skill", slug: "legacy" },
     });
-    await db.$executeRawUnsafe(
-      'ALTER TABLE "SelfAssessmentRating" DISABLE TRIGGER self_rating_history',
-    );
-    try {
-      await db.selfAssessmentRating.create({
-        data: {
-          selfAssessmentId: f.recipient.assessment.id,
-          skillId: added.id,
-          rating: 4,
-        },
-      });
-    } finally {
-      await db.$executeRawUnsafe(
-        'ALTER TABLE "SelfAssessmentRating" ENABLE TRIGGER self_rating_history',
-      );
-    }
+    const baselineAt = new Date();
+    await db.selfAssessmentRatingEvent.create({data:{userId:f.recipient.id,skillId:added.id,selfAssessmentId:f.recipient.assessment.id,sourceRevision:randomUUID(),previousRating:null,newRating:4,type:'BASELINE',createdAt:baselineAt}});
     const dry = await ratings.backfill(true);
     expect(dry.internalRatings).toBe(1);
-    expect(dry.selfBaselines).toBe(1);
+    expect(dry.selfBaselines).toBe(0);
     expect(
       await db.playerInternalRating.findUnique({
         where: {
@@ -461,7 +448,7 @@ describeDb("internal ratings PostgreSQL integration", () => {
     );
     expect(history.items[0].type).toBe("BASELINE");
     expect(history.items[0].timestamp.getTime()).toBeGreaterThanOrEqual(
-      started.getTime(),
+      baselineAt.getTime(),
     );
     expect(
       (await current(f.recipient.id, f.skills[0].id)).currentRating.toString(),

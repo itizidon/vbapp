@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "crypto";
 import { JwtService } from "@nestjs/jwt";
 import { FeedbackService } from "../../src/feedback/feedback.service";
@@ -44,7 +44,7 @@ const url = process.env.TEST_DATABASE_URL;
       const self = new SelfAssessmentsService(db as any);
       const users = [];
       for (const rating of [3, 5, 2]) {
-        const id = randomUUID();
+        const id = clerkId();
         const user = await db.user.create({
           data: {
             id,

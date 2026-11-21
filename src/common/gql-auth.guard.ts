@@ -1,29 +1,33 @@
+import { SelfAssessmentsService } from "../self-assessments/self-assessments.service";
 import {
   CanActivate,
   ExecutionContext,
+  ForbiddenException,
   Injectable,
-  UnauthorizedException,
 } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
 import { GqlExecutionContext } from "@nestjs/graphql";
-import { isUUID } from "class-validator";
+import { ClerkSessions } from "../auth/clerk/sessions";
+const clerkSessionKey = Symbol("verifiedClerkSession");
 @Injectable()
 export class GqlAuthGuard implements CanActivate {
-  constructor(private readonly jwt: JwtService) {}
+  protected allowIncompleteOnboarding = false;
+  constructor(
+    readonly sessions: ClerkSessions,
+    readonly assessments: SelfAssessmentsService,
+  ) {}
   async canActivate(context: ExecutionContext) {
     const req = GqlExecutionContext.create(context).getContext().req;
-    const value = req.headers?.authorization as string | undefined;
-    if (!value?.startsWith("Bearer ")) throw new UnauthorizedException();
-    try {
-      const payload = await this.jwt.verifyAsync(value.slice(7));
-      // Invitation capabilities share the signing service, never account authority.
-      if (payload.kind || !isUUID(payload.id) || payload.sub !== payload.id)
-        throw new Error("Not an account session");
-      req.user = payload;
-      return true;
-    } catch {
-      delete req.user;
-      throw new UnauthorizedException("Invalid or expired token");
-    }
+    delete req.user;
+    delete req.clerkUserId;
+    const user = await (req[clerkSessionKey] ??= this.sessions.authenticate(
+      req.headers?.authorization,
+    ));
+    if (!this.allowIncompleteOnboarding && !user.onboardingComplete)
+      throw new ForbiddenException("Complete your player onboarding");
+    if (!this.allowIncompleteOnboarding && user.assessment)
+      await this.assessments.reconcile(user.id, user.assessment);
+    req.user = user;
+    req.clerkUserId = user.id;
+    return true;
   }
 }

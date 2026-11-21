@@ -466,6 +466,15 @@ export class TrainingVideoJobs {
       const job = await this.claim("CLEANUP_MEDIA");
       if (!job) break;
       try {
+        const cleanup=job.payload as {clerkCutoverCleanup?:boolean;clerkDeletionCleanup?:boolean;ownerId?:string;keys?:unknown}|null;
+        if(cleanup?.clerkCutoverCleanup || cleanup?.clerkDeletionCleanup){
+          if(cleanup.clerkCutoverCleanup && process.env.CLERK_ALLOW_CUTOVER_MEDIA_CLEANUP!=='true'){
+            await this.db.videoProcessingJob.update({where:{id:job.id},data:{status:'PENDING',attempts:{decrement:1},leaseToken:null,leaseUntil:null,runAfter:new Date(Date.now()+3600000),errorCode:'AWAITING_CUTOVER_MEDIA_APPROVAL'}});continue;
+          }
+          if(!Array.isArray(cleanup.keys)||cleanup.keys.length>1000||cleanup.keys.some(key=>typeof key!=='string'||!key.startsWith(cleanup.clerkDeletionCleanup?`training/players/${cleanup.ownerId}/`:'training/players/')))throw new Error('Invalid deletion media scope');
+          for(const key of cleanup.keys)await this.storage.delete(key as string);
+          await this.db.videoProcessingJob.updateMany({where:{id:job.id,leaseToken:job.leaseToken,status:'PROCESSING'},data:{status:'COMPLETED',payload:Prisma.DbNull,leaseToken:null,leaseUntil:null,errorCode:null}});done++;continue;
+        }
         const source = job.submissionId
           ? await this.db.drillVideoSubmission.findUniqueOrThrow({
               where: { id: job.submissionId },

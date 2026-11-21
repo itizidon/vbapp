@@ -225,7 +225,7 @@ export class DashboardService {
           r."skillId", avg(r.rating)::float8 AS average, count(*) AS count
         FROM "FeedbackRating" r JOIN "PrivateAnalyticsEligibleFeedback" f ON f.id = r."feedbackId"
         JOIN "Skill" s ON s.id = r."skillId" JOIN "Sport" sport ON sport.id = s."sportId"
-        WHERE f."recipientId" = ${actor}::uuid AND f.status = 'PUBLISHED' AND sport.slug = 'beach-volleyball' AND s.active = true
+        WHERE f."recipientId" = ${actor}::text AND f.status = 'PUBLISHED' AND sport.slug = 'beach-volleyball' AND s.active = true
           AND f."sportId" = s."sportId" AND f."createdAt" < ${end}
           ${from ? Prisma.sql`AND f."createdAt" >= ${from}` : Prisma.empty}
         GROUP BY 1, r."skillId" ORDER BY 1, r."skillId"

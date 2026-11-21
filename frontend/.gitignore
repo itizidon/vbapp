@@ -8,3 +8,12 @@ test-results/
 .next-qa/
 
 .next-video-check/
+
+.next-social-check/
+
+.next-email-check/
+
+.next-email-browser/
+
+.next-clerk-check/
+.next-clerk-browser/

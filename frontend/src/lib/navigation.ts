@@ -3,7 +3,7 @@ export function safeReturnTo(value: unknown, fallback = "/matches") {
     typeof value !== "string" ||
     !value.startsWith("/") ||
     value.startsWith("//") ||
-    /[\\\r\n]/.test(value)
+    /[\\\u0000-\u0020\u007f]/.test(value)
   )
     return fallback;
   return value;

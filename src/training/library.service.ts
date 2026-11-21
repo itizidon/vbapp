@@ -103,7 +103,7 @@ export class TrainingLibraryService {
     const node = await db.skillTreeNode.findFirst({
       where: {
         id,
-        ...(!this.access.isEditor(actor)
+        ...(!(await this.access.isEditor(actor))
           ? { status: "PUBLISHED" as const }
           : {}),
       },
@@ -119,7 +119,7 @@ export class TrainingLibraryService {
     const drill = await db.drill.findFirst({
       where: {
         id,
-        ...(!this.access.isEditor(actor)
+        ...(!(await this.access.isEditor(actor))
           ? {
               status: "PUBLISHED" as const,
               skills: {
@@ -140,7 +140,7 @@ export class TrainingLibraryService {
     const nodes = await this.db.skillTreeNode.findMany({
       where: {
         ...(categoryId ? { categoryId } : {}),
-        ...(!this.access.isEditor(actor)
+        ...(!(await this.access.isEditor(actor))
           ? { status: "PUBLISHED" as const }
           : {}),
       },
@@ -253,7 +253,7 @@ export class TrainingLibraryService {
       throw new BadRequestException("Limit must be 1–100");
     return this.db.drill.findMany({
       where: {
-        ...(!this.access.isEditor(actor)
+        ...(!(await this.access.isEditor(actor))
           ? {
               status: "PUBLISHED" as const,
               AND: [

@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { InternalRatingsService } from "../src/internal-ratings/internal-ratings.service";
-const userId = "11111111-1111-4111-8111-111111111111",
+const userId = "user_fixtureplayer11111111",
   sportId = "22222222-2222-4222-8222-222222222222";
 function setup(values: number[]) {
   const tx: any = {

@@ -16,7 +16,7 @@ export class MotionAdmin {
   async workspace(actor: string, id: string) {
     const v = this.videos;
     await v.access.user(actor);
-    const editor = v.access.isEditor(actor);
+    const editor = (await v.access.isEditor(actor));
     const drill = await v.library.drill(id, actor);
     const refs = await v.db.drillReferenceVideo.findMany({
       where: {

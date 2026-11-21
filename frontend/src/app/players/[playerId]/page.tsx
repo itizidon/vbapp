@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { z } from "zod";
+import {isClerkPlayerId}from"@/lib/player-id";
 import { PlayerHistory } from "@/components/player-pages";
 export default async function Page({
   params,
@@ -7,6 +7,6 @@ export default async function Page({
   params: Promise<{ playerId: string }>;
 }) {
   const { playerId } = await params;
-  if (!z.uuid().safeParse(playerId).success) notFound();
+  if (!isClerkPlayerId(playerId)) notFound();
   return <PlayerHistory id={playerId} />;
 }

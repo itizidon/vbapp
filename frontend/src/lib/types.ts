@@ -1,4 +1,9 @@
 export interface User {
+  emailVerified?: boolean;
+  onboardingComplete?: boolean;
+  age?:number|null;
+  heightCm?:number|null;
+  imageUrl?:string|null;
   aiCoachingEnabled?: boolean;
   isPublic: boolean;
   id: string;

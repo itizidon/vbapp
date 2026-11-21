@@ -1,3 +1,4 @@
+import {isClerkUserId}from"../auth/clerk/metadata";
 import { setTimeout as delay } from "node:timers/promises";
 import { PrismaClient, Prisma } from "@prisma/client";
 import { isUUID } from "class-validator";
@@ -41,7 +42,7 @@ export async function main(args = process.argv.slice(2)) {
       !player ||
       !sport ||
       o.positional.length !== 2 ||
-      !isUUID(player) ||
+      !isClerkUserId(player) ||
       !isUUID(sport)
     )
       throw new Error("Use profile <player UUID> <sport UUID>");
@@ -127,7 +128,7 @@ export async function main(args = process.argv.slice(2)) {
         !userId ||
         !sportId ||
         o.positional.length !== 2 ||
-        !isUUID(userId) ||
+        !isClerkUserId(userId) ||
         !isUUID(sportId)
       )
         throw new Error("Use profile <player UUID> <sport UUID>");

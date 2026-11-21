@@ -12,6 +12,20 @@ export default function PrivacyPage() {
         describes current feedback controls; it is not a claim of legal
         compliance.
       </p>
+      <h2 className="text-xl">Accounts and sign-in</h2>
+      <p>
+        Clerk manages BVBTips accounts, credentials, verification, sessions,
+        profile identity and optional Google or Facebook connections. Account
+        settings let you manage your identity, security and account deletion.
+        BVBTips does not store your password or a copied account directory in
+        PostgreSQL. Application activity references your Clerk account ID.
+      </p>
+      <p>
+        Deleting an account queues removal of private application data and
+        anonymization of shared match and review history. Reusable drills and
+        demonstrations remain available, with creator attribution removed.
+        You can also contact us using the address below about your data.
+      </p>
       <h2 className="text-xl">Private analytics and AI coaching</h2>
       <p>
         Feedback includes ratings, optional comments, match associations and

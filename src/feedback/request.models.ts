@@ -1,3 +1,4 @@
+import {IsClerkUserId}from"../auth/clerk/validation";
 import { Field, ID, InputType, registerEnumType } from "@nestjs/graphql";
 import { FeedbackReviewMode } from "@prisma/client";
 import {
@@ -54,7 +55,7 @@ export class SubmitFeedbackRequestInput {
   @Field(() => ID) @IsUUID() submissionId!: string;
   @Field(() => ID, { nullable: true })
   @IsOptional()
-  @IsUUID()
+  @IsClerkUserId()
   assignedReviewerId?: string;
   @Field({ nullable: true })
   @IsOptional()

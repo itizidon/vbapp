@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "node:crypto";
 import {
   options,
@@ -93,7 +93,7 @@ const url = process.env.TEST_DATABASE_URL;
     ).id;
     const users = await Promise.all(
       [0, 1].map(() => {
-        const id = randomUUID();
+        const id = clerkId();
         return db.user.create({
           data: {
             username: id,

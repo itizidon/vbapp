@@ -1,4 +1,5 @@
 "use client";
+import { useClerk } from "@clerk/nextjs";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -94,6 +95,7 @@ export function DesktopNavigation() {
   return <Navigation />;
 }
 export function AccountMenu() {
+  const {signOut}=useClerk();
   const router = useRouter();
   const client = useQueryClient();
   const { setTheme } = useTheme();
@@ -102,12 +104,7 @@ export function AccountMenu() {
   async function logout() {
     setBusy(true);
     try {
-      const response = await fetch("/api/graphql", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "logout" }),
-      });
-      if (!response.ok) throw new Error("Unable to sign out. Try again.");
+      await signOut();
       client.clear();
       notifyAuthChanged();
       router.replace("/login");
@@ -119,7 +116,12 @@ export function AccountMenu() {
   return (
     <section className="panel space-y-5">
       <h2>Settings</h2>
-      <Link href="/training" className="block rounded-xl border border-border p-4 text-primary">Skills, drills and video practice →</Link>
+      <Link
+        href="/training"
+        className="block rounded-xl border border-border p-4 text-primary"
+      >
+        Skills, drills and video practice →
+      </Link>
       <div>
         <p className="mb-3 text-sm">Appearance</p>
         <div className="flex flex-wrap gap-2">
@@ -152,10 +154,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const unauthenticated =
     user.error instanceof ApiError && user.error.status === 401;
+  const needsOnboarding = !!user.data?.me && user.data.me.onboardingComplete===false;
   useEffect(() => {
-    if (unauthenticated)
+    if (needsOnboarding) router.replace("/onboarding");
+    else if (unauthenticated)
       router.replace(`/login?next=${encodeURIComponent(path)}`);
-  }, [unauthenticated, path, router]);
+  }, [unauthenticated, needsOnboarding, path, router]);
   return (
     <>
       <a href="#main-content" className="skip">
@@ -178,7 +182,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         id="main-content"
         className="mx-auto max-w-6xl px-4 pb-[calc(6rem+env(safe-area-inset-bottom))] pt-7 sm:px-6 md:pb-12 sm:pt-10"
       >
-        {user.isPending || unauthenticated ? (
+        {user.isPending || unauthenticated || needsOnboarding ? (
           <LoadingSkeleton />
         ) : user.error ? (
           <ErrorState error={user.error} retry={() => user.refetch()} />

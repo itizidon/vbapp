@@ -1,4 +1,5 @@
-import { PrismaClient, Feedback } from "@prisma/client";
+import {Feedback } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "node:crypto";
 import { FeedbackProcessingWorker } from "../../src/feedback-processing/worker";
 import {
@@ -72,7 +73,7 @@ const url = process.env.TEST_DATABASE_URL;
       skillId = skill.id;
       const users = await Promise.all(
         [0, 1].map(() => {
-          const id = randomUUID();
+          const id = clerkId();
           return db.user.create({
             data: {
               username: id,
@@ -443,7 +444,7 @@ const url = process.env.TEST_DATABASE_URL;
       });
       const rows = await db.$queryRaw<
         { id: string }[]
-      >`SELECT id FROM "EligibleFeedbackObservation" WHERE "feedbackId" IN (SELECT id FROM "Feedback" WHERE "recipientId"=${userId}::uuid)`;
+      >`SELECT id FROM "EligibleFeedbackObservation" WHERE "feedbackId" IN (SELECT id FROM "Feedback" WHERE "recipientId"=${userId}::text)`;
       expect(rows).toHaveLength(0);
       await db.feedbackTheme.update({
         where: { id: "platform_control" },

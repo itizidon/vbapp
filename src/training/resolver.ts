@@ -22,7 +22,7 @@ export class TrainingResolver {
   @Query(() => Boolean)
   async canManageTraining(@CurrentUser() user: AuthUser) {
     await this.library.access.user(user.id);
-    return this.library.access.isEditor(user.id);
+    return (await this.library.access.isEditor(user.id));
   }
   @UseGuards(GqlAuthGuard)
   @Mutation(() => D.DrillModel)
@@ -570,7 +570,7 @@ export class TrainingResolver {
     return this.library.db.drillTechniqueVariant.findMany({
       where: {
         drillId,
-        ...(!this.library.access.isEditor(user?.id)
+        ...(!(await this.library.access.isEditor(user?.id))
           ? { status: "PUBLISHED" as const }
           : {}),
       },
@@ -588,7 +588,7 @@ export class TrainingResolver {
     return this.library.db.techniqueCheckpoint.findMany({
       where: {
         drillId,
-        ...(!this.library.access.isEditor(user?.id)
+        ...(!(await this.library.access.isEditor(user?.id))
           ? { status: "PUBLISHED" as const }
           : {}),
       },
@@ -598,9 +598,9 @@ export class TrainingResolver {
   }
   @UseGuards(OptionalGqlAuthGuard)
   @Query(() => [D.CoachingSituationModel])
-  coachingSituations(@CurrentUser() user: AuthUser) {
+  async coachingSituations(@CurrentUser() user: AuthUser) {
     return this.library.db.coachingSituation.findMany({
-      where: !this.library.access.isEditor(user?.id)
+      where: !(await this.library.access.isEditor(user?.id))
         ? { status: "PUBLISHED" }
         : {},
       orderBy: { id: "asc" },
@@ -617,7 +617,7 @@ export class TrainingResolver {
     return this.library.db.drillRecommendationRule.findMany({
       where: {
         drillId,
-        ...(!this.library.access.isEditor(user?.id)
+        ...(!(await this.library.access.isEditor(user?.id))
           ? {
               enabled: true,
               OR: [

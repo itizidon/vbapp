@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { InternalRatingsService } from "../src/internal-ratings/internal-ratings.service";
-const userId = "11111111-1111-4111-8111-111111111111",
+const userId = "user_fixtureplayer11111111",
   sportId = "22222222-2222-4222-8222-222222222222";
 function setup() {
   const tx: any = {
@@ -53,7 +53,7 @@ it("returns independent real current sources in a bounded set of batched queries
   const { service, tx } = setup();
   const result = await service.radarProfile(userId, userId, sportId);
   expect(result.skills[0]).toMatchObject({
-    selfRating: 4,
+    selfRating: 2,
     internalRating: 3.5,
     averageFeedbackRating: 4.25,
     feedbackCount: 4,

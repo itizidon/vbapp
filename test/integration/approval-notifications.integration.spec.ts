@@ -1,4 +1,5 @@
-import { PrismaClient, FeedbackStatus } from "@prisma/client";
+import {FeedbackStatus } from "@prisma/client";
+import {TestDatabase as PrismaClient,clerkId,clerkToken,fixtureRole}from"../helpers/clerk-fixtures";
 import { randomUUID } from "node:crypto";
 import { FeedbackService } from "../../src/feedback/feedback.service";
 import { PrismaService } from "../../src/prisma/prisma.service";
@@ -33,7 +34,7 @@ const url = process.env.TEST_DATABASE_URL;
         })
       ).id;
       for (let i = 0; i < 3; i++) {
-        const id = randomUUID();
+        const id = clerkId();
         users.push(id);
         await db.user.create({
           data: {

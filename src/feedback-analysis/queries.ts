@@ -68,7 +68,7 @@ const dateBefore = (asOf: Date, days: number) =>
   new Date(asOf.getTime() - days * DAY_MS);
 function eligible(userId: string, sportId: string, asOf: Date) {
   return Prisma.sql`
- eligible AS (SELECT f.*, feedback_trust_classification(f) AS trust, CASE WHEN feedback_trust_classification(f)='VERIFIED_APPROVED' THEN f."reviewerId" END AS "verifiedReviewer" FROM "Feedback" f WHERE feedback_analysis_eligible(f) AND "recipientId"=${userId}::uuid AND "sportId"=${sportId}::uuid AND "createdAt"<=${asOf}),
+ eligible AS (SELECT f.*, feedback_trust_classification(f) AS trust, CASE WHEN feedback_trust_classification(f)='VERIFIED_APPROVED' THEN f."reviewerId" END AS "verifiedReviewer" FROM "Feedback" f WHERE feedback_analysis_eligible(f) AND "recipientId"=${userId}::text AND "sportId"=${sportId}::uuid AND "createdAt"<=${asOf}),
  written AS (SELECT f.* FROM eligible f WHERE EXISTS (SELECT 1 FROM "Feedback" src WHERE src.id=f.id AND feedback_analysis_eligible(src)) AND (NULLIF(btrim(f."overallComment"),'') IS NOT NULL OR EXISTS
   (SELECT 1 FROM "FeedbackRating" r WHERE r."feedbackId"=f.id AND NULLIF(btrim(r.comment),'') IS NOT NULL)))`;
 }
@@ -87,7 +87,7 @@ export async function summaryQuery(
  count(*) FILTER(WHERE f.id IN (SELECT id FROM written) AND (j.status IS NULL OR (j.status<>'FAILED' AND (j.status<>'COMPLETED' OR j.moderation<>'ALLOW'))))::int AS awaiting,
  count(*) FILTER(WHERE f.id IN (SELECT id FROM written) AND j.status='FAILED')::int AS failed,
  (SELECT count(*)::int FROM "Feedback" x JOIN "FeedbackAnalysisJob" xj ON xj."feedbackId"=x.id
-  WHERE x."recipientId"=${userId}::uuid AND x."sportId"=${sportId}::uuid AND x."createdAt"<=${asOf}
+  WHERE x."recipientId"=${userId}::text AND x."sportId"=${sportId}::uuid AND x."createdAt"<=${asOf}
    AND feedback_ai_submission_permitted(x) AND xj.moderation NOT IN ('ALLOW','UNASSESSED')) AS moderated
  FROM eligible f LEFT JOIN "FeedbackAnalysisJob" j ON j."feedbackId"=f.id`);
   return row;
@@ -112,9 +112,8 @@ export function skillQuery(
  avg(r.rating) FILTER(WHERE r.submitted>=${dateBefore(asOf, C.recentDays + C.precedingDays)} AND r.submitted<${dateBefore(asOf, C.recentDays)})::float AS "previous90Average",
  sr.rating AS "selfRating",ir."currentRating"::float AS "internalRating"
  FROM "Skill" s LEFT JOIN ranked r ON r."skillId"=s.id
- LEFT JOIN "SelfAssessment" a ON a."userId"=${userId}::uuid AND a."sportId"=s."sportId"
- LEFT JOIN "SelfAssessmentRating" sr ON sr."selfAssessmentId"=a.id AND sr."skillId"=s.id
- LEFT JOIN "PlayerInternalRating" ir ON ir."userId"=${userId}::uuid AND ir."skillId"=s.id
+ LEFT JOIN LATERAL (SELECT e."newRating" AS rating FROM "SelfAssessmentRatingEvent" e WHERE e."userId"=${userId}::text AND e."skillId"=s.id ORDER BY e."createdAt" DESC,e.sequence DESC LIMIT 1) sr ON true
+ LEFT JOIN "PlayerInternalRating" ir ON ir."userId"=${userId}::text AND ir."skillId"=s.id
  WHERE s."sportId"=${sportId}::uuid AND s.active AND s.slug IN (${Prisma.join(PRIMARY_SKILL_SLUGS)})
  GROUP BY s.id,sr.rating,ir."currentRating" ORDER BY CASE s.slug WHEN 'attack' THEN 1 WHEN 'defense' THEN 2 WHEN 'passing' THEN 3 WHEN 'setting' THEN 4 ELSE 5 END`);
 }
@@ -132,7 +131,7 @@ export function themeQuery(
  active_themes AS (SELECT t.* FROM "FeedbackTheme" t WHERE t.active AND (cardinality(t."skillSlugs")=0 OR EXISTS
   (SELECT 1 FROM "Skill" s WHERE s."sportId"=${sportId}::uuid AND s.active AND s.slug=ANY(t."skillSlugs")))),
  obs AS (SELECT o.*,f."createdAt" AS submitted,f."verifiedReviewer" AS "reviewerId" FROM "EligibleFeedbackObservation" o JOIN eligible f ON f.id=o."feedbackId"),
- mentions AS (SELECT "themeId","feedbackId",min(submitted) AS submitted,min("reviewerId"::text)::uuid AS reviewer,
+ mentions AS (SELECT "themeId","feedbackId",min(submitted) AS submitted,min("reviewerId") AS reviewer,
   count(*)::int AS raw,bool_or(sentiment='positive') AS positive,bool_or(sentiment='negative') AS negative,bool_or(sentiment='neutral') AS neutral
   FROM obs GROUP BY "themeId","feedbackId"),
  theme_skills AS (SELECT t.id AS theme,s.id AS skill FROM active_themes t JOIN "Skill" s ON s.slug=ANY(t."skillSlugs") AND s."sportId"=${sportId}::uuid AND s.active
@@ -227,8 +226,8 @@ export function trustThemeQuery(
  UNION ALL SELECT 'previous' WHERE m."createdAt">=${dateBefore(asOf, C.recentDays + C.precedingDays)} AND m."createdAt"<${dateBefore(asOf, C.recentDays)}) p)
  SELECT "themeId",trust,period,count(*)::int AS "feedbackCount",count(*) FILTER(WHERE positive)::int AS positive,
  count(*) FILTER(WHERE negative)::int AS negative,count(*) FILTER(WHERE neutral)::int AS neutral,
- count(DISTINCT coalesce("reviewerId",id))::int AS "distinctSources",
- count(DISTINCT coalesce("reviewerId",id)) FILTER(WHERE negative)::int AS "negativeSources"
+ count(DISTINCT coalesce("reviewerId",id::text))::int AS "distinctSources",
+ count(DISTINCT coalesce("reviewerId",id::text)) FILTER(WHERE negative)::int AS "negativeSources"
  FROM periods GROUP BY "themeId",trust,period`);
 }
 export function trustSummaryQuery(
