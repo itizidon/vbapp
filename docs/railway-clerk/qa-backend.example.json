@@ -1,0 +1,15 @@
+{
+  "NODE_ENV": "production",
+  "APP_ENV": "qa",
+  "FRONTEND_URL": "https://scintillating-wonder-production-92bc.up.railway.app",
+  "CORS_ORIGINS": "https://scintillating-wonder-production-92bc.up.railway.app",
+  "CLERK_SECRET_KEY": "__REPLACE_QA_CLERK_SECRET_KEY__",
+  "CLERK_ISSUER": "__REPLACE_QA_CLERK_ISSUER__",
+  "CLERK_AUTHORIZED_PARTIES": "https://scintillating-wonder-production-92bc.up.railway.app",
+  "CLERK_JWT_KEY": "",
+  "CLERK_AUDIENCE": "",
+  "CLERK_WEBHOOK_SIGNING_SECRET": "__REPLACE_QA_WEBHOOK_SIGNING_SECRET__",
+  "CLERK_DELETION_WORKER_ENABLED": "true",
+  "GUEST_CAPABILITY_SECRET": "__REPLACE_QA_INDEPENDENT_RANDOM_SECRET__",
+  "CLERK_ALLOW_CUTOVER_MEDIA_CLEANUP": "false"
+}

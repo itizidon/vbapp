@@ -114,6 +114,52 @@ pg_restore --dbname="$RECOVERY_DATABASE_URL" --no-owner --no-acl .backups/clerk/
 
 Verify manifest SHA-256, counts and curriculum fingerprints, and restore the matching old application release when recovering pre-Clerk data. Switch application traffic only after verifying the recovery database. A backup contains personal data and legacy credential hashes; restrict access and retention.
 
+## Recovering an ordinary deploy that attempted the cutover
+
+If `pnpm db:deploy` or `prisma migrate deploy` reaches `20261126000000_clerk_identity_cutover` without the cutover tool, the migration intentionally rejects the missing/expired backup permit. Prisma can display only `current transaction is aborted`; that message alone does not prove which earlier statement failed. Do not remove the guard, edit the applied migration, mark it applied, or repeatedly retry ordinary deploys.
+
+The updated `db:deploy` command now performs a read-only preflight before migrations or seeds. It stops clearly for an empty/legacy schema or a recorded failed migration. Build this release before using that compiled command.
+
+Identify the exact Railway environment and service first: both QA and production databases may be named `railway` on hosts named `postgres.railway.internal`. These names alone cannot distinguish the targets. Pause automatic migration retries and source writers while diagnosing the intended target.
+
+Inspect migration status in the selected backend's environment:
+
+```bash
+pnpm exec prisma migrate status
+```
+
+If you need the cutover inventory from a temporary Railway deployment rather than a shell, use the QA-only `railway.qa-clerk-preview.json` file. Push the file with the release, then select **only the QA backend** and set its Railway Config File path to `/railway.qa-clerk-preview.json`. Its build command is `pnpm build`; its start command is the read-only `pnpm clerk:cutover --dry-run --allow-remote --allow-production`; pre-deploy commands are empty and automatic restarts are disabled. Configuration-file values override dashboard settings. The preview exits after printing its inventory and does not serve HTTP, so do not interpret it as a healthy API deployment. Review the logs and restore the normal `/railway.backend.json` config before serving the API after recovery. Never select this preview file for the production service. Do not put the diagnostic command in both build and start fields.
+
+Using a PostgreSQL client connected to that same selected database, inspect the original migration record and schema state:
+
+```sql
+SELECT migration_name, started_at, finished_at, rolled_back_at, logs
+FROM "_prisma_migrations"
+WHERE migration_name = '20261126000000_clerk_identity_cutover'
+ORDER BY started_at DESC;
+
+SELECT current_database(),
+       to_regclass('public."User"') IS NOT NULL AS legacy_user_table,
+       to_regclass('public."ClerkDeletionJob"') IS NOT NULL AS clerk_job_table,
+       to_regclass('public."_ClerkCutoverPermit"') IS NOT NULL AS backup_permit_table;
+```
+
+If the logged failure and schema inspection confirm the cutover transaction rolled back entirely, mark only that failed attempt rolled back so the reviewed cutover can retry it:
+
+```bash
+pnpm exec prisma migrate resolve --rolled-back 20261126000000_clerk_identity_cutover
+```
+
+`migrate resolve` changes migration history; it does not undo SQL. Do not run it as an assumption or mark the cutover `--applied`. A mixed/unexpected schema requires investigation or recovery from backup first. Earlier successfully applied migrations remain applied.
+
+Then preview the actual cutover, using Railway-provided environment variables rather than a local `.env` file:
+
+```bash
+pnpm clerk:cutover --dry-run --allow-remote --allow-production
+```
+
+QA also needs the production acknowledgement flag when `NODE_ENV=production`. This preview performs no reset. Review its target and counts before using the backup-gated execution procedure above. The execution host must have compatible PostgreSQL backup tools and durable backup storage; a standard Node deployment image may not have either. After successful cutover, ordinary `db:deploy` can apply later migrations and seed catalog content. No remote migration recovery is performed automatically by this documentation or the preflight.
+
 ## Production rollout (manual only)
 
 Provision a separate production Clerk instance, provider credentials, exact issuer/origins and verified email policy. Configure backend/frontend server secrets and webhook endpoint. Protect QA separately; CORS/APP_ENV are not tester access controls. Review the inventory with release owners, stop writes/workers, take and restore-test the backup, and only then invoke the CLI with explicit `--allow-remote --allow-production --execute --confirm-database NAME --backup-dir SECURE-PATH` in the selected environment. The flags are operator acknowledgements, not authorization to run production changes from this task. Do not put destructive migrations in automatic pre-deploy hooks.

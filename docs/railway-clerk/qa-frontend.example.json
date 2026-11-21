@@ -1,0 +1,13 @@
+{
+  "NODE_ENV": "production",
+  "APP_ENV": "qa",
+  "GRAPHQL_API_URL": "https://vbapp-production.up.railway.app/graphql",
+  "FRONTEND_URL": "https://scintillating-wonder-production-92bc.up.railway.app",
+  "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY": "__REPLACE_QA_CLERK_PUBLISHABLE_KEY__",
+  "CLERK_SECRET_KEY": "__REPLACE_QA_CLERK_SECRET_KEY__",
+  "NEXT_PUBLIC_CLERK_SIGN_IN_URL": "/login",
+  "NEXT_PUBLIC_CLERK_SIGN_UP_URL": "/signup",
+  "NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL": "/matches",
+  "NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL": "/onboarding",
+  "PRIVACY_CONTACT_EMAIL": "support@bvbtips.com"
+}

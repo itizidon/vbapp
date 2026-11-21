@@ -18,7 +18,7 @@
     "prisma:seed": "tsx --env-file=.env prisma/seed.ts",
     "prisma:seed:deploy": "node dist/prisma/seed.js",
     "ratings:backfill": "node dist/prisma/backfill-internal-ratings.js",
-    "db:deploy": "pnpm prisma:deploy && pnpm prisma:seed:deploy",
+    "db:deploy": "node dist/src/auth/clerk/deploy-preflight.js && pnpm prisma:deploy && pnpm prisma:seed:deploy",
     "feedback:process": "node dist/src/feedback-processing/cli.js",
     "feedback:watch": "node --env-file=.env dist/src/feedback-processing/cli.js watch 10 --execute",
     "coach:prune": "node dist/prisma/prune-ai-coach.js",

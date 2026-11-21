@@ -48,3 +48,5 @@ Complete QA first: signup, verification, onboarding, email/password and social s
 For production, repeat the reviewed cutover and validation against the separately identified production services and Clerk instance. New users register through Clerk; old account passwords and IDs are not imported or reconnected. No QA or production changes are performed by writing this guide.
 
 Official reference: [Clerk environment and staging guidance](https://clerk.com/docs/guides/development/managing-environments).
+
+Service-specific JSON templates with the supplied Railway domains: [Railway Clerk variables](railway-clerk/README.md). These templates contain placeholders for secrets and have not been deployed.
